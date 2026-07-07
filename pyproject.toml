@@ -1,0 +1,8 @@
+# プロジェクトのメタデータ
+[project]
+name = "malchan"
+version = "0.1.0"
+authors = [
+  { name="Your Name", email="you@example.com" },
+]
+description = "パッケージです。"
