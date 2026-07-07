@@ -37,6 +37,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+models = [
+  "catboost>=1.2",
+  "imbalanced-learn>=0.12",
+  "lightgbm>=4.0",
+  "optuna>=3.6",
+  "xgboost>=2.0",
+]
+materials = [
+  "matminer>=0.9",
+  "mendeleev>=0.17",
+  "pymatgen>=2024.1",
+  "rdkit>=2023.9",
+  "scikit-fingerprints>=1.0",
+  "xenonpy>=0.6",
+]
 inverse = [
   "optuna>=3.6",
 ]
@@ -71,20 +86,30 @@ dev = [
 all = [
   "black>=24.0",
   "build>=1.2",
+  "catboost>=1.2",
+  "imbalanced-learn>=0.12",
   "ipykernel>=6.0",
   "jupyterlab>=4.0",
+  "lightgbm>=4.0",
+  "matminer>=0.9",
   "matplotlib>=3.7",
+  "mendeleev>=0.17",
   "mypy>=1.8",
   "openpyxl>=3.1",
   "optuna>=3.6",
   "plotly>=5.18",
   "pre-commit>=3.6",
+  "pymatgen>=2024.1",
   "pytest>=8.0",
   "pytest-cov>=5.0",
+  "rdkit>=2023.9",
   "ruff>=0.6",
+  "scikit-fingerprints>=1.0",
   "shap>=0.44",
   "statsmodels>=0.14",
   "twine>=5.0",
+  "xenonpy>=0.6",
+  "xgboost>=2.0",
 ]
 
 [project.urls]
@@ -103,7 +128,8 @@ namespaces = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-pythonpath = ["src"]naddopts = [
+pythonpath = ["src"]
+addopts = [
   "-ra",
   "--strict-config",
   "--strict-markers",
