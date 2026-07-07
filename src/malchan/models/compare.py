@@ -1,6 +1,8 @@
 import pandas as pd
-from machine_learning.models.machine_learning.models import SingleOutputMLModelPipeline
-from machine_learning.models.machine_learning.utils import REG_MODEL_DICT, CLS_MODEL_DICT
+
+from .models import SingleOutputMLModelPipeline
+from .utils import CLS_MODEL_DICT, REG_MODEL_DICT
+
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any
 import warnings
 warnings.simplefilter('ignore')
