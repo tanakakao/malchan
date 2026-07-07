@@ -122,7 +122,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["malchan*", "machine_learning*"]
+include = ["malchan*"]
 namespaces = true
 
 [tool.pytest.ini_options]
@@ -157,7 +157,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["malchan", "machine_learning"]
+known-first-party = ["malchan"]
 
 [tool.black]
 line-length = 120
