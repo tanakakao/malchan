@@ -1,6 +1,8 @@
 from sklearn.pipeline import Pipeline
-from machine_learning.models.machine_learning.pipelines.preprocess_pipeline import make_preprocess
-from machine_learning.models.machine_learning.pipelines.predictor_pipeline import make_predictor
+
+from .preprocess_pipeline import make_preprocess
+from .predictor_pipeline import make_predictor
+
 
 def make_pipeline(
     model_names,
