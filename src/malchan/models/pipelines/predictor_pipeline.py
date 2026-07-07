@@ -39,7 +39,7 @@ from sklearn.gaussian_process import GaussianProcessClassifier
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any, Type
 import warnings
 
-from machine_learning.models.machine_learning.utils import (
+from ..utils import (
     REG_MODEL_DICT, CLS_MODEL_DICT, FP_dcit, INORG_dict, AD_MODEL_DICT, SAMPLING_DICT,
     reg_default_params, cls_default_params, ad_default_params,
     get_param_grid_reg, get_param_grid_cls
@@ -205,7 +205,7 @@ def make_predictor(
         model_names (List[str]): 使用するモデルの名前のリスト。アンサンブルの場合は複数、単体モデルの場合は1つ。
         ens_type (Optional[str]): アンサンブルの種類。'アンサンブル', 'スタッキング', 'バギング', 'ブースティング' から選択。デフォルトは None。
         base_model (Optional[str]): ベースモデルの名前。スタッキング、バギング、ブースティングのときに使用。デフォルトは None。
-        model_params (Optional[List[Dict[str, Any]]]): 各モデルのパラメータを指定するリスト。デフォルトは None。
+        model_params (Optional[List[Dict[str, Any]]): 各モデルのパラメータを指定するリスト。デフォルトは None。
         base_model_params (Optional[Dict[str, Any]]): ベースモデルのパラメータを指定する辞書。デフォルトは None。
 
     Returns:
