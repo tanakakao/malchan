@@ -14,10 +14,8 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 import io
 import os
-import sys
-sys.path.append('..')
 
-from machine_learning.models.export.export_visualization import (
+from .export_visualization import (
     save_yy_plot_mpl, save_importances_plot_mpl, plot_shap_beeswarm_mpl, save_pd_plot_mpl, plot_pd_heatmap_matrix_lower,
     save_pca_mpl, save_corrmatrix_mpl, save_scattermatrix_mpl
 )
