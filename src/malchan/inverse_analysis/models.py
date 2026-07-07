@@ -4,7 +4,9 @@ import plotly.graph_objects as go
 import optuna
 
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any
-from machine_learning.models.inverse_analysis.utils import search_setting, get_sampler, objective, get_result, default_settings
+
+from .utils import search_setting, get_sampler, objective, get_result, default_settings
+
 
 def inverse_analysis(
     model,
