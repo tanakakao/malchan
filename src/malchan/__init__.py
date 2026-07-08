@@ -1,8 +1,4 @@
-"""Top-level public API for :mod:`malchan`.
-
-The project has several optional-heavy submodules.  Keep top-level import light by
-resolving public objects lazily only when they are accessed.
-"""
+"""Top-level public API for :mod:`malchan`."""
 
 from importlib import import_module
 from typing import Any
@@ -10,8 +6,8 @@ from typing import Any
 __version__ = "0.1.0"
 
 _LAZY_EXPORTS = {
-    "MLModelPipeline": "malchan.models",
-    "SingleOutputMLModelPipeline": "malchan.models",
+    "MLModelPipeline": "malchan.pipeline",
+    "SingleOutputMLModelPipeline": "malchan.pipeline",
     "feature_names_from_pipeline": "malchan.models.utils",
     "train_and_evaluate_models": "malchan.models.compare",
     "inverse_analysis": "malchan.inverse_analysis",
@@ -32,17 +28,7 @@ __all__ = ["__version__", *_LAZY_EXPORTS]
 
 
 def __getattr__(name: str) -> Any:
-    """Resolve public objects lazily.
-
-    Args:
-        name: Public attribute name requested from the top-level package.
-
-    Returns:
-        The resolved object from the corresponding submodule.
-
-    Raises:
-        AttributeError: If ``name`` is not part of the public API.
-    """
+    """Resolve public objects lazily."""
 
     if name not in _LAZY_EXPORTS:
         raise AttributeError(f"module 'malchan' has no attribute {name!r}")
