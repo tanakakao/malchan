@@ -2,12 +2,14 @@ import numpy as np
 import plotly.graph_objects as go
 import optuna
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any
-from machine_learning.models.machine_learning_utils import (
-    fit_model, tune_model, get_cat_unique_values, make_pipeline,
-    feature_names_from_pipeline, get_shap_values, get_importances,
-    get_pfi_values, get_shap_scatter, get_pd_and_ice, get_pd_and_ice_2d, label_encode
+from malchan.models.training import fit_model, tune_model
+from malchan.models.utils import get_cat_unique_values, feature_names_from_pipeline, label_encode
+from malchan.models.pipelines import make_pipeline
+from malchan.models.explainability import (
+    get_shap_values, get_importances, get_pfi_values,
+    get_shap_scatter, get_pd_and_ice, get_pd_and_ice_2d,
 )
-from machine_learning.visualization import show_importances, yy_plot_ml, show_pd_and_ice, show_pd_2d, show_shap_scatter, show_shap_beeswarm
+from malchan.visualization.machine_learning_plots import show_importances, yy_plot_ml, show_pd_and_ice, show_pd_2d, show_shap_scatter, show_shap_beeswarm
 
 def show_ia_result_with_pd(
     df_trials,

@@ -9,10 +9,10 @@ from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_sco
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.model_selection import KFold, LeaveOneOut
 
-from machine_learning.models.machine_learning.training import fit_model, tune_model, cv_fit
-from machine_learning.models.machine_learning.utils import get_cat_unique_values, feature_names_from_pipeline, label_encode
-from machine_learning.models.machine_learning.explainability import get_shap_values, get_importances, get_pfi_values, get_shap_scatter, get_pd_and_ice, get_pd_and_ice_2d
-from machine_learning.models.machine_learning.pipelines import make_pipeline
+from .training import fit_model, tune_model, cv_fit
+from .utils import get_cat_unique_values, feature_names_from_pipeline, label_encode
+from .explainability import get_shap_values, get_importances, get_pfi_values, get_shap_scatter, get_pd_and_ice, get_pd_and_ice_2d
+from .pipelines import make_pipeline
 
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any
 import warnings
