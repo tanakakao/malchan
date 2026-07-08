@@ -3,12 +3,12 @@ import plotly.graph_objects as go
 import optuna
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any
 
-from machine_learning.models.machine_learning.training import fit_model, tune_model, cv_fit
-from machine_learning.models.machine_learning.utils import get_cat_unique_values, feature_names_from_pipeline, label_encode
-from machine_learning.models.machine_learning.explainability import get_shap_values, get_importances, get_pfi_values, get_shap_scatter, get_pd_and_ice, get_pd_and_ice_2d
-from machine_learning.models.machine_learning.pipelines import make_pipeline
+from malchan.models.training import fit_model, tune_model, cv_fit
+from malchan.models.utils import get_cat_unique_values, feature_names_from_pipeline, label_encode
+from malchan.models.explainability import get_shap_values, get_importances, get_pfi_values, get_shap_scatter, get_pd_and_ice, get_pd_and_ice_2d
+from malchan.models.pipelines import make_pipeline
 
-from machine_learning.models.visualization import show_importances, yy_plot_ml, show_pd_and_ice, show_pd_2d, show_shap_scatter, show_shap_beeswarm
+from malchan.visualization.machine_learning_plots import show_importances, yy_plot_ml, show_pd_and_ice, show_pd_2d, show_shap_scatter, show_shap_beeswarm
 
 def show_ia_result_with_pd(
     df_trials,

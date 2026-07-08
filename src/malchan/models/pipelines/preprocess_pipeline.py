@@ -44,7 +44,7 @@ import copy
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any, Type, Hashable
 import warnings
 
-from machine_learning.models.machine_learning.utils import FP_dcit, INORG_dict
+from ..utils import FP_dcit, INORG_dict
 
 warnings.simplefilter('ignore')
 def _func(x):

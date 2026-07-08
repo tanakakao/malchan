@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.metrics import confusion_matrix
 
-from machine_learning.models import MLModelPipeline
+from malchan.models import MLModelPipeline
 
 import warnings
 warnings.simplefilter('ignore')

@@ -22,7 +22,7 @@ import copy
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any, Type
 import warnings
 
-from machine_learning.models.machine_learning.utils import get_param_grid_reg, get_param_grid_cls
+from .utils import get_param_grid_reg, get_param_grid_cls
 
 optuna.logging.disable_default_handler()
 warnings.simplefilter('ignore')
