@@ -98,6 +98,25 @@ def show_importances(
 
     return fig
 
+def _get_training_X(child_model: Any) -> pd.DataFrame:
+    """Return training feature values for visualization.
+
+    Args:
+        child_model (Any): Single-output model object. It may store features
+            directly in ``X`` or indirectly through ``_get_X()`` when it is
+            owned by a multi-output pipeline.
+
+    Returns:
+        pd.DataFrame: Training feature values.
+
+    Raises:
+        ValueError: If training feature values cannot be found.
+    """
+    X = child_model._get_X() if hasattr(child_model, "_get_X") else getattr(child_model, "X", None)
+    if X is None:
+        raise ValueError("学習データの説明変数が見つかりません。モデルをfitした後に実行してください。")
+    return X
+
 def _get_training_y(child_model: Any) -> pd.DataFrame:
     """Return training target values for visualization.
 
@@ -321,17 +340,17 @@ def show_pd_and_ice(
         if target_col is None:
             raise ValueError("target_colを指定してください。")
         X_PD, xticks = child_model.get_pd_and_ice(target_col)
-        X = child_model.X
-        y = child_model.y
+        X = _get_training_X(child_model)
+        y = _get_training_y(child_model)
     if X_PD is None or target_col is None or xticks is None:
         raise ValueError("X_PD/target_col/xticks、またはmodelとtarget/object_colとtarget_colを指定してください。")
 
     if len(X_PD.shape)==3:
         X_PD = X_PD[:,:,col_idx]
         if y is not None:
-            y = (y.values.ravel()==col_idx).astype(int)
+            y = (np.asarray(y).ravel()==col_idx).astype(int)
     elif y is not None:
-        y=y.values.ravel()
+        y = np.asarray(y).ravel()
 
     fig = go.Figure()
 
@@ -418,8 +437,8 @@ def show_pd_2d(
         if target_cols is None:
             raise ValueError("target_colsを指定してください。")
         X_PD, xticks1, xticks2 = child_model.get_pd_2d(target_cols=target_cols)
-        X = child_model.X
-        y = child_model.y
+        X = _get_training_X(child_model)
+        y = _get_training_y(child_model)
     if X_PD is None or target_cols is None or xticks1 is None or xticks2 is None:
         raise ValueError("X_PD/target_cols/xticks1/xticks2、またはmodelとtarget/object_colとtarget_colsを指定してください。")
 
@@ -442,7 +461,7 @@ def show_pd_2d(
     )
 
     if X is not None:
-        marker_color = y.values.ravel() if y is not None else 'red'
+        marker_color = np.asarray(y).ravel() if y is not None else 'red'
         fig.add_trace(
             go.Scatter(
                 x=X[target_cols[0]].values,
@@ -508,7 +527,7 @@ def show_shap_scatter(
         if target_col is None:
             raise ValueError("target_colを指定してください。")
         X_shappd = child_model.get_shap_scatter_data(target_col)
-        rawX = child_model.X
+        rawX = _get_training_X(child_model)
         shap_values = child_model.shap_values
         unique_dict = child_model._shared_attr("unique_cols")
         target_items = getattr(child_model, "target_items", None)
@@ -606,7 +625,7 @@ def show_shap_beeswarm(
     """
     child_model, _ = _resolve_model_target(model, target, object_col)
     if child_model is not None:
-        X = child_model.X
+        X = _get_training_X(child_model)
         shap_values = child_model.shap_values
         cat_cols = child_model._shared_attr("cat_cols")
     if X is None or shap_values is None:
