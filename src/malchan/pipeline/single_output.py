@@ -105,6 +105,7 @@ class SingleOutputMLModelPipeline:
         self.ad = False
 
         self.le = None
+        self._encoded_y = None
         self.target_items = None
         # # アンサンブルや特徴量変換を考慮したカテゴリカル列のインデックス作成
         self.cat_index = None
@@ -274,10 +275,46 @@ class SingleOutputMLModelPipeline:
         return self.context.X if self.context is not None else self.X
 
     def _get_y(self) -> Optional[pd.DataFrame]:
-        """Return this target's training values from local storage or shared context."""
+        """Return this target's training values from local storage or shared context.
+
+        Returns:
+            Optional[pd.DataFrame]: The target values. For classification models,
+                encoded labels are returned after fitting so estimators that require
+                numeric classes, such as XGBoost, can be refit consistently during
+                cross-validation.
+        """
+        if self.task == "classification" and self._encoded_y is not None:
+            return self._encoded_y
         if self.context is not None:
             return None if self.target_col is None else self.context.Y[[self.target_col]]
         return self.y
+
+    def _prepare_cv_y(self, y: Optional[Union[np.ndarray, pd.Series, pd.DataFrame]]) -> Union[pd.Series, pd.DataFrame]:
+        """Prepare target values used by cross-validation.
+
+        Args:
+            y: Optional target values provided to :meth:`cv_score`.
+
+        Returns:
+            Union[pd.Series, pd.DataFrame]: Target values aligned with the model
+                expectation. Classification labels are label-encoded when a fitted
+                label encoder is available.
+        """
+        if y is None:
+            return self._get_y()
+
+        y_data = y.copy() if hasattr(y, "copy") else y
+        if self.task != "classification" or self.le is None:
+            return y_data
+
+        if isinstance(y_data, pd.DataFrame):
+            encoded = self.le.transform(y_data.iloc[:, 0])
+            return pd.Series(encoded, index=y_data.index, name=y_data.columns[0])
+        if isinstance(y_data, pd.Series):
+            encoded = self.le.transform(y_data)
+            return pd.Series(encoded, index=y_data.index, name=y_data.name)
+
+        return pd.Series(self.le.transform(y_data))
 
     def _shared_attr(self, name: str):
         """Return a shared metadata attribute from context when available."""
@@ -548,10 +585,10 @@ class SingleOutputMLModelPipeline:
         # 入力データが指定されていない場合は学習データを使用
         if X is None:
             x = self._get_X()
-            Y = self._get_y()
+            Y = self._prepare_cv_y(y=None)
         else:
             x = X
-            Y = y
+            Y = self._prepare_cv_y(y)
 
         # クロスバリデーションの設定
         if method == 'kfold':
