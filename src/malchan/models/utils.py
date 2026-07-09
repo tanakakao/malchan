@@ -498,7 +498,7 @@ def get_param_grid_reg(model_name: str) -> dict:
         'Extra-Trees': {
             'predictor__n_estimators': IntDistribution(50, 300, step=50),
             'predictor__max_depth': IntDistribution(3, 20),
-            'predictor__max_features': CategoricalDistribution(['auto', 'sqrt']),
+            'predictor__max_features': CategoricalDistribution(['sqrt', None]),
             'predictor__min_samples_split': IntDistribution(2, 10),
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
@@ -506,14 +506,14 @@ def get_param_grid_reg(model_name: str) -> dict:
             'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
             'predictor__n_estimators': IntDistribution(50, 300, step=50),
             'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__max_features': CategoricalDistribution(['auto', 'sqrt']),
+            'predictor__max_features': CategoricalDistribution(['sqrt', None]),
             'predictor__min_samples_split': IntDistribution(2, 10),
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'HistGradientBoosting': {
             'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
             'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__max_features': CategoricalDistribution(['auto', 'sqrt']),
+            'predictor__max_features': FloatDistribution(0.1, 1.0, step=0.1),
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'XGBoost': {
@@ -562,10 +562,10 @@ def get_param_grid_reg(model_name: str) -> dict:
             'predictor__kernel': CategoricalDistribution(kernels)
         },
         'ベイズ線形回帰': {
-            'regressor__alpha_1': FloatDistribution(1e-8, 1e-2, log=True),
-            'regressor__alpha_2': FloatDistribution(1e-8, 1e-2, log=True),
-            'regressor__lambda_1': FloatDistribution(1e-8, 1e-2, log=True),
-            'regressor__lambda_2': FloatDistribution(1e-8, 1e-2, log=True)
+            'predictor__alpha_1': FloatDistribution(1e-8, 1e-2, log=True),
+            'predictor__alpha_2': FloatDistribution(1e-8, 1e-2, log=True),
+            'predictor__lambda_1': FloatDistribution(1e-8, 1e-2, log=True),
+            'predictor__lambda_2': FloatDistribution(1e-8, 1e-2, log=True)
         },
         'ARDベイズ線形回帰': {
             'predictor__alpha_1': FloatDistribution(1e-8, 1e-2, log=True),
@@ -641,7 +641,7 @@ def get_param_grid_cls(model_name: str) -> dict:
         'Extra-Trees': {
             'predictor__n_estimators': IntDistribution(50, 300, step=50),
             'predictor__max_depth': IntDistribution(3, 20),
-            'predictor__max_features': CategoricalDistribution(['auto', 'sqrt']),
+            'predictor__max_features': CategoricalDistribution(['sqrt', None]),
             'predictor__min_samples_split': IntDistribution(2, 10),
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
@@ -649,14 +649,14 @@ def get_param_grid_cls(model_name: str) -> dict:
             'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
             'predictor__n_estimators': IntDistribution(50, 300, step=50),
             'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__max_features': CategoricalDistribution(['auto', 'sqrt']),
+            'predictor__max_features': CategoricalDistribution(['sqrt', None]),
             'predictor__min_samples_split': IntDistribution(2, 10),
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'HistGradientBoosting': {
             'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
             'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__max_features': CategoricalDistribution(['auto', 'sqrt']),
+            'predictor__max_features': FloatDistribution(0.1, 1.0, step=0.1),
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'XGBoost': {
