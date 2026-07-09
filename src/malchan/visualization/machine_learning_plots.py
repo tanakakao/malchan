@@ -98,20 +98,72 @@ def show_importances(
 
     return fig
 
+def _get_training_X(child_model: Any) -> pd.DataFrame:
+    """Return training feature values for visualization.
+
+    Args:
+        child_model (Any): Single-output model object. It may store features
+            directly in ``X`` or indirectly through ``_get_X()`` when it is
+            owned by a multi-output pipeline.
+
+    Returns:
+        pd.DataFrame: Training feature values.
+
+    Raises:
+        ValueError: If training feature values cannot be found.
+    """
+    X = child_model._get_X() if hasattr(child_model, "_get_X") else getattr(child_model, "X", None)
+    if X is None:
+        raise ValueError("学習データの説明変数が見つかりません。モデルをfitした後に実行してください。")
+    return X
+
+def _get_training_y(child_model: Any) -> pd.DataFrame:
+    """Return training target values for visualization.
+
+    Args:
+        child_model (Any): Single-output model object. It may store targets
+            directly in ``y`` or indirectly through ``_get_y()`` when it is
+            owned by a multi-output pipeline.
+
+    Returns:
+        pd.DataFrame: Training target values.
+
+    Raises:
+        ValueError: If training target values cannot be found.
+    """
+    y = child_model._get_y() if hasattr(child_model, "_get_y") else getattr(child_model, "y", None)
+    if y is None:
+        raise ValueError("学習データの目的変数が見つかりません。モデルをfitした後に実行してください。")
+    return y
+
 def _yy_plot(
     y,
     pred_train,
     pred_test=None,
     residual=False
 ):
+    """Create an actual-vs-predicted scatter plot for regression models.
+
+    Args:
+        y: Actual target values. Accepts pandas objects or array-like values.
+        pred_train: Training predictions. Accepts pandas objects or array-like values.
+        pred_test: Test or validation predictions. Defaults to None.
+        residual (bool): Whether to plot residuals instead of predictions.
+
+    Returns:
+        go.Figure: Plotly figure containing the regression diagnostic plot.
+    """
+    y_values = np.asarray(y).ravel()
+    pred_train_values = np.asarray(pred_train).ravel()
+
     if residual:
-        y_train_value = pred_train.values.ravel() - y.values.ravel()
+        y_train_value = pred_train_values - y_values
         if pred_test is not None:
-            y_test_value = pred_test.values.ravel() - y.values.ravel()
+            y_test_value = np.asarray(pred_test).ravel() - y_values
     else:
-        y_train_value = pred_train.values.ravel()
+        y_train_value = pred_train_values
         if pred_test is not None:
-            y_test_value = pred_test.values.ravel()
+            y_test_value = np.asarray(pred_test).ravel()
     
     # Plotly 図オブジェクトを作成
     fig = go.Figure()
@@ -119,7 +171,7 @@ def _yy_plot(
     # 実際の値と予測値の散布図を追加
     fig.add_trace(
         go.Scatter(
-            x=y.values.ravel(),
+            x=y_values,
             y=y_train_value,
             mode='markers',
             marker_color='blue',
@@ -130,7 +182,7 @@ def _yy_plot(
     if pred_test is not None:
         fig.add_trace(
             go.Scatter(
-                x=y.values.ravel(),
+                x=y_values,
                 y=y_test_value,
                 mode='markers',
                 marker_color='green',
@@ -140,13 +192,13 @@ def _yy_plot(
 
     # 対角線（実際の値 = 予測値）を追加
     if residual:
-        x_min_val = min(y.values.ravel())
-        x_max_val = max(y.values.ravel())
+        x_min_val = min(y_values)
+        x_max_val = max(y_values)
         y_min_val = 0
         y_max_val = 0
     else:
-        x_min_val = min([min(y.values.ravel()), min(y_train_value)])
-        x_max_val = max([max(y.values.ravel()), max(y_train_value)])
+        x_min_val = min([min(y_values), min(y_train_value)])
+        x_max_val = max([max(y_values), max(y_train_value)])
         y_min_val = x_min_val
         y_max_val = x_max_val
 
@@ -193,12 +245,13 @@ def yy_plot_ml(
     Returns:
         go.Figure: Plotlyの図オブジェクト。
     """
-    _, target = _resolve_model_target(model, target, object_col)
+    child_model, target = _resolve_model_target(model, target, object_col)
+    y = _get_training_y(child_model)
     # 予測値を取得
     if not cv:
-        if model.models[target].task=="classification":
-            cm = confusion_matrix(model.models[target].y, model.predict()[target])
-            labels = model.models[target].target_items
+        if child_model.task=="classification":
+            cm = confusion_matrix(y, model.predict()[target])
+            labels = child_model.target_items
             fig = go.Figure(
                 data=go.Heatmap(
                     z=cm,
@@ -217,15 +270,15 @@ def yy_plot_ml(
             )
         else:
             fig = _yy_plot(
-                model.models[target].y,
+                y,
                 model.predict()[target],
                 None,
                 residual
             )
     else:
-        if model.models[target].task=="classification":
-            cm = confusion_matrix(model.models[target].y.astype(int), model.models[target].cv_preds[train_test].astype(int))
-            labels = model.models[target].target_items
+        if child_model.task=="classification":
+            cm = confusion_matrix(y.astype(int), child_model.cv_preds[train_test].astype(int))
+            labels = child_model.target_items
             fig = go.Figure(
                 data=go.Heatmap(
                     z=cm,
@@ -243,9 +296,9 @@ def yy_plot_ml(
             )
         else:
             fig = _yy_plot(
-                    model.models[target].y,
-                    model.models[target].cv_preds["train"],
-                    model.models[target].cv_preds["test"],
+                    y,
+                    child_model.cv_preds["train"],
+                    child_model.cv_preds["test"],
                     residual
             )         
     return fig
@@ -287,17 +340,17 @@ def show_pd_and_ice(
         if target_col is None:
             raise ValueError("target_colを指定してください。")
         X_PD, xticks = child_model.get_pd_and_ice(target_col)
-        X = child_model.X
-        y = child_model.y
+        X = _get_training_X(child_model)
+        y = _get_training_y(child_model)
     if X_PD is None or target_col is None or xticks is None:
         raise ValueError("X_PD/target_col/xticks、またはmodelとtarget/object_colとtarget_colを指定してください。")
 
     if len(X_PD.shape)==3:
         X_PD = X_PD[:,:,col_idx]
         if y is not None:
-            y = (y.values.ravel()==col_idx).astype(int)
+            y = (np.asarray(y).ravel()==col_idx).astype(int)
     elif y is not None:
-        y=y.values.ravel()
+        y = np.asarray(y).ravel()
 
     fig = go.Figure()
 
@@ -384,8 +437,8 @@ def show_pd_2d(
         if target_cols is None:
             raise ValueError("target_colsを指定してください。")
         X_PD, xticks1, xticks2 = child_model.get_pd_2d(target_cols=target_cols)
-        X = child_model.X
-        y = child_model.y
+        X = _get_training_X(child_model)
+        y = _get_training_y(child_model)
     if X_PD is None or target_cols is None or xticks1 is None or xticks2 is None:
         raise ValueError("X_PD/target_cols/xticks1/xticks2、またはmodelとtarget/object_colとtarget_colsを指定してください。")
 
@@ -408,7 +461,7 @@ def show_pd_2d(
     )
 
     if X is not None:
-        marker_color = y.values.ravel() if y is not None else 'red'
+        marker_color = np.asarray(y).ravel() if y is not None else 'red'
         fig.add_trace(
             go.Scatter(
                 x=X[target_cols[0]].values,
@@ -474,7 +527,7 @@ def show_shap_scatter(
         if target_col is None:
             raise ValueError("target_colを指定してください。")
         X_shappd = child_model.get_shap_scatter_data(target_col)
-        rawX = child_model.X
+        rawX = _get_training_X(child_model)
         shap_values = child_model.shap_values
         unique_dict = child_model._shared_attr("unique_cols")
         target_items = getattr(child_model, "target_items", None)
@@ -572,7 +625,7 @@ def show_shap_beeswarm(
     """
     child_model, _ = _resolve_model_target(model, target, object_col)
     if child_model is not None:
-        X = child_model.X
+        X = _get_training_X(child_model)
         shap_values = child_model.shap_values
         cat_cols = child_model._shared_attr("cat_cols")
     if X is None or shap_values is None:
