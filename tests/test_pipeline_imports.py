@@ -33,3 +33,9 @@ def test_single_output_pipeline_class_is_defined_in_pipeline_module():
 
     assert SingleOutputMLModelPipeline.__module__ == "malchan.pipeline.single_output"
     assert "malchan.models.models" not in sys.modules
+
+
+def test_single_output_pipeline_does_not_delegate_to_legacy_models_module():
+    from malchan.pipeline.single_output import SingleOutputMLModelPipeline
+
+    assert SingleOutputMLModelPipeline.__new__ is object.__new__
