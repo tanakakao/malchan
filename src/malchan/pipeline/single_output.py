@@ -583,13 +583,13 @@ class SingleOutputMLModelPipeline:
 
             # トレーニングとテストスコアを計算
             cv_train = self.score(_X_train, _y_train, cv_model)
-            train_predicts = self.predict(_X_train, cv_model)
+            train_predicts = self.predict(_X_train, cv_model, proba=self.task == "classification")
             score_train_cv.append(cv_train)
             train_predicts["index"] = train_index
             predicts_train_cv.append(train_predicts)
 
             cv_test = self.score(_X_test, _y_test, cv_model)
-            test_predicts = self.predict(_X_test, cv_model)
+            test_predicts = self.predict(_X_test, cv_model, proba=self.task == "classification")
             score_test_cv.append(cv_test)
             test_predicts["index"] = test_index
             predicts_test_cv.append(test_predicts)
@@ -598,7 +598,7 @@ class SingleOutputMLModelPipeline:
         score_train_cv = pd.concat(score_train_cv).groupby(level=0).mean()
         score_test_cv = pd.concat(score_test_cv).groupby(level=0).mean()
 
-        predicts_train_cv = self._aggregate_cv_train_predictions(predicts_train_cv)
+        predicts_train_cv = pd.concat(predicts_train_cv).reset_index(drop=True).set_index("index").sort_index().groupby('index').mean()
         predicts_test_cv = pd.concat(predicts_test_cv).reset_index(drop=True).set_index("index").sort_index()
 
         self.cv_scores = {
@@ -609,24 +609,6 @@ class SingleOutputMLModelPipeline:
             'train': predicts_train_cv,
             'test': predicts_test_cv
         }
-
-    def _aggregate_cv_train_predictions(self, predicts_train_cv: List[pd.DataFrame]) -> pd.DataFrame:
-        """Aggregate cross-validation train predictions by original row index.
-
-        Args:
-            predicts_train_cv: Per-fold training prediction dataframes. Each dataframe
-                must contain an ``index`` column with the original row positions.
-
-        Returns:
-            pd.DataFrame: Aggregated training predictions indexed by the original row
-            positions. Regression predictions are averaged. Classification
-            predictions use the most frequent class so string labels can be handled.
-        """
-        predicts = pd.concat(predicts_train_cv).reset_index(drop=True).set_index("index").sort_index()
-        if self.task == "regression":
-            return predicts.groupby("index").mean()
-
-        return predicts.groupby("index").agg(lambda values: values.mode().iloc[0])
 
     def shap(
         self,
