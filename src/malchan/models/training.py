@@ -185,20 +185,27 @@ def tune_model(
     task="regression",
     n_trials=100,
     verbose=0
-) -> RegressorMixin:
-    """
-    モデルをチューニングする関数。アンサンブルモデルのチューニングにはOptunaSearchCVを使用。
+) -> Tuple[RegressorMixin, Optional[Union[Dict[str, Any], List[Dict[str, Any]]]], Optional[Dict[str, Any]]]:
+    """モデルのハイパーパラメータをOptunaSearchCVでチューニングする。
 
     Args:
         X (Union[np.ndarray, pd.DataFrame]): 特徴量データ。
         y (Union[np.ndarray, pd.Series]): ターゲットデータ。
-        model_pipeline (Pipeline): モデルパイプライン。
-        model_names (List[str]): 使用するモデルの名前のリスト。
-        base_model (Optional[str]): ベースモデルの名前。スタッキング、バギング、ブースティングのときに使用。デフォルトは None。
-        ens_type (Optional[str]): アンサンブルの種類。'アンサンブル', 'スタッキング', 'バギング', 'ブースティング' から選択。デフォルトは None。
+        model_pipeline (Pipeline): チューニング対象のモデルパイプライン。
+        model_names (List[str]): 使用するモデル名のリスト。
+        base_model (Optional[str]): アンサンブルのベースモデル名。
+        ens_type (Optional[str]): アンサンブル種別。
+        sampling_method: 分類タスクで使用するサンプリング方式。
+        cat_index (Optional[List[int]]): 前処理前のカテゴリ特徴量インデックス。
+        cat_index_fit (Optional[List[int]]): 学習時にモデルへ渡すカテゴリ特徴量インデックス。
+        task: タスク種別。``regression`` または ``classification``。
+        n_trials: Optunaの試行回数。
+        verbose: OptunaSearchCVのログ出力レベル。
 
     Returns:
-        RegressorMixin: チューニングされたモデルまたはそのままのモデルパイプライン。
+        Tuple[RegressorMixin, Optional[Union[Dict[str, Any], List[Dict[str, Any]]]], Optional[Dict[str, Any]]]:
+            チューニング済みモデル、単体モデルまたは構成モデルの最良パラメータ、
+            アンサンブルのベースモデル最良パラメータ。単体モデルでは第3要素はNone。
     """
     if ens_type:
         # アンサンブルモデルのパラメータを取得
@@ -216,6 +223,7 @@ def tune_model(
         )
 
     fit_params: Dict[str, Any] = {}
+    best_base_param = None
 
     # LightGBMモデルの場合、カテゴリカル特徴量のインデックスを設定
     if model_names[0] == 'LightGBM' and (ens_type is not None):
