@@ -62,3 +62,31 @@ def test_make_predictor_accepts_empty_tuned_linear_regression_param_dict():
     )
 
     assert isinstance(predictor, LinearRegression)
+
+
+def test_make_bagging_predictor_defaults_base_model_to_first_model():
+    """バギングでbase_model未指定の場合は先頭モデルをベースモデルにする。"""
+    predictor = make_predictor(
+        model_names=["Ridge"],
+        ensemble=True,
+        ens_type="バギング",
+        base_model=None,
+        task="regression",
+    )
+
+    assert isinstance(predictor.estimator, Ridge)
+    assert predictor.estimator.alpha == 0.01
+
+
+def test_make_boosting_predictor_defaults_base_model_to_first_model():
+    """ブースティングでbase_model未指定の場合は先頭モデルをベースモデルにする。"""
+    predictor = make_predictor(
+        model_names=["Ridge"],
+        ensemble=True,
+        ens_type="ブースティング",
+        base_model=None,
+        task="regression",
+    )
+
+    assert isinstance(predictor.estimator, Ridge)
+    assert predictor.estimator.alpha == 0.01
