@@ -77,3 +77,51 @@ def test_cv_score_keeps_label_predictions_for_regression(monkeypatch):
 
     assert proba_calls == [False] * 6
     assert list(pipeline.cv_preds["train"].columns) == ["y"]
+
+
+def test_cv_score_uses_encoded_labels_for_classification_fit(monkeypatch):
+    """分類CVの再学習では文字列ラベルではなくエンコード済みラベルを使用する。"""
+    encoded_folds = []
+    fake_training = types.ModuleType("malchan.models.training")
+
+    def cv_fit(X_train, y_train, cv_model, *args, **kwargs):
+        """Record labels passed to fold fitting."""
+        encoded_folds.append(set(y_train.tolist()))
+        return cv_model
+
+    fake_training.cv_fit = cv_fit
+    monkeypatch.setitem(sys.modules, "malchan.models.training", fake_training)
+
+    pipeline = SingleOutputMLModelPipeline()
+    pipeline.X = pd.DataFrame({"x": range(6)})
+    pipeline.y = pd.Series(["a", "b", "c", "a", "b", "c"], name="y_cat_str")
+    pipeline.task = "classification"
+    pipeline.cat_index = []
+    pipeline.cat_index_fit = []
+    pipeline.model_names = ["XGBoost"]
+    pipeline.sampling_method = None
+    pipeline.ensemble = False
+    pipeline.target_col = "y_cat_str"
+    pipeline.target_items = ["a", "b", "c"]
+    pipeline.idx2item = {0: "a", 1: "b", 2: "c"}
+    pipeline.item2idx = {"a": 0, "b": 1, "c": 2}
+    pipeline._encoded_y = pd.Series([0, 1, 2, 0, 1, 2], name="y_cat_str")
+
+    monkeypatch.setattr(pipeline, "_make_pipeline", lambda: object())
+    monkeypatch.setattr(
+        pipeline,
+        "score",
+        lambda X, y, model: pd.DataFrame({"ACCURACY": [1.0], "PRECISION": [1.0], "RECALL": [1.0], "F1": [1.0]}),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "predict",
+        lambda X=None, model=None, proba=False, idx2item=False: pd.DataFrame(
+            {"y_cat_str_a": [0.6] * len(X), "y_cat_str_b": [0.3] * len(X), "y_cat_str_c": [0.1] * len(X)}
+        ),
+    )
+
+    pipeline.cv_score(n_splits=3)
+
+    assert encoded_folds
+    assert all(labels <= {0, 1, 2} for labels in encoded_folds)
