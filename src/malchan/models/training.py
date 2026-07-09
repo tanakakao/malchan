@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import optuna
 from optuna.integration import OptunaSearchCV
+from optuna.distributions import IntDistribution
 
 from sklearn.base import RegressorMixin
 
@@ -172,6 +173,43 @@ def get_params(
             raise ValueError("task は regression か classification で指定してください。")    
     return params
 
+
+def adjust_param_grid_for_data(
+    params: Dict[str, Any],
+    model_names: List[str],
+    X: Union[np.ndarray, pd.DataFrame],
+    cv: int
+) -> Dict[str, Any]:
+    """入力データのサイズに合わせて探索範囲を安全な値へ調整する。
+
+    Args:
+        params (Dict[str, Any]): OptunaSearchCVに渡すハイパーパラメータ探索範囲。
+        model_names (List[str]): チューニング対象のモデル名。
+        X (Union[np.ndarray, pd.DataFrame]): 特徴量データ。
+        cv (int): 交差検証の分割数。
+
+    Returns:
+        Dict[str, Any]: 入力データで必ず評価できるように調整した探索範囲。
+    """
+    adjusted_params = params.copy()
+    n_samples, n_features = X.shape
+    min_train_samples = max(1, n_samples - int(np.ceil(n_samples / cv)))
+
+    for key, distribution in list(adjusted_params.items()):
+        is_pls_components = key.endswith("__n_components") and "PLS回帰" in model_names
+        if is_pls_components and isinstance(distribution, IntDistribution):
+            high = min(distribution.high, n_features, min_train_samples)
+            if high < distribution.low:
+                high = distribution.low
+            adjusted_params[key] = IntDistribution(
+                low=distribution.low,
+                high=high,
+                step=distribution.step,
+                log=distribution.log,
+            )
+
+    return adjusted_params
+
 def tune_model(
     X: Union[np.ndarray, pd.DataFrame],
     y: Union[np.ndarray, pd.Series],
@@ -241,11 +279,16 @@ def tune_model(
         sm = make_sampling_preprocess(y=y, method=sampling_method, cat_idx=cat_index, k_neighbors=5)
         X, y = sm.fit_resample(X, y)
     
+    cv = min(5, len(y))
+    if cv < 2:
+        raise ValueError("チューニングには2件以上の学習データが必要です。")
+    params = adjust_param_grid_for_data(params, model_names, X, cv)
+
     # OptunaSearchCVでモデルのハイパーパラメータをチューニング
     model_tune = OptunaSearchCV(
             model_pipeline,
             params,
-            cv=5,
+            cv=cv,
             n_jobs=-1,
             n_trials=n_trials,
             scoring='neg_root_mean_squared_error' if task=="regression" else "accuracy",
