@@ -166,16 +166,15 @@ def get_params(
             _params = {k.replace('predictor', 'predictor__final_estimator'): v for k, v in _params.items()}
             params.update(_params)
     elif ens_type in ['バギング', 'ブースティング']:
-        # バギングまたはブースティングの場合、ベースモデルのハイパーパラメータを取得して辞書に追加
+        # バギング・ブースティングは探索コストが大きいため、ベースモデル単体の探索範囲を返す
         if task=="regression":
-            _params = get_param_grid_reg(base_model)
+            params = get_param_grid_reg(base_model)
         elif task=="classification":
-            _params = get_param_grid_cls(base_model)
+            params = get_param_grid_cls(base_model)
         else:
             raise ValueError("task は regression か classification で指定してください。")
-        if _params is None:
+        if params is None:
             raise ValueError(f"{base_model} のチューニングパラメータが定義されていません。")
-        params = {k.replace('predictor', 'predictor__estimator'): v for k, v in _params.items()}
     else:
         # 単体モデルの場合、そのモデルのハイパーパラメータを取得
         if task=="regression":
@@ -224,6 +223,83 @@ def adjust_param_grid_for_data(
             )
 
     return adjusted_params
+
+
+def _use_single_base_model_for_tuning(
+    model_pipeline: Pipeline,
+    model_names: List[str],
+    base_model: Optional[str],
+    ens_type: Optional[str],
+    task: str,
+) -> Tuple[Pipeline, List[str], Optional[str]]:
+    """バギング・ブースティング用に単体ベースモデルのチューニングへ切り替える。
+
+    Args:
+        model_pipeline (Pipeline): チューニングに使用するパイプライン。
+        model_names (List[str]): 指定されたモデル名のリスト。
+        base_model (Optional[str]): アンサンブルのベースモデル名。未指定時は先頭モデルを使う。
+        ens_type (Optional[str]): アンサンブル種別。
+        task (str): タスク種別。``regression`` または ``classification``。
+
+    Returns:
+        Tuple[Pipeline, List[str], Optional[str]]: チューニング用パイプライン、
+            チューニング対象モデル名のリスト、解決済みベースモデル名。
+    """
+    if ens_type not in ["バギング", "ブースティング"]:
+        return model_pipeline, model_names, base_model
+
+    from .pipelines.predictor_pipeline import make_model
+    from .utils import reg_default_params, cls_default_params
+
+    resolved_base_model = base_model or model_names[0]
+    default_params = (
+        reg_default_params[resolved_base_model]
+        if task == "regression"
+        else cls_default_params[resolved_base_model]
+    )
+    model_pipeline.set_params(
+        predictor=make_model(resolved_base_model, task, default_params.copy())
+    )
+    return model_pipeline, [resolved_base_model], resolved_base_model
+
+
+def _restore_tuned_bagging_or_boosting_predictor(
+    model_pipeline: Pipeline,
+    model_names: List[str],
+    base_model: Optional[str],
+    ens_type: Optional[str],
+    task: str,
+    best_base_param: Optional[Dict[str, Any]],
+) -> Pipeline:
+    """単体チューニング結果を使ってバギング・ブースティング予測器を復元する。
+
+    Args:
+        model_pipeline (Pipeline): 単体モデルをチューニング済みのパイプライン。
+        model_names (List[str]): 元のモデル名のリスト。
+        base_model (Optional[str]): 解決済みベースモデル名。
+        ens_type (Optional[str]): アンサンブル種別。
+        task (str): タスク種別。``regression`` または ``classification``。
+        best_base_param (Optional[Dict[str, Any]]): 単体チューニングで得たベースモデルパラメータ。
+
+    Returns:
+        Pipeline: チューニング済みパラメータをベース推定器に設定したアンサンブルパイプライン。
+    """
+    if ens_type not in ["バギング", "ブースティング"]:
+        return model_pipeline
+
+    from .pipelines.predictor_pipeline import make_ens_predictor
+
+    model_pipeline.set_params(
+        predictor=make_ens_predictor(
+            ens_type=ens_type,
+            model_names=model_names,
+            base_model=base_model or model_names[0],
+            model_params=None,
+            base_model_params=best_base_param,
+            task=task,
+        )
+    )
+    return model_pipeline
 
 def tune_model(
     X: Union[np.ndarray, pd.DataFrame],
@@ -275,19 +351,28 @@ def tune_model(
             task=task
         )
 
+    original_model_names = model_names
+    model_pipeline, tuning_model_names, base_model = _use_single_base_model_for_tuning(
+        model_pipeline=model_pipeline,
+        model_names=model_names,
+        base_model=base_model,
+        ens_type=ens_type,
+        task=task,
+    )
+
     fit_params: Dict[str, Any] = {}
     best_base_param = None
 
     # LightGBMモデルの場合、カテゴリカル特徴量のインデックスを設定
-    if model_names[0] == 'LightGBM' and (ens_type is not None):
+    if tuning_model_names[0] == 'LightGBM' and (ens_type is not None):
         fit_params['predictor__categorical_feature'] = cat_index_fit
 
     # CatBoostモデルの場合、カテゴリカル特徴量のインデックスを設定
-    elif model_names[0] == 'CatBoost' and not (ens_type is not None):
+    elif tuning_model_names[0] == 'CatBoost' and not (ens_type is not None):
         fit_params['predictor__cat_features'] = cat_index_fit if len(cat_index)>0 else None
         fit_params['predictor__verbose'] = False
 
-    if sampling_method=="sample_weight" and model_names[0] not in ["MLPClassifier","GaussianProcessClassifier"] and (ens_type is not None) and task=="classification":
+    if sampling_method=="sample_weight" and tuning_model_names[0] not in ["MLPClassifier","GaussianProcessClassifier"] and (ens_type is not None) and task=="classification":
         fit_params['predictor__sample_weight'] = compute_sample_weight("balanced", y)
     
     if sampling_method in ["ros","rus","smote"]:
@@ -297,7 +382,7 @@ def tune_model(
     cv = min(5, len(y))
     if cv < 2:
         raise ValueError("チューニングには2件以上の学習データが必要です。")
-    params = adjust_param_grid_for_data(params, model_names, X, cv)
+    params = adjust_param_grid_for_data(params, tuning_model_names, X, cv)
 
     # OptunaSearchCVでモデルのハイパーパラメータをチューニング
     model_tune = OptunaSearchCV(
@@ -327,7 +412,9 @@ def tune_model(
         if ens_type in ['スタッキング', 'バギング', 'ブースティング']:
             best_base_param = {}
             for k in best_params_.keys():
-                if k.split("__")[1]=="final_estimator":
+                if ens_type in ['バギング', 'ブースティング']:
+                    best_base_param[k.replace("predictor__", "")] = best_params_[k]
+                elif k.split("__")[1]=="final_estimator":
                     best_base_param[k.replace("predictor__final_estimator__", "")] = best_params_[k]
                 elif k.split("__")[1]=="estimator":
                     best_base_param[k.replace("predictor__estimator__", "")] = best_params_[k]
@@ -337,6 +424,16 @@ def tune_model(
         best_params = {}
         for k in best_params_.keys():
             best_params[k.replace("predictor__", "")] = best_params_[k]        
+    if ens_type in ['バギング', 'ブースティング']:
+        model = _restore_tuned_bagging_or_boosting_predictor(
+            model_pipeline=model,
+            model_names=original_model_names,
+            base_model=base_model,
+            ens_type=ens_type,
+            task=task,
+            best_base_param=best_base_param,
+        )
+        model.fit(X, y)
     return model, best_params, best_base_param
 
 def cv_fit(
