@@ -542,7 +542,7 @@ def get_param_grid_reg(model_name: str) -> dict:
         },
         'CatBoost': {
             'predictor__learning_rate': FloatDistribution(1e-5, 1., log=True),
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
+            'predictor__iterations': IntDistribution(50, 300, step=50),
             'predictor__max_depth': IntDistribution(2, 15),
             'predictor__min_child_samples': IntDistribution(2, 50),
             'predictor__colsample_bylevel': FloatDistribution(0.1, 1.0, step=0.1),
@@ -685,7 +685,7 @@ def get_param_grid_cls(model_name: str) -> dict:
         },
         'CatBoost': {
             'predictor__learning_rate': FloatDistribution(1e-5, 1., log=True),
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
+            'predictor__iterations': IntDistribution(50, 300, step=50),
             'predictor__max_depth': IntDistribution(2, 15),
             'predictor__min_child_samples': IntDistribution(2, 50),
             'predictor__colsample_bylevel': FloatDistribution(0.1, 1.0, step=0.1),
