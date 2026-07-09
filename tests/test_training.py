@@ -31,3 +31,33 @@ def test_tune_model_returns_none_base_params_for_single_model(monkeypatch):
     assert model is not None
     assert best_params == {"alpha": 0.1}
     assert best_base_param is None
+
+
+def test_catboost_regression_tuning_uses_iterations_parameter():
+    """CatBoost回帰のチューニング対象にiterationsを使用する。
+
+    CatBoostは``iterations``と``n_estimators``を同時に設定できないため、
+    デフォルトパラメータで使っている``iterations``に統一されていることを確認する。
+    """
+    pytest.importorskip("optuna")
+    from malchan.models.utils import get_param_grid_reg
+
+    params = get_param_grid_reg("CatBoost")
+
+    assert "predictor__iterations" in params
+    assert "predictor__n_estimators" not in params
+
+
+def test_catboost_classification_tuning_uses_iterations_parameter():
+    """CatBoost分類のチューニング対象にiterationsを使用する。
+
+    CatBoostは``iterations``と``n_estimators``を同時に設定できないため、
+    デフォルトパラメータで使っている``iterations``に統一されていることを確認する。
+    """
+    pytest.importorskip("optuna")
+    from malchan.models.utils import get_param_grid_cls
+
+    params = get_param_grid_cls("CatBoost")
+
+    assert "predictor__iterations" in params
+    assert "predictor__n_estimators" not in params
