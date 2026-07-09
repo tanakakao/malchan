@@ -291,9 +291,38 @@ class SingleOutputMLModelPipeline:
                       num_scale_type: Optional[str] = None, cat_impute: bool = False, poly: bool = False,
                       poly_degree: int = 1, poly_interaction_only: bool = True, decomposition: bool = False,
                       decomposition_method: str = "PCA", dec_n_components: int = 2, sampling_method=None) -> None:
-        """Fit the model after X/y and shared metadata have been prepared."""
+        """Fit the model after X/y and shared metadata have been prepared.
+
+        Args:
+            target_col: Target column name. Set to ``None`` for applicability-domain models.
+            task: Learning task name, such as ``"regression"`` or ``"classification"``.
+            model_names: Model names to train.
+            fingerprints: Fingerprint names used for SMILES featurization.
+            comp_method: Composition featurization method.
+            comp_feats: Composition feature names.
+            ad: Whether to fit an applicability-domain model.
+            tuning: Whether to tune hyperparameters.
+            ensemble: Whether to use an ensemble predictor.
+            ens_type: Ensemble type.
+            base_model: Base model name for ensemble predictors.
+            model_params: Predictor parameters.
+            base_model_param: Base model parameters.
+            num_impute_type: Numeric imputation type.
+            num_scale_type: Numeric scaling type.
+            cat_impute: Whether to impute categorical values.
+            poly: Whether to add polynomial features.
+            poly_degree: Polynomial degree.
+            poly_interaction_only: Whether to create interaction-only polynomial features.
+            decomposition: Whether to apply decomposition.
+            decomposition_method: Decomposition method name.
+            dec_n_components: Number of decomposition components.
+            sampling_method: Sampling method for classification.
+        """
         from ..models.training import fit_model, tune_model
         from ..models.utils import feature_names_from_pipeline, label_encode
+
+        self.target_col = target_col if not ad else "AD"
+        self.task = task if not ad else "AD"
 
         X_train = self._get_X()
         y_train = self._get_y()
@@ -303,8 +332,6 @@ class SingleOutputMLModelPipeline:
         comp_cols = self._shared_attr("comp_cols")
         all_cols = self._shared_attr("all_cols")
 
-        self.target_col = target_col if not ad else "AD"
-        self.task = task if not ad else "AD"
         self.model_names = model_names
         self.ensemble = ensemble if not ad else False
         self.ens_type = ens_type
