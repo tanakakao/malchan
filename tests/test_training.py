@@ -173,3 +173,80 @@ def test_bagging_params_use_single_model_parameter_names(monkeypatch):
     )
 
     assert params == {"predictor__alpha": [0.1]}
+
+
+def test_lightgbm_ensemble_tuning_does_not_pass_direct_categorical_feature(monkeypatch):
+    """LightGBMのVotingチューニングではVotingRegressorへ直接fit_paramsを渡さない。"""
+    pytest.importorskip("optuna")
+    from sklearn.ensemble import VotingRegressor
+    from sklearn.linear_model import Ridge
+    from sklearn.pipeline import Pipeline
+    from malchan.models import training
+
+    captured = {}
+
+    class DummySearchCV:
+        def __init__(self, estimator, params, **kwargs):
+            self.best_estimator_ = estimator
+            self.best_params_ = {}
+
+        def fit(self, X, y, **fit_params):
+            captured["fit_params"] = fit_params
+            return self
+
+    monkeypatch.setattr(training, "OptunaSearchCV", DummySearchCV)
+    monkeypatch.setattr(training, "get_params", lambda **kwargs: {})
+
+    pipeline = Pipeline([
+        ("predictor", VotingRegressor([("model1", Ridge()), ("model2", Ridge())])),
+    ])
+
+    training.tune_model(
+        X=[[0.0], [1.0], [2.0]],
+        y=[0.0, 1.0, 2.0],
+        model_pipeline=pipeline,
+        model_names=["LightGBM", "LightGBM"],
+        ens_type="アンサンブル",
+        cat_index_fit=[0],
+        task="regression",
+        n_trials=1,
+    )
+
+    assert "predictor__categorical_feature" not in captured["fit_params"]
+
+
+def test_lightgbm_single_tuning_passes_categorical_feature(monkeypatch):
+    """単体LightGBMのチューニングではカテゴリ特徴量をLightGBMへ渡す。"""
+    pytest.importorskip("optuna")
+    from sklearn.pipeline import Pipeline
+    from sklearn.dummy import DummyRegressor
+    from malchan.models import training
+
+    captured = {}
+
+    class DummySearchCV:
+        def __init__(self, estimator, params, **kwargs):
+            self.best_estimator_ = estimator
+            self.best_params_ = {}
+
+        def fit(self, X, y, **fit_params):
+            captured["fit_params"] = fit_params
+            return self
+
+    monkeypatch.setattr(training, "OptunaSearchCV", DummySearchCV)
+    monkeypatch.setattr(training, "get_params", lambda **kwargs: {})
+
+    pipeline = Pipeline([("predictor", DummyRegressor())])
+
+    training.tune_model(
+        X=[[0.0], [1.0], [2.0]],
+        y=[0.0, 1.0, 2.0],
+        model_pipeline=pipeline,
+        model_names=["LightGBM"],
+        cat_index_fit=[0],
+        task="regression",
+        n_trials=1,
+    )
+
+    assert captured["fit_params"]["predictor__categorical_feature"] == [0]
+    assert "predictor__callbacks" in captured["fit_params"]

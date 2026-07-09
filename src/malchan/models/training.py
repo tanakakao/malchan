@@ -330,8 +330,9 @@ def tune_model(
     best_base_param = None
 
     # LightGBMモデルの場合、カテゴリカル特徴量のインデックスを設定
-    if tuning_model_names[0] == 'LightGBM' and (ens_type is not None):
+    if tuning_model_names[0] == 'LightGBM' and ens_type is None:
         fit_params['predictor__categorical_feature'] = cat_index_fit
+        fit_params['predictor__callbacks'] = [lgb.log_evaluation(period=0)]
 
     # CatBoostモデルの場合、カテゴリカル特徴量のインデックスを設定
     elif tuning_model_names[0] == 'CatBoost' and not (ens_type is not None):
