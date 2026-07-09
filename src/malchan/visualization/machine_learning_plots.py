@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from typing import List, Optional, Union, Dict, Tuple, Callable, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import OrdinalEncoder
@@ -13,22 +13,65 @@ from malchan.models import MLModelPipeline
 import warnings
 warnings.simplefilter('ignore')
 
-def show_importances(
-    feature_names: List[str],
-    feature_importances: np.ndarray,
-    n_bar: int = 15
-) -> go.Figure:
-    """
-    特徴量の重要度を棒グラフで表示する関数。
+def _resolve_model_target(model: Optional[MLModelPipeline], target: Optional[str], object_col: Optional[str]) -> Tuple[Optional[Any], Optional[str]]:
+    """Resolve a child model from a model pipeline.
 
     Args:
-        feature_names (List[str]): 特徴量の名前のリスト。
-        feature_importances (np.ndarray): 特徴量の重要度を示す配列。
-        n_bar (int): 表示するバーの数（上位の特徴量数）。
+        model (Optional[MLModelPipeline]): Model pipeline that has a ``models`` mapping.
+        target (Optional[str]): Output column name used as a key of ``model.models``.
+        object_col (Optional[str]): Alias for ``target`` kept for visualization APIs.
 
     Returns:
-        go.Figure: 棒グラフを含む Plotly 図オブジェクト。
+        Tuple[Optional[Any], Optional[str]]: The selected child model and resolved key.
+
+    Raises:
+        ValueError: If only one of ``model`` and output key is provided.
+        KeyError: If the resolved output key does not exist in ``model.models``.
     """
+    resolved_target = target if target is not None else object_col
+    if model is None:
+        if resolved_target is not None:
+            raise ValueError("modelを指定しない場合、target/object_colは指定できません。")
+        return None, None
+    if resolved_target is None:
+        raise ValueError("modelを指定する場合、targetまたはobject_colを指定してください。")
+    if resolved_target not in model.models:
+        raise KeyError(f"{resolved_target!r} is not found in model.models.")
+    return model.models[resolved_target], resolved_target
+
+def show_importances(
+    feature_names: Optional[List[str]] = None,
+    feature_importances: Optional[np.ndarray] = None,
+    n_bar: int = 15,
+    model: Optional[MLModelPipeline] = None,
+    target: Optional[str] = None,
+    object_col: Optional[str] = None,
+    importance_type: str = "model",
+) -> go.Figure:
+    """特徴量の重要度を棒グラフで表示します。
+
+    Args:
+        feature_names (Optional[List[str]]): 特徴量の名前のリスト。
+        feature_importances (Optional[np.ndarray]): 特徴量の重要度。
+        n_bar (int): 表示する上位特徴量数。
+        model (Optional[MLModelPipeline]): 学習済みモデルパイプライン。
+        target (Optional[str]): 可視化対象の目的変数名。
+        object_col (Optional[str]): ``target`` の別名。
+        importance_type (str): ``model`` 指定時に取得する重要度の種類。
+
+    Returns:
+        go.Figure: 重要度の棒グラフ。
+
+    Raises:
+        ValueError: 必要な入力が不足している場合。
+    """
+    child_model, _ = _resolve_model_target(model, target, object_col)
+    if child_model is not None:
+        feature_names = child_model.feature_names
+        importance_getter = getattr(child_model, f"{importance_type}_importance")
+        feature_importances = importance_getter()
+    if feature_names is None or feature_importances is None:
+        raise ValueError("feature_names/feature_importances、またはmodelとtarget/object_colを指定してください。")
     # 特徴量重要度でソートするインデックスを取得
     sort_idx = np.argsort(-np.abs(feature_importances))
 
@@ -131,20 +174,26 @@ def _yy_plot(
 
 def yy_plot_ml(
     model: MLModelPipeline,
-    target: str,
+    target: Optional[str] = None,
     cv: bool = False,
     residual: bool = False,
     train_test="train",
+    object_col: Optional[str] = None,
 ) -> go.Figure:
-    """
-    実際の値と予測値をプロットする散布図と対角線を作成する関数。
+    """実測値と予測値、または分類の混同行列を表示します。
 
     Args:
-        _model (MLModelPipeline): モデルパイプラインオブジェクト。
+        model (MLModelPipeline): 学習済みモデルパイプライン。
+        target (Optional[str]): 可視化対象の目的変数名。
+        cv (bool): Cross validation の予測値を使うかどうか。
+        residual (bool): 回帰で残差を表示するかどうか。
+        train_test (str): 分類CVで表示する予測値の区分。
+        object_col (Optional[str]): ``target`` の別名。
 
     Returns:
-        go.Figure: 散布図と対角線を含む Plotly 図オブジェクト。
+        go.Figure: Plotlyの図オブジェクト。
     """
+    _, target = _resolve_model_target(model, target, object_col)
     # 予測値を取得
     if not cv:
         if model.models[target].task=="classification":
@@ -202,35 +251,56 @@ def yy_plot_ml(
     return fig
 
 def show_pd_and_ice(
-    X_PD: np.ndarray,
-    target_col: str,
-    xticks: np.ndarray,
+    X_PD: Optional[np.ndarray] = None,
+    target_col: Optional[str] = None,
+    xticks: Optional[np.ndarray] = None,
     X=None,
     y=None,
     ice: bool = True,
-    col_idx=-1
+    col_idx=-1,
+    model: Optional[MLModelPipeline] = None,
+    target: Optional[str] = None,
+    object_col: Optional[str] = None,
 ) -> go.Figure:
-    """
-    部分依存プロット（Partial Dependence Plot）と個別条件期待値（ICE）を表示する関数。
+    """部分依存プロット（PD）とICEを表示します。
 
     Args:
-        X_PD (np.ndarray): 部分依存プロットデータ（ICEを含む）。
-        xticks (np.ndarray): 特徴量の値（x軸）。
-        ice (bool): ICEを表示するかどうかのフラグ（デフォルトは True）。
+        X_PD (Optional[np.ndarray]): 事前計算済みのPD/ICEデータ。
+        target_col (Optional[str]): x軸に表示する特徴量名。
+        xticks (Optional[np.ndarray]): ``target_col`` のグリッド値。
+        X (Optional[pd.DataFrame]): 実データの特徴量。指定時は散布図を重ねます。
+        y (Optional[pd.DataFrame]): 実データの目的変数。指定時は散布図を重ねます。
+        ice (bool): ICE線を表示するかどうか。
+        col_idx (int): 分類モデルの出力次元インデックス。
+        model (Optional[MLModelPipeline]): 学習済みモデルパイプライン。
+        target (Optional[str]): 可視化対象の目的変数名。
+        object_col (Optional[str]): ``target`` の別名。
 
     Returns:
-        go.Figure: 部分依存プロットとICEを含む Plotly 図オブジェクト。
+        go.Figure: PD/ICEのPlotly図オブジェクト。
+
+    Raises:
+        ValueError: 必要な入力が不足している場合。
     """
+    child_model, _ = _resolve_model_target(model, target, object_col)
+    if child_model is not None:
+        if target_col is None:
+            raise ValueError("target_colを指定してください。")
+        X_PD, xticks = child_model.get_pd_and_ice(target_col)
+        X = child_model.X
+        y = child_model.y
+    if X_PD is None or target_col is None or xticks is None:
+        raise ValueError("X_PD/target_col/xticks、またはmodelとtarget/object_colとtarget_colを指定してください。")
+
     if len(X_PD.shape)==3:
         X_PD = X_PD[:,:,col_idx]
-        y = (y.values.ravel()==col_idx).astype(int)
-    else:
+        if y is not None:
+            y = (y.values.ravel()==col_idx).astype(int)
+    elif y is not None:
         y=y.values.ravel()
-    
-    # Plotly 図オブジェクトを作成
+
     fig = go.Figure()
-    
-    # ICEプロットを追加するかどうかを判断
+
     if ice:
         for i in range(X_PD.shape[1]):
             fig.add_trace(
@@ -240,11 +310,10 @@ def show_pd_and_ice(
                     mode='lines',
                     line=dict(color='rgba(0,100,200,0.2)'),
                     name=None,
-                    showlegend=False  
+                    showlegend=False
                 )
             )
-        
-    # 部分依存プロットの平均値を追加
+
     fig.add_trace(
         go.Scatter(
             x=xticks,
@@ -255,78 +324,91 @@ def show_pd_and_ice(
         )
     )
 
-    if (X is not None)&(y is not None):
+    if (X is not None) and (y is not None):
         fig.add_trace(
             go.Scatter(
                 x=X[target_col].values.ravel(),
                 y=y,
                 mode='markers',
                 marker_color="red",
-                name='Autual Data('+target_col+')',
+                name='Actual Data('+target_col+')',
                 marker=dict(size=10,)
             )
         )
-    
 
-    # グラフのレイアウトを設定
     fig.update_layout(
         title='Partial Dependence Plot with ICE',
         xaxis_title=target_col,
         yaxis_title='Predicted Value',
-        # showlegend=False,
         width=650,
         height=600
     )
 
     return fig
 
+
 def show_pd_2d(
-    X_PD: np.ndarray,
-    target_cols: List[str],
-    xticks1: np.ndarray,
-    xticks2: np.ndarray,
+    X_PD: Optional[np.ndarray] = None,
+    target_cols: Optional[List[str]] = None,
+    xticks1: Optional[np.ndarray] = None,
+    xticks2: Optional[np.ndarray] = None,
     X=None,
     y=None,
-    col_idx=-1
+    col_idx=-1,
+    model: Optional[MLModelPipeline] = None,
+    target: Optional[str] = None,
+    object_col: Optional[str] = None,
 ) -> go.Figure:
-    """
-    部分依存プロット（Partial Dependence Plot）と個別条件期待値（ICE）を表示する関数。
+    """2次元の部分依存プロットを表示します。
 
     Args:
-        X_PD (np.ndarray): 部分依存プロットデータ（ICEを含む）。
-        xticks (np.ndarray): 特徴量の値（x軸）。
-        ice (bool): ICEを表示するかどうかのフラグ（デフォルトは True）。
+        X_PD (Optional[np.ndarray]): 事前計算済みの2次元PDデータ。
+        target_cols (Optional[List[str]]): x軸とy軸に表示する2つの特徴量名。
+        xticks1 (Optional[np.ndarray]): 1つ目の特徴量のグリッド値。
+        xticks2 (Optional[np.ndarray]): 2つ目の特徴量のグリッド値。
+        X (Optional[pd.DataFrame]): 実データの特徴量。指定時は散布図を重ねます。
+        y (Optional[pd.DataFrame]): 実データの目的変数。散布図の色に使います。
+        col_idx (int): 分類モデルの出力次元インデックス。
+        model (Optional[MLModelPipeline]): 学習済みモデルパイプライン。
+        target (Optional[str]): 可視化対象の目的変数名。
+        object_col (Optional[str]): ``target`` の別名。
 
     Returns:
-        go.Figure: 部分依存プロットとICEを含む Plotly 図オブジェクト。
+        go.Figure: 2次元PDのPlotly図オブジェクト。
+
+    Raises:
+        ValueError: 必要な入力が不足している場合。
     """
+    child_model, _ = _resolve_model_target(model, target, object_col)
+    if child_model is not None:
+        if target_cols is None:
+            raise ValueError("target_colsを指定してください。")
+        X_PD, xticks1, xticks2 = child_model.get_pd_2d(target_cols=target_cols)
+        X = child_model.X
+        y = child_model.y
+    if X_PD is None or target_cols is None or xticks1 is None or xticks2 is None:
+        raise ValueError("X_PD/target_cols/xticks1/xticks2、またはmodelとtarget/object_colとtarget_colsを指定してください。")
 
     if len(X_PD.shape)==3:
         X_PD = X_PD[:,:,col_idx]
-    
-    # Plotly 図オブジェクトを作成
-    fig = go.Figure() 
-    
-    # 部分依存プロットの平均値を追加
+
+    fig = go.Figure()
     fig.add_trace(
         go.Contour(
-            z=X_PD.mean(axis=1),  # 取得関数の値
-            x=xticks1.ravel(),  # グリッドのx軸
-            y=xticks2.ravel(),  # グリッドのy軸
-            ncontours=25,  # 等高線の数
-            showscale=True,  # カラーバーを表示
-            colorbar=dict(
-                title="予測値",
-                lenmode="pixels",
-                len=200
-            ),  # カラーバー設定
-            contours_coloring='heatmap',  # 等高線のカラーリング方法
-            colorscale='RdBu_r',  # カラースケール
-            hoverinfo='none'  # ホバー情報を非表示
+            z=X_PD.mean(axis=1),
+            x=xticks1.ravel(),
+            y=xticks2.ravel(),
+            ncontours=25,
+            showscale=True,
+            colorbar=dict(title="予測値", lenmode="pixels", len=200),
+            contours_coloring='heatmap',
+            colorscale='RdBu_r',
+            hoverinfo='none'
         )
     )
 
     if X is not None:
+        marker_color = y.values.ravel() if y is not None else 'red'
         fig.add_trace(
             go.Scatter(
                 x=X[target_cols[0]].values,
@@ -334,18 +416,14 @@ def show_pd_2d(
                 mode='markers',
                 name='Actual Data',
                 marker=dict(
-                    color=y.values.ravel(),
+                    color=marker_color,
                     colorscale='RdBu_r',
                     size=10,
-                    line=dict(
-                        color='black',  # エッジの色
-                        width=1         # エッジの太さ
-                    )
+                    line=dict(color='black', width=1)
+                )
             )
         )
-        )
 
-    # グラフのレイアウトを設定
     fig.update_layout(
         title='Partial Dependence Plot with ICE',
         xaxis_title=target_cols[0],
@@ -358,33 +436,54 @@ def show_pd_2d(
     return fig
 
 def show_shap_scatter(
-    X_shappd,
-    rawX: pd.DataFrame,
-    shap_values: np.ndarray,
-    target_col: str,
+    X_shappd=None,
+    rawX: Optional[pd.DataFrame] = None,
+    shap_values: Optional[np.ndarray] = None,
+    target_col: Optional[str] = None,
     interactive_col: Optional[str] = None,
-    unique_dict: Dict[str, list] = {},
+    unique_dict: Optional[Dict[str, list]] = None,
     target_item=None,
-    target_items: Dict[str, list] = None,
+    target_items: Optional[Dict[str, list]] = None,
+    model: Optional[MLModelPipeline] = None,
+    target: Optional[str] = None,
+    object_col: Optional[str] = None,
 ) -> go.Figure:
-    """
-    SHAP値を用いた散布図を表示する関数。
+    """SHAP値の散布図を表示します。
 
     Args:
-        X (pd.DataFrame): 特徴量データ。
-        shap_values (np.ndarray): SHAP値（サンプル数 x 特徴量数）。
-        target_col (str): ターゲット列の名前。
-        modelname (Optional[str]): モデルの名前（デフォルトは None）。
-        interactive_col (Optional[str]): インタラクティブに色分けする特徴量（デフォルトは None）。
-        unique_dict (Dict[str, list]): 特徴量のユニーク値に関する辞書（デフォルトは空辞書）。
+        X_shappd: 事前計算済みのSHAP散布図用データ。
+        rawX (Optional[pd.DataFrame]): 元の特徴量データ。
+        shap_values (Optional[np.ndarray]): SHAP値。
+        target_col (Optional[str]): x軸に表示する特徴量名。
+        interactive_col (Optional[str]): 色分けに使う特徴量名。
+        unique_dict (Optional[Dict[str, list]]): カテゴリ特徴量のユニーク値辞書。
+        target_item: 分類モデルのクラス名。
+        target_items (Optional[Dict[str, list]]): 分類モデルのクラス名一覧。
+        model (Optional[MLModelPipeline]): 学習済みモデルパイプライン。
+        target (Optional[str]): 可視化対象の目的変数名。
+        object_col (Optional[str]): ``target`` の別名。
 
     Returns:
-        go.Figure: SHAP値の散布図を含む Plotly 図オブジェクト。
+        go.Figure: SHAP散布図のPlotly図オブジェクト。
+
+    Raises:
+        ValueError: 必要な入力が不足している場合。
     """
-    # SHAP値がNoneの場合のエラーハンドリング
+    child_model, _ = _resolve_model_target(model, target, object_col)
+    if child_model is not None:
+        if target_col is None:
+            raise ValueError("target_colを指定してください。")
+        X_shappd = child_model.get_shap_scatter_data(target_col)
+        rawX = child_model.X
+        shap_values = child_model.shap_values
+        unique_dict = child_model._shared_attr("unique_cols")
+        target_items = getattr(child_model, "target_items", None)
     if shap_values is None:
         raise ValueError("SHAP値がNoneです。正しいSHAP値を提供してください。")
-    
+    if X_shappd is None or rawX is None or target_col is None:
+        raise ValueError("X_shappd/rawX/target_col、またはmodelとtarget/object_colとtarget_colを指定してください。")
+    unique_dict = unique_dict or {}
+
     # SHAP値とターゲット列に対するデータを取得
     X_plot = X_shappd[target_col]
     if target_item is not None:
@@ -444,27 +543,41 @@ def show_shap_scatter(
     return fig
 
 def show_shap_beeswarm(
-    X: pd.DataFrame,
-    shap_values: np.ndarray,
+    X: Optional[pd.DataFrame] = None,
+    shap_values: Optional[np.ndarray] = None,
     n_shap_top: int = 5,
-    cat_cols: List[str] = [],
-    col_idx=0
+    cat_cols: Optional[List[str]] = None,
+    col_idx=0,
+    model: Optional[MLModelPipeline] = None,
+    target: Optional[str] = None,
+    object_col: Optional[str] = None,
 ) -> go.Figure:
-    """
-    SHAP値のビーズウォームプロットを作成する関数。
+    """SHAP値のビーズウォームプロットを表示します。
 
     Args:
-        X (pd.DataFrame): 特徴量データ。
-        shap_values (np.ndarray): SHAP値（サンプル数 x 特徴量数）。
-        n_shap_top (int): プロットに表示する上位の特徴量の数。
-        cat_cols (List[str]): カテゴリカル特徴量の列名リスト。
+        X (Optional[pd.DataFrame]): 特徴量データ。
+        shap_values (Optional[np.ndarray]): SHAP値。
+        n_shap_top (int): 表示する上位特徴量数。
+        cat_cols (Optional[List[str]]): カテゴリカル特徴量の列名リスト。
+        col_idx (int): 分類モデルの出力次元インデックス。
+        model (Optional[MLModelPipeline]): 学習済みモデルパイプライン。
+        target (Optional[str]): 可視化対象の目的変数名。
+        object_col (Optional[str]): ``target`` の別名。
 
     Returns:
-        go.Figure: SHAP値のビーズウォームプロットを含む Plotly 図オブジェクト。
+        go.Figure: SHAPビーズウォームプロットのPlotly図オブジェクト。
+
+    Raises:
+        ValueError: 必要な入力が不足している場合。
     """
-    # SHAP値がNoneの場合のエラーハンドリング
-    if shap_values is None:
-        raise ValueError("SHAP値がNoneです。正しいSHAP値を提供してください。")
+    child_model, _ = _resolve_model_target(model, target, object_col)
+    if child_model is not None:
+        X = child_model.X
+        shap_values = child_model.shap_values
+        cat_cols = child_model._shared_attr("cat_cols")
+    if X is None or shap_values is None:
+        raise ValueError("X/shap_values、またはmodelとtarget/object_colを指定してください。")
+    cat_cols = cat_cols or []
 
     if len(shap_values.shape)==3:
         shap_values = shap_values[:,:,col_idx]
