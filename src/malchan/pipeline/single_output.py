@@ -583,13 +583,13 @@ class SingleOutputMLModelPipeline:
 
             # トレーニングとテストスコアを計算
             cv_train = self.score(_X_train, _y_train, cv_model)
-            train_predicts = self.predict(_X_train, cv_model)
+            train_predicts = self.predict(_X_train, cv_model, proba=self.task == "classification")
             score_train_cv.append(cv_train)
             train_predicts["index"] = train_index
             predicts_train_cv.append(train_predicts)
 
             cv_test = self.score(_X_test, _y_test, cv_model)
-            test_predicts = self.predict(_X_test, cv_model)
+            test_predicts = self.predict(_X_test, cv_model, proba=self.task == "classification")
             score_test_cv.append(cv_test)
             test_predicts["index"] = test_index
             predicts_test_cv.append(test_predicts)
