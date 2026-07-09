@@ -11,6 +11,7 @@ import lightgbm as lgb
 from imblearn.over_sampling import RandomOverSampler, SMOTE, SMOTENC
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.utils.class_weight import compute_sample_weight
+from sklearn.metrics import accuracy_score, mean_squared_error
 
 from sklearn.svm import OneClassSVM
 from sklearn.ensemble import IsolationForest
@@ -225,81 +226,38 @@ def adjust_param_grid_for_data(
     return adjusted_params
 
 
-def _use_single_base_model_for_tuning(
-    model_pipeline: Pipeline,
-    model_names: List[str],
-    base_model: Optional[str],
-    ens_type: Optional[str],
+def _safe_tuning_score(
+    estimator: Pipeline,
+    X: Union[np.ndarray, pd.DataFrame],
+    y: Union[np.ndarray, pd.Series],
     task: str,
-) -> Tuple[Pipeline, List[str], Optional[str]]:
-    """バギング・ブースティング用に単体ベースモデルのチューニングへ切り替える。
+) -> float:
+    """チューニング中に非有限スコアが出た試行へ最低スコアを返す。
 
     Args:
-        model_pipeline (Pipeline): チューニングに使用するパイプライン。
-        model_names (List[str]): 指定されたモデル名のリスト。
-        base_model (Optional[str]): アンサンブルのベースモデル名。未指定時は先頭モデルを使う。
-        ens_type (Optional[str]): アンサンブル種別。
+        estimator (Pipeline): 評価対象の学習済みパイプライン。
+        X (Union[np.ndarray, pd.DataFrame]): 検証用の特徴量データ。
+        y (Union[np.ndarray, pd.Series]): 検証用のターゲットデータ。
         task (str): タスク種別。``regression`` または ``classification``。
 
     Returns:
-        Tuple[Pipeline, List[str], Optional[str]]: チューニング用パイプライン、
-            チューニング対象モデル名のリスト、解決済みベースモデル名。
+        float: OptunaSearchCVが最大化するスコア。評価不能な試行では ``-1e18``。
     """
-    if ens_type not in ["バギング", "ブースティング"]:
-        return model_pipeline, model_names, base_model
+    try:
+        y_pred = estimator.predict(X)
+        if not np.all(np.isfinite(y_pred)):
+            return -1e18
+        if task == "regression":
+            score = -np.sqrt(mean_squared_error(y, y_pred))
+        else:
+            score = accuracy_score(y, y_pred)
+    except Exception:
+        return -1e18
 
-    from .pipelines.predictor_pipeline import make_model
-    from .utils import reg_default_params, cls_default_params
+    if not np.isfinite(score):
+        return -1e18
+    return float(score)
 
-    resolved_base_model = base_model or model_names[0]
-    default_params = (
-        reg_default_params[resolved_base_model]
-        if task == "regression"
-        else cls_default_params[resolved_base_model]
-    )
-    model_pipeline.set_params(
-        predictor=make_model(resolved_base_model, task, default_params.copy())
-    )
-    return model_pipeline, [resolved_base_model], resolved_base_model
-
-
-def _restore_tuned_bagging_or_boosting_predictor(
-    model_pipeline: Pipeline,
-    model_names: List[str],
-    base_model: Optional[str],
-    ens_type: Optional[str],
-    task: str,
-    best_base_param: Optional[Dict[str, Any]],
-) -> Pipeline:
-    """単体チューニング結果を使ってバギング・ブースティング予測器を復元する。
-
-    Args:
-        model_pipeline (Pipeline): 単体モデルをチューニング済みのパイプライン。
-        model_names (List[str]): 元のモデル名のリスト。
-        base_model (Optional[str]): 解決済みベースモデル名。
-        ens_type (Optional[str]): アンサンブル種別。
-        task (str): タスク種別。``regression`` または ``classification``。
-        best_base_param (Optional[Dict[str, Any]]): 単体チューニングで得たベースモデルパラメータ。
-
-    Returns:
-        Pipeline: チューニング済みパラメータをベース推定器に設定したアンサンブルパイプライン。
-    """
-    if ens_type not in ["バギング", "ブースティング"]:
-        return model_pipeline
-
-    from .pipelines.predictor_pipeline import make_ens_predictor
-
-    model_pipeline.set_params(
-        predictor=make_ens_predictor(
-            ens_type=ens_type,
-            model_names=model_names,
-            base_model=base_model or model_names[0],
-            model_params=None,
-            base_model_params=best_base_param,
-            task=task,
-        )
-    )
-    return model_pipeline
 
 def tune_model(
     X: Union[np.ndarray, pd.DataFrame],
@@ -352,13 +310,21 @@ def tune_model(
         )
 
     original_model_names = model_names
-    model_pipeline, tuning_model_names, base_model = _use_single_base_model_for_tuning(
-        model_pipeline=model_pipeline,
-        model_names=model_names,
-        base_model=base_model,
-        ens_type=ens_type,
-        task=task,
-    )
+    tuning_model_names = model_names
+    if ens_type in ['バギング', 'ブースティング']:
+        from .pipelines.predictor_pipeline import make_model
+        from .utils import reg_default_params, cls_default_params
+
+        base_model = base_model or model_names[0]
+        default_params = (
+            reg_default_params[base_model]
+            if task == "regression"
+            else cls_default_params[base_model]
+        )
+        model_pipeline.set_params(
+            predictor=make_model(base_model, task, default_params.copy())
+        )
+        tuning_model_names = [base_model]
 
     fit_params: Dict[str, Any] = {}
     best_base_param = None
@@ -391,7 +357,10 @@ def tune_model(
             cv=cv,
             n_jobs=-1,
             n_trials=n_trials,
-            scoring='neg_root_mean_squared_error' if task=="regression" else "accuracy",
+            scoring=lambda estimator, X_valid, y_valid: _safe_tuning_score(
+                estimator, X_valid, y_valid, task
+            ),
+            error_score=-1e18,
             verbose=verbose
     )
     model_tune.fit(X, y, **fit_params)
@@ -425,13 +394,17 @@ def tune_model(
         for k in best_params_.keys():
             best_params[k.replace("predictor__", "")] = best_params_[k]        
     if ens_type in ['バギング', 'ブースティング']:
-        model = _restore_tuned_bagging_or_boosting_predictor(
-            model_pipeline=model,
-            model_names=original_model_names,
-            base_model=base_model,
-            ens_type=ens_type,
-            task=task,
-            best_base_param=best_base_param,
+        from .pipelines.predictor_pipeline import make_ens_predictor
+
+        model.set_params(
+            predictor=make_ens_predictor(
+                ens_type=ens_type,
+                model_names=original_model_names,
+                base_model=base_model or original_model_names[0],
+                model_params=None,
+                base_model_params=best_base_param,
+                task=task,
+            )
         )
         model.fit(X, y)
     return model, best_params, best_base_param

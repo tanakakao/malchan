@@ -74,6 +74,11 @@ def test_mlp_regression_hidden_layer_sizes_uses_optuna_distribution():
     assert isinstance(distribution, optuna.distributions.BaseDistribution)
     assert all(isinstance(choice, tuple) for choice in distribution.choices)
 
+    solver_distribution = params["predictor__solver"]
+    learning_rate_distribution = params["predictor__learning_rate"]
+    assert "sgd" not in solver_distribution.choices
+    assert learning_rate_distribution.choices == ("constant",)
+
 
 def test_mlp_classification_hidden_layer_sizes_uses_optuna_distribution():
     """MLP分類のhidden_layer_sizesはOptuna Distributionで定義する。"""
@@ -85,6 +90,26 @@ def test_mlp_classification_hidden_layer_sizes_uses_optuna_distribution():
     distribution = params["predictor__hidden_layer_sizes"]
     assert isinstance(distribution, optuna.distributions.BaseDistribution)
     assert all(isinstance(choice, tuple) for choice in distribution.choices)
+
+    solver_distribution = params["predictor__solver"]
+    learning_rate_distribution = params["predictor__learning_rate"]
+    assert "sgd" not in solver_distribution.choices
+    assert learning_rate_distribution.choices == ("constant",)
+
+
+def test_tweedie_regression_grid_uses_stable_normal_identity_link():
+    """一般化線形モデルはNaNスコアを避ける安定したTweedie設定だけを探索する。"""
+    optuna = pytest.importorskip("optuna")
+    from malchan.models.utils import get_param_grid_reg
+
+    params = get_param_grid_reg("一般化線形モデル")
+
+    power_distribution = params["predictor__power"]
+    link_distribution = params["predictor__link"]
+    assert isinstance(power_distribution, optuna.distributions.BaseDistribution)
+    assert isinstance(link_distribution, optuna.distributions.BaseDistribution)
+    assert power_distribution.choices == (0,)
+    assert link_distribution.choices == ("identity",)
 
 
 def test_bagging_tuning_searches_single_base_model_and_restores_ensemble(monkeypatch):
@@ -101,6 +126,8 @@ def test_bagging_tuning_searches_single_base_model_and_restores_ensemble(monkeyp
         def __init__(self, estimator, params, **kwargs):
             captured["predictor_type"] = type(estimator.named_steps["predictor"])
             captured["params"] = params
+            captured["scoring"] = kwargs["scoring"]
+            captured["error_score"] = kwargs["error_score"]
             self.best_estimator_ = estimator
             self.best_params_ = {"predictor__alpha": 0.25}
 
@@ -124,6 +151,8 @@ def test_bagging_tuning_searches_single_base_model_and_restores_ensemble(monkeyp
 
     assert captured["predictor_type"] is Ridge
     assert captured["params"] == {"predictor__alpha": [0.25]}
+    assert callable(captured["scoring"])
+    assert captured["error_score"] == -1e18
     assert best_params is None
     assert best_base_param == {"alpha": 0.25}
     assert isinstance(model.named_steps["predictor"], BaggingRegressor)
