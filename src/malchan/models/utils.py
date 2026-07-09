@@ -496,8 +496,8 @@ def get_param_grid_reg(model_name: str) -> dict:
         },
         '一般化線形モデル': {
             'predictor__alpha': FloatDistribution(1e-3, 1e+1, log=True),
-            'predictor__power': CategoricalDistribution([0, 1, 2, 3]),
-            'predictor__link': CategoricalDistribution(['auto', 'log', 'identity'])
+            'predictor__power': CategoricalDistribution([0]),
+            'predictor__link': CategoricalDistribution(['identity'])
         },
         '回帰木': {
             'predictor__max_depth': IntDistribution(3, 20),
@@ -602,10 +602,10 @@ def get_param_grid_reg(model_name: str) -> dict:
         '多層パーセプトロン': {
             'predictor__hidden_layer_sizes': CategoricalDistribution(get_mlp_hidden_layer_size_candidates()),
             'predictor__activation': CategoricalDistribution(["identity", "logistic", "tanh", "relu"]),
-            'predictor__solver': CategoricalDistribution(["lbfgs", "sgd", "adam"]),
+            'predictor__solver': CategoricalDistribution(["lbfgs", "adam"]),
             'predictor__alpha':FloatDistribution(1e-8, 1e-2, log=True),
             'predictor__learning_rate_init':FloatDistribution(1e-8, 1e-2, log=True),
-            'predictor__learning_rate': CategoricalDistribution(["constant", "invscaling", "adaptive"]),
+            'predictor__learning_rate': CategoricalDistribution(["constant"]),
         }
     }
     
@@ -730,10 +730,10 @@ def get_param_grid_cls(model_name: str) -> dict:
         '多層パーセプトロン': {
             'predictor__hidden_layer_sizes': CategoricalDistribution(get_mlp_hidden_layer_size_candidates()),
             'predictor__activation': CategoricalDistribution(["identity", "logistic", "tanh", "relu"]),
-            'predictor__solver': CategoricalDistribution(["lbfgs", "sgd", "adam"]),
+            'predictor__solver': CategoricalDistribution(["lbfgs", "adam"]),
             'predictor__alpha':FloatDistribution(1e-8, 1e-2, log=True),
             'predictor__learning_rate_init':FloatDistribution(1e-8, 1e-2, log=True),
-            'predictor__learning_rate': CategoricalDistribution(["constant", "invscaling", "adaptive"]),
+            'predictor__learning_rate': CategoricalDistribution(["constant"]),
         }
     }
     

@@ -11,6 +11,7 @@ import lightgbm as lgb
 from imblearn.over_sampling import RandomOverSampler, SMOTE, SMOTENC
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.utils.class_weight import compute_sample_weight
+from sklearn.metrics import accuracy_score, mean_squared_error
 
 from sklearn.svm import OneClassSVM
 from sklearn.ensemble import IsolationForest
@@ -166,16 +167,15 @@ def get_params(
             _params = {k.replace('predictor', 'predictor__final_estimator'): v for k, v in _params.items()}
             params.update(_params)
     elif ens_type in ['バギング', 'ブースティング']:
-        # バギングまたはブースティングの場合、ベースモデルのハイパーパラメータを取得して辞書に追加
+        # バギング・ブースティングは探索コストが大きいため、ベースモデル単体の探索範囲を返す
         if task=="regression":
-            _params = get_param_grid_reg(base_model)
+            params = get_param_grid_reg(base_model)
         elif task=="classification":
-            _params = get_param_grid_cls(base_model)
+            params = get_param_grid_cls(base_model)
         else:
             raise ValueError("task は regression か classification で指定してください。")
-        if _params is None:
+        if params is None:
             raise ValueError(f"{base_model} のチューニングパラメータが定義されていません。")
-        params = {k.replace('predictor', 'predictor__estimator'): v for k, v in _params.items()}
     else:
         # 単体モデルの場合、そのモデルのハイパーパラメータを取得
         if task=="regression":
@@ -224,6 +224,40 @@ def adjust_param_grid_for_data(
             )
 
     return adjusted_params
+
+
+def _safe_tuning_score(
+    estimator: Pipeline,
+    X: Union[np.ndarray, pd.DataFrame],
+    y: Union[np.ndarray, pd.Series],
+    task: str,
+) -> float:
+    """チューニング中に非有限スコアが出た試行へ最低スコアを返す。
+
+    Args:
+        estimator (Pipeline): 評価対象の学習済みパイプライン。
+        X (Union[np.ndarray, pd.DataFrame]): 検証用の特徴量データ。
+        y (Union[np.ndarray, pd.Series]): 検証用のターゲットデータ。
+        task (str): タスク種別。``regression`` または ``classification``。
+
+    Returns:
+        float: OptunaSearchCVが最大化するスコア。評価不能な試行では ``-1e18``。
+    """
+    try:
+        y_pred = estimator.predict(X)
+        if not np.all(np.isfinite(y_pred)):
+            return -1e18
+        if task == "regression":
+            score = -np.sqrt(mean_squared_error(y, y_pred))
+        else:
+            score = accuracy_score(y, y_pred)
+    except Exception:
+        return -1e18
+
+    if not np.isfinite(score):
+        return -1e18
+    return float(score)
+
 
 def tune_model(
     X: Union[np.ndarray, pd.DataFrame],
@@ -275,19 +309,36 @@ def tune_model(
             task=task
         )
 
+    original_model_names = model_names
+    tuning_model_names = model_names
+    if ens_type in ['バギング', 'ブースティング']:
+        from .pipelines.predictor_pipeline import make_model
+        from .utils import reg_default_params, cls_default_params
+
+        base_model = base_model or model_names[0]
+        default_params = (
+            reg_default_params[base_model]
+            if task == "regression"
+            else cls_default_params[base_model]
+        )
+        model_pipeline.set_params(
+            predictor=make_model(base_model, task, default_params.copy())
+        )
+        tuning_model_names = [base_model]
+
     fit_params: Dict[str, Any] = {}
     best_base_param = None
 
     # LightGBMモデルの場合、カテゴリカル特徴量のインデックスを設定
-    if model_names[0] == 'LightGBM' and (ens_type is not None):
+    if tuning_model_names[0] == 'LightGBM' and (ens_type is not None):
         fit_params['predictor__categorical_feature'] = cat_index_fit
 
     # CatBoostモデルの場合、カテゴリカル特徴量のインデックスを設定
-    elif model_names[0] == 'CatBoost' and not (ens_type is not None):
+    elif tuning_model_names[0] == 'CatBoost' and not (ens_type is not None):
         fit_params['predictor__cat_features'] = cat_index_fit if len(cat_index)>0 else None
         fit_params['predictor__verbose'] = False
 
-    if sampling_method=="sample_weight" and model_names[0] not in ["MLPClassifier","GaussianProcessClassifier"] and (ens_type is not None) and task=="classification":
+    if sampling_method=="sample_weight" and tuning_model_names[0] not in ["MLPClassifier","GaussianProcessClassifier"] and (ens_type is not None) and task=="classification":
         fit_params['predictor__sample_weight'] = compute_sample_weight("balanced", y)
     
     if sampling_method in ["ros","rus","smote"]:
@@ -297,7 +348,7 @@ def tune_model(
     cv = min(5, len(y))
     if cv < 2:
         raise ValueError("チューニングには2件以上の学習データが必要です。")
-    params = adjust_param_grid_for_data(params, model_names, X, cv)
+    params = adjust_param_grid_for_data(params, tuning_model_names, X, cv)
 
     # OptunaSearchCVでモデルのハイパーパラメータをチューニング
     model_tune = OptunaSearchCV(
@@ -306,7 +357,10 @@ def tune_model(
             cv=cv,
             n_jobs=-1,
             n_trials=n_trials,
-            scoring='neg_root_mean_squared_error' if task=="regression" else "accuracy",
+            scoring=lambda estimator, X_valid, y_valid: _safe_tuning_score(
+                estimator, X_valid, y_valid, task
+            ),
+            error_score=-1e18,
             verbose=verbose
     )
     model_tune.fit(X, y, **fit_params)
@@ -327,7 +381,9 @@ def tune_model(
         if ens_type in ['スタッキング', 'バギング', 'ブースティング']:
             best_base_param = {}
             for k in best_params_.keys():
-                if k.split("__")[1]=="final_estimator":
+                if ens_type in ['バギング', 'ブースティング']:
+                    best_base_param[k.replace("predictor__", "")] = best_params_[k]
+                elif k.split("__")[1]=="final_estimator":
                     best_base_param[k.replace("predictor__final_estimator__", "")] = best_params_[k]
                 elif k.split("__")[1]=="estimator":
                     best_base_param[k.replace("predictor__estimator__", "")] = best_params_[k]
@@ -337,6 +393,20 @@ def tune_model(
         best_params = {}
         for k in best_params_.keys():
             best_params[k.replace("predictor__", "")] = best_params_[k]        
+    if ens_type in ['バギング', 'ブースティング']:
+        from .pipelines.predictor_pipeline import make_ens_predictor
+
+        model.set_params(
+            predictor=make_ens_predictor(
+                ens_type=ens_type,
+                model_names=original_model_names,
+                base_model=base_model or original_model_names[0],
+                model_params=None,
+                base_model_params=best_base_param,
+                task=task,
+            )
+        )
+        model.fit(X, y)
     return model, best_params, best_base_param
 
 def cv_fit(
