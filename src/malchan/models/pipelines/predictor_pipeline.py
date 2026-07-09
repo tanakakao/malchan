@@ -47,6 +47,37 @@ from ..utils import (
 
 warnings.simplefilter('ignore')
 
+
+def _resolve_single_model_params(
+    model_name: str,
+    model_params: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]],
+    task: str,
+) -> Dict[str, Any]:
+    """単体モデル用のパラメータ辞書を取得する。
+
+    Args:
+        model_name (str): パラメータを取得するモデル名。
+        model_params (Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]):
+            モデル作成時に指定されたパラメータ。チューニング後は辞書、
+            未チューニング時や既存コードからは単一要素のリストが渡される。
+        task (str): タスク種別。``regression`` または ``classification``。
+
+    Returns:
+        Dict[str, Any]: モデル初期化に使用するパラメータ辞書。
+    """
+    if model_params is None or model_params == [{}]:
+        if task == "regression":
+            return reg_default_params[model_name]
+        return cls_default_params[model_name]
+
+    if isinstance(model_params, list):
+        if len(model_params) == 0:
+            return {}
+        return model_params[0]
+
+    return model_params
+
+
 def make_model(
     model_name: str,
     task="regression",
@@ -189,12 +220,13 @@ def make_ens_predictor(
         else:
             raise ValueError("task は regression か classification で指定してください。")
 
+
 def make_predictor(
     model_names: List[str],
     ensemble: bool = False,
     ens_type: Optional[str] = None,
     base_model: Optional[str] = None,
-    model_params: Optional[List[Dict[str, Any]]] = None,
+    model_params: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
     base_model_params: Optional[Dict[str, Any]] = None,
     task = "regression",
 ) -> RegressorMixin:
@@ -205,7 +237,7 @@ def make_predictor(
         model_names (List[str]): 使用するモデルの名前のリスト。アンサンブルの場合は複数、単体モデルの場合は1つ。
         ens_type (Optional[str]): アンサンブルの種類。'アンサンブル', 'スタッキング', 'バギング', 'ブースティング' から選択。デフォルトは None。
         base_model (Optional[str]): ベースモデルの名前。スタッキング、バギング、ブースティングのときに使用。デフォルトは None。
-        model_params (Optional[List[Dict[str, Any]]): 各モデルのパラメータを指定するリスト。デフォルトは None。
+        model_params (Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]): 単体モデルのパラメータ辞書、または各モデルのパラメータを指定するリスト。デフォルトは None。
         base_model_params (Optional[Dict[str, Any]]): ベースモデルのパラメータを指定する辞書。デフォルトは None。
 
     Returns:
@@ -233,13 +265,7 @@ def make_predictor(
     else:
         # モデルのパラメータが指定されていない場合、デフォルトパラメータを使用
         model_name = model_names[0]
-        if (model_params is None)|(model_params == [{}]):
-            if task=="regression":
-                model_params = reg_default_params[model_name]
-            else:
-                model_params = cls_default_params[model_name]
-        else:
-            model_params = model_params[0]
+        model_params = _resolve_single_model_params(model_name, model_params, task)
         return make_model(
                     model_name,
                     task,
