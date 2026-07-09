@@ -146,6 +146,9 @@ def make_ens_predictor(
     #     if len(model_params) != n_model:
     #         raise ValueError("model_params の長さは model_names の長さと一致する必要があります。")
 
+    if ens_type in ["バギング", "ブースティング"] and base_model is None:
+        base_model = model_names[0]
+
     if base_model:
         if base_model_params is None:
             if task=="regression":

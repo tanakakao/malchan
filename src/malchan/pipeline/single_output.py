@@ -334,7 +334,9 @@ class SingleOutputMLModelPipeline:
 
         self.model_names = model_names
         self.ensemble = ensemble if not ad else False
-        self.ens_type = ens_type
+        self.ens_type = ens_type if self.ensemble else None
+        if self.ens_type in ["バギング", "ブースティング"] and base_model is None:
+            base_model = model_names[0]
         self.base_model = base_model
         self.model_params = model_params
         self.base_model_param = base_model_param

@@ -121,17 +121,24 @@ def get_params(
     base_model: Optional[str] = None,
     ens_type: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    モデルまたはアンサンブル予測器のハイパーパラメータを取得する関数。
+    """モデルまたはアンサンブル予測器のハイパーパラメータを取得する。
 
     Args:
         model_names (List[str]): 使用するモデルの名前のリスト。アンサンブルの場合は複数、単体モデルの場合は1つ。
-        base_model (Optional[str]): ベースモデルの名前。スタッキング、バギング、ブースティングのときに使用。デフォルトは None。
-        ens_type (Optional[str]): アンサンブルの種類。'アンサンブル', 'スタッキング', 'バギング', 'ブースティング' から選択。デフォルトは None。
+        task (str): タスク種別。``regression`` または ``classification``。
+        base_model (Optional[str]): ベースモデルの名前。スタッキング、バギング、ブースティングのときに使用。
+            バギング、ブースティングで未指定の場合は ``model_names[0]`` を使用する。
+        ens_type (Optional[str]): アンサンブルの種類。'アンサンブル', 'スタッキング', 'バギング', 'ブースティング' から選択。
 
     Returns:
         Dict[str, Any]: ハイパーパラメータの辞書。
+
+    Raises:
+        ValueError: タスク種別、モデル名、またはベースモデル指定が不正な場合。
     """
+    if ens_type in ['バギング', 'ブースティング'] and base_model is None:
+        base_model = model_names[0]
+
     if ens_type in ['アンサンブル', 'スタッキング']:
         params = {}
         # 各モデルのハイパーパラメータを取得し、名前を変更して辞書に追加
@@ -142,6 +149,8 @@ def get_params(
                 _params = get_param_grid_cls(model_name)
             else:
                 raise ValueError("task は regression か classification で指定してください。")
+            if _params is None:
+                raise ValueError(f"{model_name} のチューニングパラメータが定義されていません。")
             _params = {k.replace('predictor', f'predictor__model{i + 1}'): v for k, v in _params.items()}
             params.update(_params)
         # スタッキングの場合、最終推定器のハイパーパラメータを取得して辞書に追加
@@ -152,6 +161,8 @@ def get_params(
                 _params = get_param_grid_cls(base_model)
             else:
                 raise ValueError("task は regression か classification で指定してください。")
+            if _params is None:
+                raise ValueError(f"{base_model} のチューニングパラメータが定義されていません。")
             _params = {k.replace('predictor', 'predictor__final_estimator'): v for k, v in _params.items()}
             params.update(_params)
     elif ens_type in ['バギング', 'ブースティング']:
@@ -162,6 +173,8 @@ def get_params(
             _params = get_param_grid_cls(base_model)
         else:
             raise ValueError("task は regression か classification で指定してください。")
+        if _params is None:
+            raise ValueError(f"{base_model} のチューニングパラメータが定義されていません。")
         params = {k.replace('predictor', 'predictor__estimator'): v for k, v in _params.items()}
     else:
         # 単体モデルの場合、そのモデルのハイパーパラメータを取得
@@ -170,7 +183,9 @@ def get_params(
         elif task=="classification":
             params = get_param_grid_cls(model_names[0])
         else:
-            raise ValueError("task は regression か classification で指定してください。")    
+            raise ValueError("task は regression か classification で指定してください。")
+        if params is None:
+            raise ValueError(f"{model_names[0]} のチューニングパラメータが定義されていません。")
     return params
 
 
