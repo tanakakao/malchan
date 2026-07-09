@@ -24,3 +24,12 @@ def test_import_models_package_does_not_load_legacy_models_module():
     assert "SingleOutputMLModelPipeline" in models.__all__
     assert "MLModelPipeline" in models.__all__
     assert "malchan.models.models" not in sys.modules
+
+
+def test_single_output_pipeline_class_is_defined_in_pipeline_module():
+    sys.modules.pop("malchan.models.models", None)
+
+    from malchan.pipeline.single_output import SingleOutputMLModelPipeline
+
+    assert SingleOutputMLModelPipeline.__module__ == "malchan.pipeline.single_output"
+    assert "malchan.models.models" not in sys.modules
