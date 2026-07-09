@@ -61,3 +61,27 @@ def test_catboost_classification_tuning_uses_iterations_parameter():
 
     assert "predictor__iterations" in params
     assert "predictor__n_estimators" not in params
+
+
+def test_mlp_regression_hidden_layer_sizes_uses_optuna_distribution():
+    """MLP回帰のhidden_layer_sizesはOptuna Distributionで定義する。"""
+    optuna = pytest.importorskip("optuna")
+    from malchan.models.utils import get_param_grid_reg
+
+    params = get_param_grid_reg("多層パーセプトロン")
+
+    distribution = params["predictor__hidden_layer_sizes"]
+    assert isinstance(distribution, optuna.distributions.BaseDistribution)
+    assert all(isinstance(choice, tuple) for choice in distribution.choices)
+
+
+def test_mlp_classification_hidden_layer_sizes_uses_optuna_distribution():
+    """MLP分類のhidden_layer_sizesはOptuna Distributionで定義する。"""
+    optuna = pytest.importorskip("optuna")
+    from malchan.models.utils import get_param_grid_cls
+
+    params = get_param_grid_cls("多層パーセプトロン")
+
+    distribution = params["predictor__hidden_layer_sizes"]
+    assert isinstance(distribution, optuna.distributions.BaseDistribution)
+    assert all(isinstance(choice, tuple) for choice in distribution.choices)

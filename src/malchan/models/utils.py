@@ -65,6 +65,23 @@ import warnings
 optuna.logging.disable_default_handler()
 warnings.simplefilter('ignore')
 
+
+def get_mlp_hidden_layer_size_candidates() -> list[tuple[int, ...]]:
+    """MLPのhidden_layer_sizes探索候補を返す。
+
+    OptunaSearchCVは各パラメータ値にOptunaのDistributionを要求するため、
+    hidden_layer_sizesの各層を個別のIntDistributionのタプルとして指定できない。
+    そのため、MLPでよく使う1〜3層の構成をCategoricalDistributionの候補として返す。
+
+    Returns:
+        list[tuple[int, ...]]: hidden_layer_sizesに渡せる層構成の候補。
+    """
+    return (
+        [(units,) for units in range(5, 105, 5)]
+        + [(units, units) for units in range(10, 105, 10)]
+        + [(units, units, units) for units in range(10, 105, 10)]
+    )
+
 REG_MODEL_DICT = {
     '線形回帰': LinearRegression,
     'Ridge': Ridge,
@@ -583,7 +600,7 @@ def get_param_grid_reg(model_name: str) -> dict:
             'predictor__fit_intercept': CategoricalDistribution([True])
         },
         '多層パーセプトロン': {
-            'predictor__hidden_layer_sizes': (IntDistribution(5, 100, step=5),IntDistribution(5, 100, step=5),IntDistribution(5, 100, step=5)),
+            'predictor__hidden_layer_sizes': CategoricalDistribution(get_mlp_hidden_layer_size_candidates()),
             'predictor__activation': CategoricalDistribution(["identity", "logistic", "tanh", "relu"]),
             'predictor__solver': CategoricalDistribution(["lbfgs", "sgd", "adam"]),
             'predictor__alpha':FloatDistribution(1e-8, 1e-2, log=True),
@@ -711,7 +728,7 @@ def get_param_grid_cls(model_name: str) -> dict:
         #     'predictor__C': FloatDistribution(1e-3, 1e+2, log=True),
         # },
         '多層パーセプトロン': {
-            'predictor__hidden_layer_sizes': (IntDistribution(5, 100, step=5),IntDistribution(5, 100, step=5),IntDistribution(5, 100, step=5)),
+            'predictor__hidden_layer_sizes': CategoricalDistribution(get_mlp_hidden_layer_size_candidates()),
             'predictor__activation': CategoricalDistribution(["identity", "logistic", "tanh", "relu"]),
             'predictor__solver': CategoricalDistribution(["lbfgs", "sgd", "adam"]),
             'predictor__alpha':FloatDistribution(1e-8, 1e-2, log=True),
