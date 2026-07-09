@@ -12,7 +12,7 @@ import warnings
 
 warnings.simplefilter('ignore')
 
-from .single_output import SingleOutputMLModelPipeline
+from .single_output import PipelineSharedContext, SingleOutputMLModelPipeline
 
 class MLModelPipeline:
     def __init__(
@@ -43,6 +43,7 @@ class MLModelPipeline:
         """
         self.X = None
         self.y = None
+        self.context = None
 
         self.num_cols = None
         self.cat_cols = None
@@ -131,12 +132,25 @@ class MLModelPipeline:
         comp_cols = [] if (comp_cols is None or comp_cols == [None]) else comp_cols
 
         # 入力データ、目的変数、数値・カテゴリカル特徴量などの設定
-        X = df[num_cols + cat_cols + smiles_cols + comp_cols]
+        feature_cols = num_cols + cat_cols + smiles_cols + comp_cols
+        target_cols = [] if target_cols is None else target_cols
+        if impute:
+            if any(t == "regression" for t in ([tasks] if isinstance(tasks, str) else tasks)):
+                X = df[feature_cols]
+                Y = df[target_cols]
+            else:
+                imputer = SimpleImputer(strategy="most_frequent")
+                X = df[feature_cols]
+                Y = pd.DataFrame(imputer.fit_transform(df[target_cols]), columns=target_cols, index=df.index)
+        else:
+            _df = df[feature_cols + target_cols].dropna()
+            X = _df[feature_cols]
+            Y = _df[target_cols]
         # self.y = df[target_cols]
         self.num_cols = num_cols
         self.cat_cols = cat_cols
         self.all_cols = num_cols + cat_cols + smiles_cols + comp_cols
-        self.target_cols = target_cols if target_cols is not None else []
+        self.target_cols = target_cols
         self.model_names = model_names
         self.smiles_cols = smiles_cols
         self.comp_cols = comp_cols
@@ -145,6 +159,18 @@ class MLModelPipeline:
 
         # カテゴリカル変数のユニーク値を取得
         self.unique_cols = get_cat_unique_values(X, self.cat_cols+self.smiles_cols+self.comp_cols)
+        self.context = PipelineSharedContext(
+            X=X,
+            Y=Y,
+            num_cols=self.num_cols,
+            cat_cols=self.cat_cols,
+            smiles_cols=self.smiles_cols,
+            comp_cols=self.comp_cols,
+            all_cols=self.all_cols,
+            unique_cols=self.unique_cols,
+        )
+        self.X = None
+        self.y = None
 
         self.tasks = [tasks]*len(self.target_cols) if type(tasks)==str else tasks
         self.tunings = [tunings]*len(self.target_cols) if type(tunings)==bool else tunings
@@ -181,20 +207,15 @@ class MLModelPipeline:
         for i, target in enumerate(target_cols):
             self.models[target] = SingleOutputMLModelPipeline()
             if target != "AD":
-                self.models[target].fit(
-                    df,
+                self.models[target].fit_from_context(
+                    context=self.context,
                     target_col=self.target_cols[i],
                     task=self.tasks[i],
-                    num_cols=self.num_cols,
-                    cat_cols=self.cat_cols,
                     model_names=self.model_names[i],
-                    smiles_cols=self.smiles_cols,
                     fingerprints=self.fingerprints,
-                    comp_cols=self.comp_cols,
                     comp_method=self.comp_method,
                     comp_feats=self.comp_feats,
                     ad=False,
-                    impute=impute,
                     tuning=self.tunings[i],
                     ensemble=self.ensembles[i],
                     ens_type=self.ens_types[i],
@@ -213,20 +234,15 @@ class MLModelPipeline:
                     sampling_method = self.sampling_method
                 )
             else:
-                self.models[target].fit(
-                    df,
+                self.models[target].fit_from_context(
+                    context=self.context,
                     target_col=None,
                     task="AD",
-                    num_cols=self.num_cols,
-                    cat_cols=self.cat_cols,
                     model_names=[self.ad_model_name],
-                    smiles_cols=self.smiles_cols,
                     fingerprints=self.fingerprints,
-                    comp_cols=self.comp_cols,
                     comp_method=self.comp_method,
                     comp_feats=self.comp_feats,
                     ad=True,
-                    impute=impute,
                     tuning=False,
                     ensemble=False,
                     ens_type=None,
@@ -268,7 +284,7 @@ class MLModelPipeline:
         target_cols = self.target_cols if not self.ad else self.target_cols+["AD"]
 
         models = self.models if models is None else models
-        X_data = models[target_cols[0]].X if X is None else X
+        X_data = self.context.X if X is None and self.context is not None else (models[target_cols[0]]._get_X() if X is None else X)
 
         predictions = pd.concat(
             [
@@ -415,6 +431,17 @@ class MLModelPipeline:
         for k in keys_self:
             if hasattr(self, k):
                 state[k] = getattr(self, k)
+        if hasattr(self, "context") and self.context is not None:
+            state["context"] = PipelineSharedContext(
+                X=self.context.X if include_data else None,
+                Y=self.context.Y if include_data else None,
+                num_cols=self.context.num_cols,
+                cat_cols=self.context.cat_cols,
+                smiles_cols=self.context.smiles_cols,
+                comp_cols=self.context.comp_cols,
+                all_cols=self.context.all_cols,
+                unique_cols=self.context.unique_cols,
+            )
 
         # 各 SingleOutputMLModelPipeline のチェックポイントを保存
         models_checkpoints = {}
@@ -444,11 +471,15 @@ class MLModelPipeline:
 
         # 残りのインスタンス変数を復元
         obj.__dict__.update(state)
+        context = getattr(obj, "context", None)
 
         # 各 SingleOutputMLModelPipeline インスタンスを復元し、obj.models に格納
         restored_models = {} # 新しい辞書を準備
         for target_name, ckpt_data in models_checkpoints.items():
-            restored_models[target_name] = SingleOutputMLModelPipeline.load_checkpoint(ckpt_data)
+            restored = SingleOutputMLModelPipeline.load_checkpoint(ckpt_data)
+            if getattr(restored, "shared_mode", False):
+                restored.context = context
+            restored_models[target_name] = restored
         obj.models = restored_models # 復元されたモデルをobj.modelsに代入
 
         return obj

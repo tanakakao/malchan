@@ -8,9 +8,36 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.model_selection import KFold, LeaveOneOut
 
 from typing import List, Optional, Union, Dict, Tuple, Callable, Any
+from dataclasses import dataclass
 import warnings
 
 warnings.simplefilter('ignore')
+
+
+@dataclass
+class PipelineSharedContext:
+    """Shared input data and metadata for multi-output model pipelines.
+
+    Args:
+        X: Feature matrix shared by child pipelines.
+        Y: Target matrix shared by child pipelines.
+        num_cols: Numeric feature column names.
+        cat_cols: Categorical feature column names.
+        smiles_cols: SMILES feature column names.
+        comp_cols: Composition feature column names.
+        all_cols: All feature column names.
+        unique_cols: Unique values for categorical-like columns.
+    """
+
+    X: pd.DataFrame
+    Y: pd.DataFrame
+    num_cols: List[str]
+    cat_cols: List[str]
+    smiles_cols: List[str]
+    comp_cols: List[str]
+    all_cols: List[str]
+    unique_cols: Dict[str, Any]
+
 
 class SingleOutputMLModelPipeline:
     def __init__(
@@ -48,6 +75,7 @@ class SingleOutputMLModelPipeline:
         self.smiles_cols = None
         self.comp_cols = None
         self.unique_cols = None
+        self.context = None
 
         self.task = None
         self.model_names = None
@@ -123,62 +151,159 @@ class SingleOutputMLModelPipeline:
         dec_n_components: int = 2,
         sampling_method=None
     ) -> None:
-        """
-        モデルパイプラインをデータに適合させる関数。チューニングが必要な場合はチューニングを実施。
-        """
-        from ..models.training import fit_model, tune_model
-        from ..models.utils import get_cat_unique_values, feature_names_from_pipeline, label_encode
+        """Fit this pipeline in standalone mode from a raw dataframe.
 
-        # 入力データ、目的変数、数値・カテゴリカル特徴量などの設定
+        Args:
+            df: Source dataframe containing feature and target columns.
+            target_col: Target column name.
+            task: Learning task name.
+            num_cols: Numeric feature column names.
+            cat_cols: Categorical feature column names.
+            model_names: Model names to train.
+            smiles_cols: SMILES feature column names.
+            fingerprints: Fingerprint names.
+            comp_cols: Composition feature column names.
+            comp_method: Composition featurization method.
+            comp_feats: Composition feature names.
+            ad: Whether to fit an applicability-domain model.
+            impute: Whether to impute missing values.
+            tuning: Whether to tune hyperparameters.
+            ensemble: Whether to use an ensemble.
+            ens_type: Ensemble type.
+            base_model: Base model name.
+            model_params: Model parameters.
+            base_model_param: Base model parameters.
+            num_impute_type: Numeric imputation type.
+            num_scale_type: Numeric scaling type.
+            cat_impute: Whether to impute categorical values.
+            poly: Whether to add polynomial features.
+            poly_degree: Polynomial degree.
+            poly_interaction_only: Whether to create interaction-only polynomial features.
+            decomposition: Whether to apply decomposition.
+            decomposition_method: Decomposition method name.
+            dec_n_components: Number of decomposition components.
+            sampling_method: Sampling method for classification.
+        """
+        from ..models.utils import get_cat_unique_values
+
         num_cols = [] if num_cols is None else num_cols
         cat_cols = [] if cat_cols is None else cat_cols
-        smiles_cols = [] if (smiles_cols is None or smiles_cols==[None]) else smiles_cols
+        smiles_cols = [] if (smiles_cols is None or smiles_cols == [None]) else smiles_cols
         comp_cols = [] if (comp_cols is None or comp_cols == [None]) else comp_cols
-
-        all_cols = num_cols+cat_cols+smiles_cols+comp_cols
-        if target_col is not None:
-            all_cols = all_cols + [target_col]
+        feature_cols = num_cols + cat_cols + smiles_cols + comp_cols
+        all_cols = feature_cols + ([target_col] if target_col is not None else [])
 
         if impute:
-            if task=="AD":
+            if task == "AD":
                 _df = df[all_cols].dropna()
-                self.X = _df[num_cols + cat_cols + smiles_cols+ comp_cols]
-                self.y = _df[[target_col]] if target_col is not None else None
-            elif task=="regression":
-                iterative_imputer = IterativeImputer(
-                    max_iter=10,
-                    random_state=0
-                )
+                X = _df[feature_cols]
+                y = _df[[target_col]] if target_col is not None else None
+            elif task == "regression":
+                iterative_imputer = IterativeImputer(max_iter=10, random_state=0)
                 _df = pd.DataFrame(
                     iterative_imputer.fit_transform(df[num_cols + [target_col]]),
-                    columns=num_cols + [target_col]
+                    columns=num_cols + [target_col],
                 )
-                self.X = df[num_cols + cat_cols + smiles_cols + comp_cols]
-                self.y = _df[[target_col]] if target_col is not None else None
+                X = df[feature_cols]
+                y = _df[[target_col]] if target_col is not None else None
             else:
-                imputer = SimpleImputer(strategy='most_frequent')
-                self.y = pd.DataFrame(
-                    imputer.fit_transform(df[[target_col]]),
-                    columns=[target_col]
-                )
-                self.X = df[num_cols + cat_cols + smiles_cols+ comp_cols]
+                imputer = SimpleImputer(strategy="most_frequent")
+                y = pd.DataFrame(imputer.fit_transform(df[[target_col]]), columns=[target_col])
+                X = df[feature_cols]
         else:
             _df = df[all_cols].dropna()
-            self.X = _df[num_cols + cat_cols + smiles_cols+ comp_cols]
-            self.y = _df[[target_col]] if target_col is not None else None
+            X = _df[feature_cols]
+            y = _df[[target_col]] if target_col is not None else None
 
-        # self.X = df[num_cols + cat_cols]
-        # self.y = df[[target_col]]
+        self.context = None
+        self.X = X
+        self.y = y
         self.num_cols = num_cols
         self.cat_cols = cat_cols
-        self.all_cols = num_cols + cat_cols + smiles_cols + comp_cols
-        self.target_col = target_col if not ad else "AD"
+        self.all_cols = feature_cols
         self.smiles_cols = smiles_cols
         self.comp_cols = comp_cols
+        self.unique_cols = get_cat_unique_values(X, cat_cols + smiles_cols + comp_cols)
+        self._fit_prepared(
+            target_col=target_col,
+            task=task,
+            model_names=model_names,
+            fingerprints=fingerprints,
+            comp_method=comp_method,
+            comp_feats=comp_feats,
+            ad=ad,
+            tuning=tuning,
+            ensemble=ensemble,
+            ens_type=ens_type,
+            base_model=base_model,
+            model_params=model_params,
+            base_model_param=base_model_param,
+            num_impute_type=num_impute_type,
+            num_scale_type=num_scale_type,
+            cat_impute=cat_impute,
+            poly=poly,
+            poly_degree=poly_degree,
+            poly_interaction_only=poly_interaction_only,
+            decomposition=decomposition,
+            decomposition_method=decomposition_method,
+            dec_n_components=dec_n_components,
+            sampling_method=sampling_method,
+        )
 
-        # カテゴリカル変数のユニーク値を取得
-        self.unique_cols = get_cat_unique_values(self.X, self.cat_cols+self.smiles_cols+self.comp_cols)
+    def fit_from_context(self, context: PipelineSharedContext, target_col: str, **kwargs) -> None:
+        """Fit this pipeline in shared mode from a parent context.
 
+        Args:
+            context: Shared context owned by the parent pipeline.
+            target_col: Target column name to fit.
+            **kwargs: Same model/preprocessing options accepted by :meth:`fit` except data columns.
+        """
+        self.context = context
+        self.X = None
+        self.y = None
+        self.num_cols = None
+        self.cat_cols = None
+        self.all_cols = None
+        self.smiles_cols = None
+        self.comp_cols = None
+        self.unique_cols = None
+        self._fit_prepared(target_col=target_col, **kwargs)
+
+    def _get_X(self) -> pd.DataFrame:
+        """Return the training feature matrix from local storage or shared context."""
+        return self.context.X if self.context is not None else self.X
+
+    def _get_y(self) -> Optional[pd.DataFrame]:
+        """Return this target's training values from local storage or shared context."""
+        if self.context is not None:
+            return None if self.target_col is None else self.context.Y[[self.target_col]]
+        return self.y
+
+    def _shared_attr(self, name: str):
+        """Return a shared metadata attribute from context when available."""
+        return getattr(self.context, name) if self.context is not None else getattr(self, name)
+
+    def _fit_prepared(self, target_col: str, task: str, model_names: List[str], fingerprints: List[str] = None,
+                      comp_method: str = None, comp_feats: List[str] = None, ad: bool = False,
+                      tuning: bool = False, ensemble: bool = False, ens_type: Optional[str] = None,
+                      base_model: Optional[str] = None, model_params: Optional[Dict[str, Any]] = None,
+                      base_model_param: Optional[Dict[str, Any]] = None, num_impute_type: Optional[str] = None,
+                      num_scale_type: Optional[str] = None, cat_impute: bool = False, poly: bool = False,
+                      poly_degree: int = 1, poly_interaction_only: bool = True, decomposition: bool = False,
+                      decomposition_method: str = "PCA", dec_n_components: int = 2, sampling_method=None) -> None:
+        """Fit the model after X/y and shared metadata have been prepared."""
+        from ..models.training import fit_model, tune_model
+        from ..models.utils import feature_names_from_pipeline, label_encode
+
+        X_train = self._get_X()
+        y_train = self._get_y()
+        num_cols = self._shared_attr("num_cols")
+        cat_cols = self._shared_attr("cat_cols")
+        smiles_cols = self._shared_attr("smiles_cols")
+        comp_cols = self._shared_attr("comp_cols")
+        all_cols = self._shared_attr("all_cols")
+
+        self.target_col = target_col if not ad else "AD"
         self.task = task if not ad else "AD"
         self.model_names = model_names
         self.ensemble = ensemble if not ad else False
@@ -187,74 +312,52 @@ class SingleOutputMLModelPipeline:
         self.model_params = model_params
         self.base_model_param = base_model_param
         self.tuning = tuning if not ad else False
-
         self.num_impute_type = num_impute_type
         self.num_scale_type = num_scale_type
         self.cat_impute = cat_impute
         self.poly = poly
         self.poly_degree = poly_degree
         self.poly_interaction_only = poly_interaction_only
-        self.decomposition= decomposition
+        self.decomposition = decomposition
         self.decomposition_method = decomposition_method
         self.dec_n_components = dec_n_components
-
-        self.sampling_method = sampling_method if task=="classification" else None
-
+        self.sampling_method = sampling_method if task == "classification" else None
         self.fingerprints = fingerprints
         self.comp_method = comp_method
         self.comp_feats = comp_feats
-
         self.ad = ad
-
-        # アンサンブルや特徴量変換を考慮したカテゴリカル列のインデックス作成
-        self.cat_index = [self.all_cols.index(c) for c in cat_cols + smiles_cols + comp_cols]
-        self.cat_index_fit = [] if decomposition or poly or self.ensemble else [self.all_cols.index(c) for c in cat_cols]
-
+        self.cat_index = [all_cols.index(c) for c in cat_cols + smiles_cols + comp_cols]
+        self.cat_index_fit = [] if decomposition or poly or self.ensemble else [all_cols.index(c) for c in cat_cols]
         self.model = self._make_pipeline()
-        # 目的変数ごとにモデルを適合
         if self.task == "classification":
-            self.target_items = np.unique(self.y.values)
-            self.y, self.le = label_encode(self.y)
-            self.idx2item = {k: v for k, v in zip(self.y.unique(), self.target_items)}
-            self.item2idx = {k: v for k, v in zip(self.target_items, self.y.unique())}
+            self.target_items = np.unique(y_train.values)
+            y_train, self.le = label_encode(y_train)
+            self.idx2item = {k: v for k, v in zip(y_train.unique(), self.target_items)}
+            self.item2idx = {k: v for k, v in zip(self.target_items, y_train.unique())}
+            if self.context is None:
+                self.y = y_train
+            else:
+                self._encoded_y = y_train
+            fit_y = y_train
         else:
             self.sampling_method = None
+            fit_y = y_train
         if self.tuning:
-            # モデルチューニングを実行[target]
             self.model, best_params, best_base_param = tune_model(
-                X=self.X,
-                y=self.y,
-                model_pipeline=self.model,
-                model_names=self.model_names,
-                base_model=self.base_model,
-                ens_type=self.ens_type,
-                sampling_method = self.sampling_method,
-                cat_index=self.cat_index,
-                cat_index_fit=self.cat_index_fit,
-                task=self.task,
-                n_trials=30,
-                verbose=2
+                X=X_train, y=fit_y, model_pipeline=self.model, model_names=self.model_names,
+                base_model=self.base_model, ens_type=self.ens_type, sampling_method=self.sampling_method,
+                cat_index=self.cat_index, cat_index_fit=self.cat_index_fit, task=self.task, n_trials=30, verbose=2,
             )
             self.model_params = best_params
             self.base_model_param = best_base_param
         else:
-            # モデルを適合させる
             self.model = fit_model(
-                X=self.X,
-                y=self.y,
-                model_pipeline=self.model,
-                model_names=self.model_names,
-                ensemble=self.ensemble,
-                sampling_method = self.sampling_method,
-                cat_index=self.cat_index,
-                cat_index_fit=self.cat_index_fit,
+                X=X_train, y=fit_y, model_pipeline=self.model, model_names=self.model_names,
+                ensemble=self.ensemble, sampling_method=self.sampling_method,
+                cat_index=self.cat_index, cat_index_fit=self.cat_index_fit,
             )
         self.feature_names = feature_names_from_pipeline(self.model)
-        # 前処理を実施
-        self.df_prerpocessed = pd.DataFrame(
-            self.model['preprocess'].transform(self.X),
-            columns=self.feature_names
-        )
+        self.df_prerpocessed = pd.DataFrame(self.model["preprocess"].transform(X_train), columns=self.feature_names)
 
     def _make_pipeline(
         self
@@ -267,10 +370,10 @@ class SingleOutputMLModelPipeline:
         model_items = make_pipeline(
             model_names=self.model_names,
             task=self.task,
-            num_cols=self.num_cols,
-            cat_cols=self.cat_cols,
-            smiles_cols=self.smiles_cols,
-            comp_cols=self.comp_cols,
+            num_cols=self._shared_attr("num_cols"),
+            cat_cols=self._shared_attr("cat_cols"),
+            smiles_cols=self._shared_attr("smiles_cols"),
+            comp_cols=self._shared_attr("comp_cols"),
             num_impute_type=self.num_impute_type,
             num_scale_type=self.num_scale_type,
             cat_impute=self.cat_impute,
@@ -311,14 +414,15 @@ class SingleOutputMLModelPipeline:
             pd.DataFrame: 予測結果。
         """
         models_pred = self.model if model is None else model
-        X_data = self.X if X is None else X
+        X_data = self._get_X() if X is None else X
+        all_cols = self._shared_attr("all_cols")
         # 各ターゲット変数に対して予測を実施
         if proba:
-            predictions = models_pred.predict_proba(X_data[self.all_cols])
+            predictions = models_pred.predict_proba(X_data[all_cols])
         elif self.task == "AD":
-            predictions = models_pred.decision_function(X_data[self.all_cols])
+            predictions = models_pred.decision_function(X_data[all_cols])
         else:
-            predictions = models_pred.predict(X_data[self.all_cols]).reshape(-1,1)
+            predictions = models_pred.predict(X_data[all_cols]).reshape(-1,1)
 
         if self.task == "regression":
             predictions = pd.DataFrame(
@@ -360,8 +464,8 @@ class SingleOutputMLModelPipeline:
         """
         # 入力データが指定されていない場合は学習データを使用
         if X is None:
-            X_data = self.X
-            y_data = self.y
+            X_data = self._get_X()
+            y_data = self._get_y()
         else:
             X_data = X
             y_data = y
@@ -414,8 +518,8 @@ class SingleOutputMLModelPipeline:
 
         # 入力データが指定されていない場合は学習データを使用
         if X is None:
-            x = self.X
-            Y = self.y
+            x = self._get_X()
+            Y = self._get_y()
         else:
             x = X
             Y = y
@@ -519,7 +623,7 @@ class SingleOutputMLModelPipeline:
         return get_pfi_values(
             self.model["predictor"],
             self.df_prerpocessed,
-            self.y
+            self._get_y()
         )
 
     def shap_importance(self):
@@ -537,12 +641,12 @@ class SingleOutputMLModelPipeline:
             return imp
 
         feature_names = self.df_prerpocessed.columns
-        num_cols = [c in self.num_cols for c in feature_names]
-        cat_cols = [c in self.cat_cols for c in feature_names]
+        num_cols = [c in self._shared_attr("num_cols") for c in feature_names]
+        cat_cols = [c in self._shared_attr("cat_cols") for c in feature_names]
 
         mat_imp = [imp[num_cols]]
 
-        for col in self.cat_cols:
+        for col in self._shared_attr("cat_cols"):
             mat_imp.append(imp[[name.startswith(f"{col}_") for name in feature_names]].sum(keepdims=True))
 
         material_cols = feature_names.str.startswith(("smiles__", "comp__"))
@@ -567,11 +671,11 @@ class SingleOutputMLModelPipeline:
 
         shap_values = self.shap_values
         feature_names = self.df_prerpocessed.columns
-        num_cols = [i for i, c in enumerate(feature_names) if c in self.num_cols]
-        cat_cols = [i for i, c in enumerate(feature_names) if c in self.cat_cols]
+        num_cols = [i for i, c in enumerate(feature_names) if c in self._shared_attr("num_cols")]
+        cat_cols = [i for i, c in enumerate(feature_names) if c in self._shared_attr("cat_cols")]
         mat_shap = [shap_values[:, num_cols]]
 
-        for col in self.cat_cols:
+        for col in self._shared_attr("cat_cols"):
             _idx = [i for i, name in enumerate(feature_names) if name.startswith(f"{col}_")]
             mat_shap.append(shap_values[:,_idx].sum(axis=1, keepdims=True))
 
@@ -598,9 +702,9 @@ class SingleOutputMLModelPipeline:
                 shap_values=self.shap_values,
                 target_col=target_col,
                 modelname=self.model_names[0],
-                unique_dict=self.unique_cols,
-                smiles_cols=self.smiles_cols,
-                comp_cols=self.comp_cols,
+                unique_dict=self._shared_attr("unique_cols"),
+                smiles_cols=self._shared_attr("smiles_cols"),
+                comp_cols=self._shared_attr("comp_cols"),
                 le=self.le
             )
         else:
@@ -610,20 +714,20 @@ class SingleOutputMLModelPipeline:
         from ..models.explainability import get_pd_and_ice
 
         return get_pd_and_ice(
-            X=self.X,
+            X=self._get_X(),
             _model=self,
             target=target_col,
-            unique_dict=self.unique_cols,
+            unique_dict=self._shared_attr("unique_cols"),
         )
 
     def get_pd_2d(self, target_cols):
         from ..models.explainability import get_pd_and_ice_2d
 
         return get_pd_and_ice_2d(
-            X=self.X,
+            X=self._get_X(),
             _model=self,
             targets=target_cols,
-            unique_dict=self.unique_cols,
+            unique_dict=self._shared_attr("unique_cols"),
             bounds=None
         )
 
@@ -633,7 +737,7 @@ class SingleOutputMLModelPipeline:
             "pfi":self.pfi_importance(),
             "shap":self.shap_importance(),
             "shap_pd": {feature: self.get_shap_scatter_data(feature) for feature in self.feature_names},
-            "pd": {feature: self.get_pd_and_ice(feature) for feature in self.all_cols}
+            "pd": {feature: self.get_pd_and_ice(feature) for feature in self._shared_attr("all_cols")}
         }
         self.importances["model_combine"] = self._combine_cat_importance(self.importances["model"])
         self.importances["pfi_combine"] = self._combine_cat_importance(self.importances["pfi"])
@@ -695,8 +799,7 @@ class SingleOutputMLModelPipeline:
         state: Dict[str, Any] = {}
 
         keys_core = [
-            "num_cols", "cat_cols", "all_cols", "target_col",
-            "smiles_cols", "comp_cols", "unique_cols",
+            "target_col",
             "task", "model_names", "ensemble", "ens_type", "base_model",
             "model_params", "base_model_param", "tuning",
             "num_impute_type", "num_scale_type", "cat_impute",
@@ -711,7 +814,13 @@ class SingleOutputMLModelPipeline:
             if hasattr(self, k):
                 state[k] = getattr(self, k)
 
-        if include_data:
+        state["shared_mode"] = self.context is not None
+        if self.context is None:
+            for k in ["num_cols", "cat_cols", "all_cols", "smiles_cols", "comp_cols", "unique_cols"]:
+                if hasattr(self, k):
+                    state[k] = getattr(self, k)
+
+        if include_data and self.context is None:
             for k in ["X", "y"]:
                 if hasattr(self, k):
                     state[k] = getattr(self, k)
