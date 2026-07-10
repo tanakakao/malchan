@@ -438,9 +438,11 @@ def show_pd_and_ice(
         raise ValueError("X_PD/target_col/xticks、またはmodelとtarget/object_colとtarget_colを指定してください。")
 
     if len(X_PD.shape)==3:
-        X_PD = X_PD[:,:,col_idx]
+        X_PD = X_PD[:, :, col_idx]
         if y is not None:
-            y = (np.asarray(y).ravel()==col_idx).astype(int)
+            target_items = _get_target_items(child_model) if child_model is not None else []
+            selected_class = target_items[col_idx] if -len(target_items) <= col_idx < len(target_items) else col_idx
+            y = (np.asarray(y).ravel() == selected_class).astype(int)
     elif y is not None:
         y = np.asarray(y).ravel()
 

@@ -804,9 +804,13 @@ def save_pd_plot_mpl(
     *,
     positive_class_index=1
 ):
-    """
-    shap_and_pd_array の結果を使って散布図 + PD 曲線 + base(hline) を描く。
-    ※重要度ソート後の参照ズレを修正済み（shap_values は「並べ替え後の i」で参照する）。
+    """Save PD/ICE plots with actual-data overlays.
+
+    Args:
+        model: Fitted model pipeline that contains the target child model.
+        target: Target column name to visualize.
+        positive_class_index: Class index used when summarizing binary or
+            multiclass outputs.
     """
     shap_values, x_ticks, x_pd, base_value, features_list, sort_desc = shap_and_pd_array(
         model, target, positive_class_index=positive_class_index, return_info=False
@@ -886,7 +890,8 @@ def save_pd_plot_mpl(
 
                 if not m.decomposition:
                     ax.scatter(x, shap_values[:, i, k], color='blue', alpha=.75)
-                ax.scatter(x, m.y==k, color='red', alpha=.5)
+                class_label = class_names[k] if class_names is not None and k < len(class_names) else k
+                ax.scatter(x, (np.asarray(m.y).ravel() == class_label).astype(int), color='red', alpha=.5)
 
                 if base_lines[k] is not None:
                     ax.hlines(base_lines[k], xmin, xmax, linestyle="--", color="black", linewidth=0.5)
