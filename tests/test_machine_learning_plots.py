@@ -416,3 +416,19 @@ def test_yy_plot_ml_accepts_multiclass_cv_probability_matrix():
     assert fig.data[0].z.tolist() == [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
     assert list(fig.data[0].x) == ["a", "b", "c"]
     assert list(fig.data[0].y) == ["a", "b", "c"]
+
+
+def test_shap_scatter_binary_class_uses_existing_single_class_shap_column():
+    """show_shap_scatter uses the existing class SHAP column for binary classifiers."""
+    X_shappd = pd.DataFrame({"x": [0.0, 1.0, 2.0], "shap_b": [0.1, 0.2, 0.3]})
+    rawX = pd.DataFrame({"x": [0.0, 1.0, 2.0]})
+
+    fig = show_shap_scatter(
+        X_shappd=X_shappd,
+        rawX=rawX,
+        shap_values=np.array([[[0.0, 0.1]], [[0.0, 0.2]], [[0.0, 0.3]]]),
+        target_col="x",
+        target_items=["a", "b"],
+    )
+
+    assert list(fig.data[0].y) == [0.1, 0.2, 0.3]
