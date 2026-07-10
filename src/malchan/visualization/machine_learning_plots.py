@@ -240,6 +240,94 @@ def _yy_plot(
 
     return fig
 
+
+def _to_class_labels(y_pred: Any, child_model: Any, y_true: Any) -> np.ndarray:
+    """Convert classification predictions to one-dimensional class labels.
+
+    Args:
+        y_pred (Any): Predicted labels, probabilities, or scores. Two-dimensional
+            arrays/DataFrames are treated as class-wise probabilities or scores.
+        child_model (Any): Fitted child model that may provide ``target_items``,
+            ``idx2item``, or ``item2idx`` for label conversion.
+        y_true (Any): True target labels used to infer fallback label order.
+
+    Returns:
+        np.ndarray: One-dimensional predicted class labels that can be passed to
+            ``sklearn.metrics.confusion_matrix``.
+    """
+    pred_values = np.asarray(y_pred)
+    true_values = np.asarray(y_true).ravel()
+    target_items = list(getattr(child_model, "target_items", []) or [])
+    idx2item = getattr(child_model, "idx2item", None) or {}
+
+    if pred_values.ndim == 2 and pred_values.shape[1] > 1:
+        pred_indices = np.nanargmax(pred_values, axis=1)
+        if target_items and len(target_items) >= pred_values.shape[1]:
+            return np.asarray([target_items[i] for i in pred_indices])
+        if idx2item:
+            return np.asarray([idx2item.get(int(i), i) for i in pred_indices])
+        return pred_indices
+
+    pred_values = pred_values.ravel()
+
+    if target_items and np.issubdtype(pred_values.dtype, np.integer):
+        return np.asarray([target_items[int(i)] if 0 <= int(i) < len(target_items) else i for i in pred_values])
+
+    labels_ref = np.unique(true_values)
+    if labels_ref.size == 2 and np.issubdtype(pred_values.dtype, np.floating):
+        finite_pred = pred_values[np.isfinite(pred_values)]
+        if finite_pred.size and finite_pred.min() >= 0.0 and finite_pred.max() <= 1.0:
+            return np.where(pred_values >= 0.5, labels_ref[1], labels_ref[0])
+
+    if np.issubdtype(labels_ref.dtype, np.number) and np.issubdtype(pred_values.dtype, np.floating):
+        labels_num = labels_ref.astype(float)
+        idx = np.argmin(np.abs(pred_values[:, None] - labels_num[None, :]), axis=1)
+        return labels_ref[idx]
+
+    return pred_values
+
+
+def _classification_confusion_matrix_figure(y_true: Any, y_pred: Any, child_model: Any) -> go.Figure:
+    """Create a Plotly confusion matrix for classification predictions.
+
+    Args:
+        y_true (Any): True target labels.
+        y_pred (Any): Predicted labels, probabilities, or scores.
+        child_model (Any): Fitted child model that may provide class label metadata.
+
+    Returns:
+        go.Figure: Heatmap figure of the confusion matrix.
+    """
+    y_true_labels = np.asarray(y_true).ravel()
+    target_items = list(getattr(child_model, "target_items", []) or [])
+    if target_items and np.issubdtype(y_true_labels.dtype, np.integer):
+        y_true_labels = np.asarray(
+            [target_items[int(i)] if 0 <= int(i) < len(target_items) else i for i in y_true_labels]
+        )
+    y_pred_labels = _to_class_labels(y_pred, child_model, y_true_labels)
+    if target_items:
+        labels = target_items
+    else:
+        labels = np.unique(np.concatenate([y_true_labels, y_pred_labels])).tolist()
+
+    cm = confusion_matrix(y_true_labels, y_pred_labels, labels=labels)
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=cm,
+            x=labels,
+            y=labels,
+            colorscale="Blues",
+            text=cm,
+            texttemplate="%{text}"
+        )
+    )
+    fig.update_layout(
+        xaxis_title="predict",
+        yaxis_title="actual",
+        yaxis=dict(autorange="reversed")
+    )
+    return fig
+
 def yy_plot_ml(
     model: MLModelPipeline,
     target: Optional[str] = None,
@@ -266,24 +354,7 @@ def yy_plot_ml(
     # 予測値を取得
     if not cv:
         if child_model.task=="classification":
-            cm = confusion_matrix(y, model.predict()[target])
-            labels = child_model.target_items
-            fig = go.Figure(
-                data=go.Heatmap(
-                    z=cm,
-                    x=labels,
-                    y=labels,
-                    colorscale="Blues",
-                    text=cm,
-                    texttemplate="%{text}"
-                )
-            )
-    
-            fig.update_layout(
-                xaxis_title="predict",
-                yaxis_title="actual",
-                yaxis=dict(autorange="reversed")
-            )
+            fig = _classification_confusion_matrix_figure(y, model.predict()[target], child_model)
         else:
             fig = _yy_plot(
                 y,
@@ -293,23 +364,7 @@ def yy_plot_ml(
             )
     else:
         if child_model.task=="classification":
-            cm = confusion_matrix(y.astype(int), child_model.cv_preds[train_test].astype(int))
-            labels = child_model.target_items
-            fig = go.Figure(
-                data=go.Heatmap(
-                    z=cm,
-                    x=labels,
-                    y=labels,
-                    colorscale="Blues",
-                    text=cm,
-                    texttemplate="%{text}"
-                )
-            )
-            fig.update_layout(
-                xaxis_title="predict",
-                yaxis_title="actual",
-                yaxis=dict(autorange="reversed")
-            )
+            fig = _classification_confusion_matrix_figure(y, child_model.cv_preds[train_test], child_model)
         else:
             fig = _yy_plot(
                     y,
