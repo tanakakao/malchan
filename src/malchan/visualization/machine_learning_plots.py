@@ -564,24 +564,9 @@ def show_shap_scatter(
     
     interactive_values = None
     if interactive_col is not None:
-        use_child_shap_scatter = False
-        if child_model is not None and getattr(child_model, "shap_values", None) is not None:
-            child_X = getattr(child_model, "X_sample", None)
-            use_child_shap_scatter = (
-                interactive_col in unique_dict
-                or (child_X is not None and interactive_col in child_X.columns)
-            )
-        if use_child_shap_scatter:
-            interactive_scatter = child_model.get_shap_scatter_data(interactive_col)
-            if isinstance(interactive_scatter, dict):
-                interactive_scatter = interactive_scatter[interactive_col]
-            if interactive_col in interactive_scatter.columns:
-                interactive_values = interactive_scatter[interactive_col].to_numpy()
-        if interactive_values is None and interactive_col in rawX.columns:
-            interactive_values = rawX[interactive_col].to_numpy()
-
-        if interactive_values is None:
-            raise ValueError(f"{interactive_col!r} is not found in SHAP scatter data or rawX.")
+        if interactive_col not in rawX.columns:
+            raise ValueError(f"{interactive_col!r} is not found in rawX.")
+        interactive_values = rawX[interactive_col].to_numpy()
 
     if interactive_col is not None and interactive_col in unique_dict.keys():
         # インタラクティブにカテゴリで色分けする特徴量がある場合

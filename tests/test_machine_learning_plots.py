@@ -140,7 +140,7 @@ class DummyVisualizationChild(SingleOutputMLModelPipeline):
         return {
             "x": pd.DataFrame({"x": [0.0, 1.0, 2.0], "shap": [0.1, 0.2, 0.3]}),
             "z": pd.DataFrame({"z": [2.0, 1.0, 0.0], "shap": [0.2, 0.1, 0.0]}),
-        }[target_col]
+        }
 
 
 class DummyVisualizationModel:
@@ -194,8 +194,8 @@ def test_shap_scatter_accepts_dataframe_scatter_data():
     assert list(fig.data[0].y) == [0.1, 0.2, 0.3]
 
 
-def test_shap_scatter_model_colors_by_interactive_col_shap_scatter_data():
-    """show_shap_scatter uses child SHAP scatter data for model interactive_col colors."""
+def test_shap_scatter_model_colors_by_interactive_col_from_rawX():
+    """show_shap_scatter uses rawX for model interactive_col colors."""
     fig = show_shap_scatter(
         model=DummyVisualizationModel(),
         target="property",
@@ -238,7 +238,7 @@ def test_shap_scatter_raises_when_interactive_col_is_missing_from_rawX():
             interactive_col="z",
         )
     except ValueError as exc:
-        assert "'z' is not found in SHAP scatter data or rawX." in str(exc)
+        assert "'z' is not found in rawX." in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing interactive_col")
 
