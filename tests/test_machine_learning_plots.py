@@ -15,6 +15,14 @@ class FakeScatter:
         self.__dict__.update(kwargs)
 
 
+class FakeBar:
+    """Test double for plotly.graph_objects.Bar."""
+
+    def __init__(self, **kwargs):
+        """Store bar trace keyword arguments as attributes."""
+        self.__dict__.update(kwargs)
+
+
 class FakeHeatmap:
     """Test double for plotly.graph_objects.Heatmap."""
 
@@ -54,6 +62,7 @@ fake_plotly = types.ModuleType("plotly")
 fake_go = types.ModuleType("plotly.graph_objects")
 fake_go.Figure = FakeFigure
 fake_go.Scatter = FakeScatter
+fake_go.Bar = FakeBar
 fake_go.Heatmap = FakeHeatmap
 fake_go.Contour = FakeContour
 fake_plotly.graph_objects = fake_go
@@ -66,6 +75,7 @@ module_path = "src/malchan/visualization/machine_learning_plots.py"
 spec = importlib.util.spec_from_file_location("machine_learning_plots", module_path)
 machine_learning_plots = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(machine_learning_plots)
+show_importances = machine_learning_plots.show_importances
 yy_plot_ml = machine_learning_plots.yy_plot_ml
 show_pd_and_ice = machine_learning_plots.show_pd_and_ice
 show_pd_2d = machine_learning_plots.show_pd_2d
@@ -97,6 +107,36 @@ class DummyMultiOutputModel:
     def predict(self):
         """Return predictions for the shared-context training rows."""
         return pd.DataFrame({"property": [1.1, 1.9, 3.2]})
+
+
+class DummyNoImportanceChild:
+    """Child model that simulates estimators without built-in importances."""
+
+    def __init__(self):
+        """Create a child model with feature names but no importance getter."""
+        self.feature_names = ["x", "z"]
+
+
+class DummyNoImportanceModel:
+    """Multi-output model whose child has no importance API."""
+
+    def __init__(self):
+        """Create the child model mapping."""
+        self.models = {"property": DummyNoImportanceChild()}
+
+
+def test_show_importances_returns_empty_figure_when_getter_is_missing():
+    """show_importances returns an empty figure for models without importances."""
+    fig = show_importances(model=DummyNoImportanceModel(), target="property")
+
+    assert fig.data == []
+
+
+def test_show_importances_returns_empty_figure_when_importances_are_none():
+    """show_importances returns an empty figure when importances are unavailable."""
+    fig = show_importances(feature_names=["x", "z"], feature_importances=None)
+
+    assert fig.data == []
 
 
 def test_yy_plot_ml_uses_shared_context_y_when_child_y_is_none():
@@ -243,6 +283,26 @@ def test_shap_scatter_raises_when_interactive_col_is_missing_from_rawX():
         assert "'z' is not found in rawX." in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing interactive_col")
+
+
+def test_shap_scatter_returns_empty_figure_when_shap_values_are_none():
+    """show_shap_scatter returns an empty figure when SHAP values are unavailable."""
+    fig = show_shap_scatter(
+        X_shappd=pd.DataFrame({"x": [0.0], "shap": [0.1]}),
+        rawX=pd.DataFrame({"x": [0.0]}),
+        shap_values=None,
+        target_col="x",
+    )
+
+    assert fig.data == []
+
+
+def test_shap_beeswarm_returns_empty_figure_when_shap_values_are_none():
+    """show_shap_beeswarm returns an empty figure when SHAP values are unavailable."""
+    fig = show_shap_beeswarm(X=pd.DataFrame({"x": [0.0]}), shap_values=None)
+
+    assert fig.data == []
+
 
 def test_shap_beeswarm_uses_shared_context_X_when_child_X_is_none():
     """show_shap_beeswarm can build feature rankings from shared-context X."""
