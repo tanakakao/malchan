@@ -618,6 +618,52 @@ def show_pd_2d(
 
     return fig
 
+
+def _resolve_shap_scatter_column(
+    X_plot: pd.DataFrame,
+    target_item=None,
+    target_items: Optional[Dict[str, list]] = None,
+) -> str:
+    """Resolve the SHAP value column to use for a scatter plot.
+
+    Args:
+        X_plot (pd.DataFrame): SHAP scatter data containing one feature column and
+            one or more SHAP value columns.
+        target_item: Class label to plot when class-specific SHAP columns exist.
+        target_items (Optional[Dict[str, list]]): Class labels available for the
+            target. Kept for compatibility with model-provided metadata.
+
+    Returns:
+        str: Name of the SHAP value column to plot.
+
+    Raises:
+        ValueError: If no usable SHAP value column is found.
+    """
+    if target_item is not None:
+        requested_col = f"shap_{target_item}"
+        if requested_col in X_plot.columns:
+            return requested_col
+        raise ValueError(f"{requested_col!r} is not found in SHAP scatter data.")
+
+    if "shap" in X_plot.columns:
+        return "shap"
+
+    shap_cols = [col for col in X_plot.columns if str(col).startswith("shap_")]
+    if len(shap_cols) == 1:
+        return shap_cols[0]
+    if len(shap_cols) > 1:
+        if target_items is not None:
+            for class_label in reversed(list(target_items)):
+                class_col = f"shap_{class_label}"
+                if class_col in shap_cols:
+                    return class_col
+        return shap_cols[-1]
+
+    if X_plot.shape[-1] > 2:
+        return X_plot.columns[-1]
+
+    raise ValueError("SHAP scatter data must contain 'shap' or 'shap_<class>' column.")
+
 def show_shap_scatter(
     X_shappd=None,
     rawX: Optional[pd.DataFrame] = None,
@@ -679,18 +725,8 @@ def show_shap_scatter(
     if target_col not in X_plot.columns:
         raise ValueError(f"{target_col!r} is not found in SHAP scatter data.")
 
-    if target_item is not None:
-        shap_col = 'shap_'+str(target_item)
-    elif target_items is not None:
-        shap_suffixes = list(target_items)
-        shap_col = 'shap_'+str(shap_suffixes[X_plot.shape[-1]-2])
-    elif X_plot.shape[-1]>2:
-        shap_col = X_plot.columns[-1]
-    else:
-        shap_col = 'shap'
-    if shap_col not in X_plot.columns:
-        raise ValueError(f"{shap_col!r} is not found in SHAP scatter data.")
-    
+    shap_col = _resolve_shap_scatter_column(X_plot, target_item, target_items)
+
     # Plotly 図オブジェクトを作成
     fig = go.Figure()
     
