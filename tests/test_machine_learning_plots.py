@@ -274,3 +274,14 @@ def test_shap_beeswarm_spreads_dense_shap_values_more_than_sparse_values():
     sparse_row = y_values[8:]
     assert np.ptp(dense_row) > np.ptp(sparse_row)
     assert np.ptp(dense_row) > 0.0
+
+def test_shap_beeswarm_uses_roomier_vertical_layout():
+    """show_shap_beeswarm reserves more vertical space for feature rows."""
+    X = pd.DataFrame({"a": [0.0, 1.0], "b": [1.0, 0.0], "c": [0.5, 0.2]})
+    shap_values = np.array([[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]])
+
+    fig = show_shap_beeswarm(X=X, shap_values=shap_values, n_shap_top=3)
+
+    assert fig.layout["height"] == 460
+    assert fig.layout["margin"] == {"t": 70, "b": 70}
+    assert fig.layout["yaxis"]["range"] == [-0.8, 2.8]

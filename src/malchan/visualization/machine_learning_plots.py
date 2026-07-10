@@ -750,11 +750,13 @@ def show_shap_beeswarm(
     # レイアウトの設定
     fig.update_layout(
         width=600,
-        height=150 + 50 * n_shap_top,
+        height=220 + 80 * n_shap_top,
+        margin=dict(t=70, b=70),
         yaxis=dict(
             tickmode='array',
             tickvals=np.arange(n_shap_top),
             ticktext=shap_top,
+            range=[-0.8, n_shap_top - 0.2],
             automargin=True
         )
     )
