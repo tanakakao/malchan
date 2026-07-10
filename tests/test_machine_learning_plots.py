@@ -345,3 +345,37 @@ def test_shap_beeswarm_uses_roomier_vertical_layout():
     assert fig.layout["height"] == 460
     assert fig.layout["margin"] == {"t": 70, "b": 70}
     assert fig.layout["yaxis"]["range"] == [-0.8, 2.8]
+
+
+class DummyMulticlassClassificationModel:
+    """Minimal multiclass classifier with CV probability predictions."""
+
+    def __init__(self):
+        """Create multiclass classification fixtures."""
+        child = SingleOutputMLModelPipeline()
+        child.y = pd.Series(["a", "b", "c"], name="y_cat_str")
+        child.task = "classification"
+        child.target_items = ["a", "b", "c"]
+        child.cv_preds = {
+            "train": pd.DataFrame(
+                {
+                    "y_cat_str_a": [0.8, 0.1, 0.2],
+                    "y_cat_str_b": [0.1, 0.7, 0.2],
+                    "y_cat_str_c": [0.1, 0.2, 0.6],
+                }
+            )
+        }
+        self.models = {"y_cat_str": child}
+
+    def predict(self):
+        """Return label predictions for non-CV classification plotting."""
+        return pd.DataFrame({"y_cat_str": ["a", "b", "c"]})
+
+
+def test_yy_plot_ml_accepts_multiclass_cv_probability_matrix():
+    """yy_plot_ml converts multiclass CV probability matrices before confusion_matrix."""
+    fig = yy_plot_ml(model=DummyMulticlassClassificationModel(), target="y_cat_str", cv=True)
+
+    assert fig.data[0].z.tolist() == [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    assert list(fig.data[0].x) == ["a", "b", "c"]
+    assert list(fig.data[0].y) == ["a", "b", "c"]
