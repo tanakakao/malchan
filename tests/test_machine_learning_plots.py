@@ -193,6 +193,55 @@ def test_shap_scatter_accepts_dataframe_scatter_data():
     assert list(fig.data[0].x) == [0.0, 1.0, 2.0]
     assert list(fig.data[0].y) == [0.1, 0.2, 0.3]
 
+
+def test_shap_scatter_model_colors_by_interactive_col_from_rawX():
+    """show_shap_scatter uses rawX for model interactive_col colors."""
+    fig = show_shap_scatter(
+        model=DummyVisualizationModel(),
+        target="property",
+        target_col="x",
+        interactive_col="z",
+    )
+
+    assert list(fig.data[0].marker["color"]) == [2.0, 1.0, 0.0]
+
+
+def test_shap_scatter_colors_by_numeric_interactive_col_from_rawX():
+    """show_shap_scatter uses rawX for numeric interactive_col colors."""
+    X_shappd = {
+        "x": pd.DataFrame({"x": [0.0, 1.0, 2.0], "shap": [0.1, 0.2, 0.3]})
+    }
+    rawX = pd.DataFrame({"x": [0.0, 1.0, 2.0], "z": [2.0, 1.0, 0.0]})
+
+    fig = show_shap_scatter(
+        X_shappd=X_shappd,
+        rawX=rawX,
+        shap_values=np.array([[0.1], [0.2], [0.3]]),
+        target_col="x",
+        interactive_col="z",
+    )
+
+    assert list(fig.data[0].marker["color"]) == [2.0, 1.0, 0.0]
+
+
+def test_shap_scatter_raises_when_interactive_col_is_missing_from_rawX():
+    """show_shap_scatter reports a missing interactive_col clearly."""
+    X_shappd = pd.DataFrame({"x": [0.0, 1.0, 2.0], "shap": [0.1, 0.2, 0.3]})
+    rawX = pd.DataFrame({"x": [0.0, 1.0, 2.0]})
+
+    try:
+        show_shap_scatter(
+            X_shappd=X_shappd,
+            rawX=rawX,
+            shap_values=np.array([[0.1], [0.2], [0.3]]),
+            target_col="x",
+            interactive_col="z",
+        )
+    except ValueError as exc:
+        assert "'z' is not found in rawX." in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for missing interactive_col")
+
 def test_shap_beeswarm_uses_shared_context_X_when_child_X_is_none():
     """show_shap_beeswarm can build feature rankings from shared-context X."""
     fig = show_shap_beeswarm(model=DummyVisualizationModel(), target="property", n_shap_top=2)

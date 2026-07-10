@@ -562,13 +562,20 @@ def show_shap_scatter(
     # Plotly 図オブジェクトを作成
     fig = go.Figure()
     
+    interactive_values = None
+    if interactive_col is not None:
+        if interactive_col not in rawX.columns:
+            raise ValueError(f"{interactive_col!r} is not found in rawX.")
+        interactive_values = rawX[interactive_col].to_numpy()
+
     if interactive_col is not None and interactive_col in unique_dict.keys():
-        # インタラクティブに色分けする特徴量がある場合
-        for c in sorted(rawX[interactive_col].unique()):
+        # インタラクティブにカテゴリで色分けする特徴量がある場合
+        for c in sorted(pd.Series(interactive_values).dropna().unique()):
+            mask = interactive_values == c
             fig.add_trace(
                 go.Scatter(
-                    x=X_plot[rawX[interactive_col] == c][target_col],
-                    y=X_plot[rawX[interactive_col] == c][shap_col],
+                    x=X_plot.loc[mask, target_col],
+                    y=X_plot.loc[mask, shap_col],
                     name=c,
                     mode='markers',
                     marker=dict(size=10,)
@@ -580,13 +587,14 @@ def show_shap_scatter(
             height=600
         )
     else:
-        # インタラクティブな色分けがない場合
+        # インタラクティブな色分けがない場合、または数値特徴量で色分けする場合
+        marker_color = interactive_values if interactive_col is not None else 'blue'
         fig.add_trace(
             go.Scatter(
                 x=X_plot[target_col],
                 y=X_plot[shap_col],
                 marker=dict(
-                    color=X_shappd[interactive_col][interactive_col] if interactive_col is not None else 'blue',
+                    color=marker_color,
                     colorscale='bluered',
                     colorbar=dict(
                         thickness=10
