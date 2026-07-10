@@ -178,6 +178,21 @@ def test_shap_scatter_uses_shared_context_rawX_when_child_X_is_none():
     assert list(fig.data[0].y) == [0.1, 0.2, 0.3]
 
 
+def test_shap_scatter_accepts_dataframe_scatter_data():
+    """show_shap_scatter accepts direct DataFrame output from get_shap_scatter_data."""
+    X_shappd = pd.DataFrame({"x": [0.0, 1.0, 2.0], "shap": [0.1, 0.2, 0.3]})
+    rawX = pd.DataFrame({"x": [0.0, 1.0, 2.0]})
+
+    fig = show_shap_scatter(
+        X_shappd=X_shappd,
+        rawX=rawX,
+        shap_values=np.array([[0.1], [0.2], [0.3]]),
+        target_col="x",
+    )
+
+    assert list(fig.data[0].x) == [0.0, 1.0, 2.0]
+    assert list(fig.data[0].y) == [0.1, 0.2, 0.3]
+
 def test_shap_beeswarm_uses_shared_context_X_when_child_X_is_none():
     """show_shap_beeswarm can build feature rankings from shared-context X."""
     fig = show_shap_beeswarm(model=DummyVisualizationModel(), target="property", n_shap_top=2)
