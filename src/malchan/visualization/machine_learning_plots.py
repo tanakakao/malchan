@@ -241,6 +241,26 @@ def _yy_plot(
     return fig
 
 
+def _get_target_items(child_model: Any) -> List[Any]:
+    """Return class labels from a child model as a plain Python list.
+
+    Args:
+        child_model (Any): Fitted child model that may expose ``target_items`` as
+            a list, tuple, NumPy array, pandas Index, or ``None``.
+
+    Returns:
+        List[Any]: Class labels normalized to a list. Empty when labels are not
+            available.
+    """
+    target_items = getattr(child_model, "target_items", None)
+    if target_items is None:
+        return []
+    if isinstance(target_items, np.ndarray):
+        return target_items.tolist()
+    if isinstance(target_items, pd.Index):
+        return target_items.tolist()
+    return list(target_items)
+
 def _to_class_labels(y_pred: Any, child_model: Any, y_true: Any) -> np.ndarray:
     """Convert classification predictions to one-dimensional class labels.
 
@@ -257,7 +277,7 @@ def _to_class_labels(y_pred: Any, child_model: Any, y_true: Any) -> np.ndarray:
     """
     pred_values = np.asarray(y_pred)
     true_values = np.asarray(y_true).ravel()
-    target_items = list(getattr(child_model, "target_items", []) or [])
+    target_items = _get_target_items(child_model)
     idx2item = getattr(child_model, "idx2item", None) or {}
 
     if pred_values.ndim == 2 and pred_values.shape[1] > 1:
@@ -314,7 +334,7 @@ def yy_plot_ml(
     if not cv:
         if child_model.task=="classification":
             y_true = np.asarray(y).ravel()
-            target_items = list(getattr(child_model, "target_items", []) or [])
+            target_items = _get_target_items(child_model)
             if target_items and np.issubdtype(y_true.dtype, np.integer):
                 y_true = np.asarray([target_items[int(i)] if 0 <= int(i) < len(target_items) else i for i in y_true])
             y_pred = _to_class_labels(model.predict()[target], child_model, y_true)
@@ -345,7 +365,7 @@ def yy_plot_ml(
     else:
         if child_model.task=="classification":
             y_true = np.asarray(y).ravel()
-            target_items = list(getattr(child_model, "target_items", []) or [])
+            target_items = _get_target_items(child_model)
             if target_items and np.issubdtype(y_true.dtype, np.integer):
                 y_true = np.asarray([target_items[int(i)] if 0 <= int(i) < len(target_items) else i for i in y_true])
             y_pred = _to_class_labels(child_model.cv_preds[train_test], child_model, y_true)
