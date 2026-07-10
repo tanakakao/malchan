@@ -168,6 +168,8 @@ def test_pd_2d_uses_shared_context_X_and_y_when_child_attrs_are_none():
     assert list(actual_trace.x) == [0.0, 1.0, 2.0]
     assert list(actual_trace.y) == [2.0, 1.0, 0.0]
     assert list(actual_trace.marker["color"]) == [1.0, 2.0, 3.0]
+    assert fig.layout["xaxis"]["range"] == [0.0, 1.0]
+    assert fig.layout["yaxis"]["range"] == [0.0, 1.0]
 
 
 def test_shap_scatter_uses_shared_context_rawX_when_child_X_is_none():
@@ -247,3 +249,28 @@ def test_shap_beeswarm_uses_shared_context_X_when_child_X_is_none():
     fig = show_shap_beeswarm(model=DummyVisualizationModel(), target="property", n_shap_top=2)
 
     assert len(fig.data[0].x) == 6
+
+
+def test_shap_beeswarm_spreads_dense_shap_values_more_than_sparse_values():
+    """show_shap_beeswarm expands rows by local SHAP-value density."""
+    X = pd.DataFrame({"dense": np.arange(8), "sparse": np.arange(8)})
+    shap_values = np.array(
+        [
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [0.0, 2.0],
+            [0.0, 3.0],
+            [0.0, 4.0],
+            [0.0, 5.0],
+            [0.0, 6.0],
+            [0.0, 7.0],
+        ]
+    )
+
+    fig = show_shap_beeswarm(X=X, shap_values=shap_values, n_shap_top=2)
+
+    y_values = np.asarray(fig.data[0].y)
+    dense_row = y_values[:8]
+    sparse_row = y_values[8:]
+    assert np.ptp(dense_row) > np.ptp(sparse_row)
+    assert np.ptp(dense_row) > 0.0

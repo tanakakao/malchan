@@ -481,6 +481,8 @@ def show_pd_2d(
         title='Partial Dependence Plot with ICE',
         xaxis_title=target_cols[0],
         yaxis_title=target_cols[1],
+        xaxis=dict(range=[float(np.nanmin(xticks1)), float(np.nanmax(xticks1))]),
+        yaxis=dict(range=[float(np.nanmin(xticks2)), float(np.nanmax(xticks2))]),
         showlegend=False,
         width=650,
         height=600
@@ -614,6 +616,49 @@ def show_shap_scatter(
     
     return fig
 
+
+def _make_density_beeswarm_offsets(values: np.ndarray, row_center: float, max_spread: float = 0.35) -> np.ndarray:
+    """SHAP値の局所密度に応じたビーズウォーム用y座標を作成します。
+
+    Args:
+        values (np.ndarray): 1つの特徴量に対応するSHAP値。
+        row_center (float): 特徴量行の中心y座標。
+        max_spread (float): 行中心から上下に広げる最大幅。
+
+    Returns:
+        np.ndarray: 入力順に対応するビーズウォーム用y座標。
+    """
+    values = np.asarray(values, dtype=float).ravel()
+    offsets = np.zeros(values.shape[0], dtype=float)
+    if values.size <= 1:
+        return row_center + offsets
+
+    finite_mask = np.isfinite(values)
+    if not finite_mask.any():
+        return row_center + offsets
+
+    finite_values = values[finite_mask]
+    value_range = np.nanmax(finite_values) - np.nanmin(finite_values)
+    if value_range == 0:
+        bin_indices = np.zeros(values.shape[0], dtype=int)
+    else:
+        bin_count = min(100, max(10, int(np.ceil(np.sqrt(finite_values.size) * 2))))
+        bin_edges = np.linspace(np.nanmin(finite_values), np.nanmax(finite_values), bin_count + 1)
+        bin_indices = np.digitize(values, bin_edges[1:-1], right=False)
+
+    for bin_index in np.unique(bin_indices[finite_mask]):
+        point_indices = np.flatnonzero(finite_mask & (bin_indices == bin_index))
+        if point_indices.size <= 1:
+            continue
+        order = point_indices[np.argsort(values[point_indices], kind="mergesort")]
+        ranks = np.arange(order.size, dtype=float)
+        side = np.where((ranks % 2) == 0, 1.0, -1.0)
+        layer = np.floor((ranks + 1.0) / 2.0)
+        max_layer = max(layer.max(), 1.0)
+        offsets[order] = side * layer / max_layer * max_spread
+
+    return row_center + offsets
+
 def show_shap_beeswarm(
     X: Optional[pd.DataFrame] = None,
     shap_values: Optional[np.ndarray] = None,
@@ -675,27 +720,26 @@ def show_shap_beeswarm(
             columns=X_scaled.columns
         )
     
-    # SHAP値とスケーリングされたデータの結合
-    df_melt = pd.concat(
-        [
-            pd.DataFrame(
-                shap_values,
-                columns=X.columns
-            )[shap_top].melt().rename(columns={'variable': 'target', 'value': 'shap'}),
-            X_scaled[shap_top].melt()['value']
-        ],
-        axis=1
-    )
+    shap_plot = pd.DataFrame(shap_values, columns=X.columns)[shap_top]
+    scaled_plot = X_scaled[shap_top]
+    x_values = []
+    y_values = []
+    color_values = []
+    for row_index, feature_name in enumerate(shap_top):
+        feature_shap = shap_plot[feature_name].to_numpy()
+        x_values.extend(feature_shap)
+        y_values.extend(_make_density_beeswarm_offsets(feature_shap, row_center=row_index))
+        color_values.extend(-scaled_plot[feature_name].to_numpy())
     
     # ビーズウォームプロットの作成
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=df_melt['shap'],
-            y=np.repeat(np.arange(n_shap_top), len(X)) + np.random.rand(len(X) * n_shap_top) * 0.2,
+            x=x_values,
+            y=y_values,
             mode='markers',
             marker=dict(
-                color=-df_melt['value'],
+                color=color_values,
                 colorscale='RdBu',
                 size=10,
             ),
