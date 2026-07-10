@@ -307,6 +307,42 @@ def _to_class_labels(y_pred: Any, child_model: Any, y_true: Any) -> np.ndarray:
     return pred_values
 
 
+
+def _selected_class_actual_values(y: Any, child_model: Any, class_index: int) -> np.ndarray:
+    """Return 0/1 actual-data values for a selected class.
+
+    Args:
+        y (Any): Original or encoded target values.
+        child_model (Any): Child model that may expose ``target_items`` and
+            ``item2idx`` for class-label/index conversion.
+        class_index (int): Selected class index. Negative values follow Python
+            indexing when class labels are available.
+
+    Returns:
+        np.ndarray: Integer array whose value is 1 when each original row belongs
+            to the selected class and 0 otherwise.
+    """
+    y_values = np.asarray(y).ravel()
+    target_items = _get_target_items(child_model) if child_model is not None else []
+    if target_items and -len(target_items) <= class_index < len(target_items):
+        selected_label = target_items[class_index]
+    else:
+        selected_label = class_index
+
+    candidates = [selected_label]
+    item2idx = getattr(child_model, "item2idx", None) if child_model is not None else None
+    if item2idx and selected_label in item2idx:
+        candidates.append(item2idx[selected_label])
+
+    if np.issubdtype(y_values.dtype, np.integer):
+        normalized_index = class_index % len(target_items) if target_items else class_index
+        candidates.append(normalized_index)
+
+    actual = np.zeros(y_values.shape, dtype=bool)
+    for candidate in candidates:
+        actual |= y_values == candidate
+    return actual.astype(int)
+
 def yy_plot_ml(
     model: MLModelPipeline,
     target: Optional[str] = None,
@@ -440,9 +476,7 @@ def show_pd_and_ice(
     if len(X_PD.shape)==3:
         X_PD = X_PD[:, :, col_idx]
         if y is not None:
-            target_items = _get_target_items(child_model) if child_model is not None else []
-            selected_class = target_items[col_idx] if -len(target_items) <= col_idx < len(target_items) else col_idx
-            y = (np.asarray(y).ravel() == selected_class).astype(int)
+            y = _selected_class_actual_values(y, child_model, col_idx)
     elif y is not None:
         y = np.asarray(y).ravel()
 

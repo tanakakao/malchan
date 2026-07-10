@@ -207,9 +207,10 @@ class DummyMulticlassPDChild(SingleOutputMLModelPipeline):
         """Create string-labeled multiclass PD fixtures."""
         super().__init__()
         self.X = pd.DataFrame({"x": [0.0, 1.0, 2.0]})
-        self.y = pd.Series(["a", "b", "c"], name="y_cat_str")
+        self.y = pd.Series([0, 1, 2], name="y_cat_str")
         self.task = "classification"
         self.target_items = np.array(["a", "b", "c"], dtype=object)
+        self.item2idx = {"a": 0, "b": 1, "c": 2}
 
     def get_pd_and_ice(self, target_col):
         """Return multiclass PD/ICE test data."""
@@ -224,8 +225,8 @@ class DummyMulticlassPDModel:
         self.models = {"y_cat_str": DummyMulticlassPDChild()}
 
 
-def test_pd_and_ice_actual_data_marks_selected_string_class():
-    """show_pd_and_ice plots actual data as 0/1 for the selected string class."""
+def test_pd_and_ice_actual_data_marks_selected_encoded_string_class():
+    """show_pd_and_ice plots encoded actual data as 0/1 for the selected string class."""
     fig = show_pd_and_ice(
         model=DummyMulticlassPDModel(),
         target="y_cat_str",

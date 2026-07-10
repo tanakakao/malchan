@@ -891,7 +891,16 @@ def save_pd_plot_mpl(
                 if not m.decomposition:
                     ax.scatter(x, shap_values[:, i, k], color='blue', alpha=.75)
                 class_label = class_names[k] if class_names is not None and k < len(class_names) else k
-                ax.scatter(x, (np.asarray(m.y).ravel() == class_label).astype(int), color='red', alpha=.5)
+                class_candidates = [class_label]
+                item2idx = getattr(m, "item2idx", None)
+                if item2idx and class_label in item2idx:
+                    class_candidates.append(item2idx[class_label])
+                class_candidates.append(k)
+                y_values = np.asarray(m.y).ravel()
+                actual_class = np.zeros(y_values.shape, dtype=bool)
+                for class_candidate in class_candidates:
+                    actual_class |= y_values == class_candidate
+                ax.scatter(x, actual_class.astype(int), color='red', alpha=.5)
 
                 if base_lines[k] is not None:
                     ax.hlines(base_lines[k], xmin, xmax, linestyle="--", color="black", linewidth=0.5)
