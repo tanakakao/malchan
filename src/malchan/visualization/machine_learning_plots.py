@@ -39,6 +39,15 @@ def _resolve_model_target(model: Optional[MLModelPipeline], target: Optional[str
         raise KeyError(f"{resolved_target!r} is not found in model.models.")
     return model.models[resolved_target], resolved_target
 
+def _empty_figure() -> go.Figure:
+    """Return an empty Plotly figure for unavailable visualization data.
+
+    Returns:
+        go.Figure: Empty Plotly figure object.
+    """
+    return go.Figure()
+
+
 def show_importances(
     feature_names: Optional[List[str]] = None,
     feature_importances: Optional[np.ndarray] = None,
@@ -68,10 +77,17 @@ def show_importances(
     child_model, _ = _resolve_model_target(model, target, object_col)
     if child_model is not None:
         feature_names = child_model.feature_names
-        importance_getter = getattr(child_model, f"{importance_type}_importance")
+        importance_getter = getattr(child_model, f"{importance_type}_importance", None)
+        if importance_getter is None:
+            return _empty_figure()
         feature_importances = importance_getter()
-    if feature_names is None or feature_importances is None:
+    if feature_names is None:
         raise ValueError("feature_names/feature_importances、またはmodelとtarget/object_colを指定してください。")
+    if feature_importances is None:
+        return _empty_figure()
+    feature_importances = np.asarray(feature_importances)
+    if feature_importances.size == 0 or not np.isfinite(feature_importances).any():
+        return _empty_figure()
     # 特徴量重要度でソートするインデックスを取得
     sort_idx = np.argsort(-np.abs(feature_importances))
 
@@ -528,13 +544,15 @@ def show_shap_scatter(
     if child_model is not None:
         if target_col is None:
             raise ValueError("target_colを指定してください。")
+        shap_values = getattr(child_model, "shap_values", None)
+        if shap_values is None:
+            return _empty_figure()
         X_shappd = child_model.get_shap_scatter_data(target_col)
         rawX = _get_training_X(child_model)
-        shap_values = child_model.shap_values
         unique_dict = child_model._shared_attr("unique_cols")
         target_items = getattr(child_model, "target_items", None)
     if shap_values is None:
-        raise ValueError("SHAP値がNoneです。正しいSHAP値を提供してください。")
+        return _empty_figure()
     if X_shappd is None or rawX is None or target_col is None:
         raise ValueError("X_shappd/rawX/target_col、またはmodelとtarget/object_colとtarget_colを指定してください。")
     unique_dict = unique_dict or {}
@@ -690,9 +708,11 @@ def show_shap_beeswarm(
     child_model, _ = _resolve_model_target(model, target, object_col)
     if child_model is not None:
         X = _get_training_X(child_model)
-        shap_values = child_model.shap_values
+        shap_values = getattr(child_model, "shap_values", None)
         cat_cols = child_model._shared_attr("cat_cols")
-    if X is None or shap_values is None:
+    if shap_values is None:
+        return _empty_figure()
+    if X is None:
         raise ValueError("X/shap_values、またはmodelとtarget/object_colを指定してください。")
     cat_cols = cat_cols or []
 
