@@ -355,7 +355,7 @@ class DummyMulticlassClassificationModel:
         child = SingleOutputMLModelPipeline()
         child.y = pd.Series(["a", "b", "c"], name="y_cat_str")
         child.task = "classification"
-        child.target_items = ["a", "b", "c"]
+        child.target_items = np.array(["a", "b", "c"], dtype=object)
         child.cv_preds = {
             "train": pd.DataFrame(
                 {
