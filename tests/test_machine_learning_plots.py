@@ -200,6 +200,42 @@ def test_pd_and_ice_uses_shared_context_X_and_y_when_child_attrs_are_none():
     assert list(actual_trace.y) == [1.0, 2.0, 3.0]
 
 
+class DummyMulticlassPDChild(SingleOutputMLModelPipeline):
+    """Child model for multiclass PD actual-data overlay tests."""
+
+    def __init__(self):
+        """Create string-labeled multiclass PD fixtures."""
+        super().__init__()
+        self.X = pd.DataFrame({"x": [0.0, 1.0, 2.0]})
+        self.y = pd.Series(["a", "b", "c"], name="y_cat_str")
+        self.task = "classification"
+        self.target_items = np.array(["a", "b", "c"], dtype=object)
+
+    def get_pd_and_ice(self, target_col):
+        """Return multiclass PD/ICE test data."""
+        return np.ones((2, 3, 3)), np.array([0.0, 1.0])
+
+
+class DummyMulticlassPDModel:
+    """Minimal model containing a multiclass PD child."""
+
+    def __init__(self):
+        """Create child model mapping."""
+        self.models = {"y_cat_str": DummyMulticlassPDChild()}
+
+
+def test_pd_and_ice_actual_data_marks_selected_string_class():
+    """show_pd_and_ice plots actual data as 0/1 for the selected string class."""
+    fig = show_pd_and_ice(
+        model=DummyMulticlassPDModel(),
+        target="y_cat_str",
+        target_col="x",
+        col_idx=1,
+    )
+
+    actual_trace = fig.data[-1]
+    assert list(actual_trace.y) == [0, 1, 0]
+
 def test_pd_2d_uses_shared_context_X_and_y_when_child_attrs_are_none():
     """show_pd_2d can overlay actual data from shared context."""
     fig = show_pd_2d(model=DummyVisualizationModel(), target="property", target_cols=["x", "z"])
