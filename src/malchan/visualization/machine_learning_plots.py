@@ -538,15 +538,26 @@ def show_shap_scatter(
     unique_dict = unique_dict or {}
 
     # SHAP値とターゲット列に対するデータを取得
-    X_plot = X_shappd[target_col]
+    if isinstance(X_shappd, dict):
+        X_plot = X_shappd[target_col]
+    else:
+        X_plot = X_shappd
+    if isinstance(X_plot, pd.Series):
+        X_plot = X_plot.to_frame(name=target_col)
+    if target_col not in X_plot.columns:
+        raise ValueError(f"{target_col!r} is not found in SHAP scatter data.")
+
     if target_item is not None:
         shap_col = 'shap_'+str(target_item)
     elif target_items is not None:
-        shap_col = 'shap_'+target_items[X_plot.shape[-1]-2]
+        shap_suffixes = list(target_items)
+        shap_col = 'shap_'+str(shap_suffixes[X_plot.shape[-1]-2])
     elif X_plot.shape[-1]>2:
         shap_col = X_plot.columns[-1]
     else:
         shap_col = 'shap'
+    if shap_col not in X_plot.columns:
+        raise ValueError(f"{shap_col!r} is not found in SHAP scatter data.")
     
     # Plotly 図オブジェクトを作成
     fig = go.Figure()
