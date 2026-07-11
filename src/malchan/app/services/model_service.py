@@ -30,16 +30,23 @@ class InMemoryModelService:
     def __init__(
         self,
         model_factory: Callable[[], Any] | None = None,
+        multi_model_factory: Callable[[], Any] | None = None,
         id_factory: Callable[[], str] | None = None,
     ) -> None:
         """Initialize an empty registry.
 
         Args:
-            model_factory: Optional pipeline factory used mainly for tests.
+            model_factory: Optional single-output pipeline factory used mainly
+                for tests.
+            multi_model_factory: Optional multi-output pipeline factory used
+                mainly for tests.
             id_factory: Optional model identifier factory used mainly for tests.
         """
 
         self._model_factory = model_factory or self._default_model_factory
+        self._multi_model_factory = (
+            multi_model_factory or self._default_multi_model_factory
+        )
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._models: dict[str, _RegisteredModel] = {}
         self._lock = RLock()
@@ -52,49 +59,101 @@ class InMemoryModelService:
 
         return SingleOutputMLModelPipeline()
 
+    @staticmethod
+    def _default_multi_model_factory() -> Any:
+        """Create the public multi-output malchan pipeline lazily."""
+
+        from malchan.models import MLModelPipeline
+
+        return MLModelPipeline()
+
     def train(self, request: TrainModelRequest) -> ModelInfo:
-        """Fit and register one model from tabular records."""
+        """Fit and register one single-output or multi-output model."""
 
-        model = self._model_factory()
         dataframe = pd.DataFrame.from_records(request.data)
-        model.fit(
-            df=dataframe,
-            target_col=request.target_col,
-            task=request.task,
-            num_cols=request.num_cols,
-            cat_cols=request.cat_cols,
-            model_names=request.model_names,
-            smiles_cols=request.smiles_cols,
-            fingerprints=request.fingerprints,
-            comp_cols=request.comp_cols,
-            comp_method=request.comp_method,
-            comp_feats=request.comp_feats,
-            impute=request.impute,
-            tuning=request.tuning,
-            ensemble=request.ensemble,
-            ens_type=request.ens_type,
-            base_model=request.base_model,
-            model_params=request.model_params,
-            base_model_param=request.base_model_param,
-            num_impute_type=request.num_impute_type,
-            num_scale_type=request.num_scale_type,
-            cat_impute=request.cat_impute,
-            poly=request.poly,
-            poly_degree=request.poly_degree,
-            poly_interaction_only=request.poly_interaction_only,
-            decomposition=request.decomposition,
-            decomposition_method=request.decomposition_method,
-            dec_n_components=request.dec_n_components,
-            sampling_method=request.sampling_method,
-        )
+        target_cols = request.resolved_target_cols
+        tasks = request.resolved_tasks
+        model_names_by_target = request.model_names_for_targets
+        aligned_model_names = [
+            model_names_by_target[target] for target in target_cols
+        ]
 
+        if request.is_multi_output:
+            model = self._multi_model_factory()
+            model.fit(
+                df=dataframe,
+                target_cols=target_cols,
+                tasks=tasks,
+                num_cols=request.num_cols,
+                cat_cols=request.cat_cols,
+                model_names=aligned_model_names,
+                smiles_cols=request.smiles_cols,
+                fingerprints=request.fingerprints,
+                comp_cols=request.comp_cols,
+                comp_method=request.comp_method,
+                comp_feats=request.comp_feats,
+                impute=request.impute,
+                tunings=request.tuning,
+                ensembles=request.ensemble,
+                ens_types=request.ens_type,
+                base_models=request.base_model,
+                model_params=request.resolved_model_params,
+                base_model_params=request.resolved_base_model_params,
+                num_impute_type=request.num_impute_type,
+                num_scale_type=request.num_scale_type,
+                cat_impute=request.cat_impute,
+                poly=request.poly,
+                poly_degree=request.poly_degree,
+                poly_interaction_only=request.poly_interaction_only,
+                decomposition=request.decomposition,
+                decomposition_method=request.decomposition_method,
+                dec_n_components=request.dec_n_components,
+                sampling_method=request.sampling_method,
+            )
+        else:
+            model = self._model_factory()
+            model.fit(
+                df=dataframe,
+                target_col=target_cols[0],
+                task=tasks[0],
+                num_cols=request.num_cols,
+                cat_cols=request.cat_cols,
+                model_names=aligned_model_names[0],
+                smiles_cols=request.smiles_cols,
+                fingerprints=request.fingerprints,
+                comp_cols=request.comp_cols,
+                comp_method=request.comp_method,
+                comp_feats=request.comp_feats,
+                impute=request.impute,
+                tuning=request.tuning,
+                ensemble=request.ensemble,
+                ens_type=request.ens_type,
+                base_model=request.base_model,
+                model_params=request.resolved_model_params[0],
+                base_model_param=request.resolved_base_model_params[0],
+                num_impute_type=request.num_impute_type,
+                num_scale_type=request.num_scale_type,
+                cat_impute=request.cat_impute,
+                poly=request.poly,
+                poly_degree=request.poly_degree,
+                poly_interaction_only=request.poly_interaction_only,
+                decomposition=request.decomposition,
+                decomposition_method=request.decomposition_method,
+                dec_n_components=request.dec_n_components,
+                sampling_method=request.sampling_method,
+            )
+
+        is_single_output = len(target_cols) == 1
         info = ModelInfo(
             model_id=self._id_factory(),
-            target_col=request.target_col,
-            task=request.task,
+            target_cols=target_cols,
+            tasks=tasks,
             feature_columns=request.feature_columns,
-            model_names=request.model_names,
+            model_names_by_target=model_names_by_target,
             created_at=datetime.now(timezone.utc),
+            target_col=target_cols[0] if is_single_output else None,
+            task=tasks[0] if is_single_output else None,
+            model_names=aligned_model_names[0] if is_single_output else [],
         )
         with self._lock:
             self._models[info.model_id] = _RegisteredModel(model=model, info=info)
@@ -119,7 +178,7 @@ class InMemoryModelService:
         model_id: str,
         request: PredictRequest,
     ) -> list[dict[str, Any]]:
-        """Run inference and return JSON-compatible records."""
+        """Run single-output or multi-output inference."""
 
         registered = self._get_registered(model_id)
         dataframe = pd.DataFrame.from_records(request.data)
