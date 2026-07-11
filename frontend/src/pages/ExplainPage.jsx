@@ -96,6 +96,11 @@ export default function ExplainPage() {
   }, [availableFeatures, feature]);
 
   useEffect(() => {
+    const methods = targetSummary?.importance_methods || [];
+    if (methods.length && !methods.includes(method)) setMethod(methods[0]);
+  }, [targetSummary, method]);
+
+  useEffect(() => {
     let active = true;
     if (!modelInfo?.model_id || !xaiTarget || !targetSummary) return undefined;
     setXaiBusy(true);
