@@ -46,6 +46,7 @@ class TrainModelRequest(BaseModel):
     decomposition_method: str = "PCA"
     dec_n_components: int = Field(default=2, ge=1)
     sampling_method: str | None = None
+    compute_xai: bool = True
 
     @property
     def feature_columns(self) -> list[str]:
@@ -203,6 +204,7 @@ class ModelInfo(BaseModel):
     target_col: str | None = None
     task: TaskType | None = None
     model_names: list[str] = Field(default_factory=list)
+    xai_status: str = "not_requested"
 
 
 class ModelListResponse(BaseModel):
