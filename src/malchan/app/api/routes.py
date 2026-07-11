@@ -42,7 +42,7 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
         tags=["models"],
     )
     def train_model(request: TrainModelRequest) -> ModelInfo:
-        """Train and register a single-output model."""
+        """Train and register a single-output or multi-output model."""
 
         try:
             return service.train(request)
@@ -76,7 +76,7 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
         tags=["models"],
     )
     def predict(model_id: str, request: PredictRequest) -> PredictionResponse:
-        """Generate predictions from a registered model."""
+        """Generate single-output or multi-output predictions."""
 
         try:
             predictions = service.predict(model_id, request)
