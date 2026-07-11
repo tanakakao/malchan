@@ -1,3 +1,5 @@
-"""Application service package for future API and web use cases."""
+"""Application services used by FastAPI and future web clients."""
 
-__all__: list[str] = []
+from .model_service import InMemoryModelService, ModelNotFoundError
+
+__all__ = ["InMemoryModelService", "ModelNotFoundError"]
