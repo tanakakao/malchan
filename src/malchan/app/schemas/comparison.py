@@ -25,6 +25,7 @@ class CompareModelsRequest(BaseModel):
     tuning_trials: TrialSelection = 30
     tuning_verbose: int = Field(default=0, ge=0)
     continue_on_error: bool = True
+    activate_best: bool = False
 
     @model_validator(mode="after")
     def validate_comparison(self) -> "CompareModelsRequest":
@@ -87,6 +88,7 @@ class TuneBestModelRequest(BaseModel):
     n_trials: TrialSelection = 30
     verbose: int = Field(default=0, ge=0)
     evaluate: bool = True
+    activate_best: bool = False
 
     @model_validator(mode="after")
     def validate_tuning(self) -> "TuneBestModelRequest":
