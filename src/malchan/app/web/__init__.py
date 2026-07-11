@@ -1,3 +1,5 @@
-"""Web UI package placeholder for future frontend integration."""
+"""React frontend integration for the malchan FastAPI application."""
 
-__all__: list[str] = []
+from .static import mount_web_ui, resolve_web_dist
+
+__all__ = ["mount_web_ui", "resolve_web_dist"]
