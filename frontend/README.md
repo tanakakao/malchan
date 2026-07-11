@@ -64,7 +64,7 @@ model.get_xai()
 }
 ```
 
-無効化後や明示的に更新したい場合だけ、Explain画面の「XAIを再計算」または`POST /xai/recompute`を使います。
+無効化後や明示的に更新したい場合だけ、Explain画面の「XAIを再計算」または`POST /xai/recompute`を使います。状態確認用の`GET /xai`は未計算時も利用できますが、重要度・SHAP・PDPの取得はHTTP `409`になります。
 
 モデル比較・チューニングで`activate_best=true`を指定した場合、登録モデルの置換後に新しいベストモデルのXAIキャッシュを自動更新します。
 
@@ -97,6 +97,8 @@ GET /api/models/<model_id>/xai/y/pdp?feature=temperature&include_ice=true&max_ic
   "targets": ["strength"]
 }
 ```
+
+通常の概要・重要度・SHAP・PDPのGETを繰り返しても、`shap()`と`get_xai()`の呼び出し回数は増えません。
 
 ## 環境変数
 
