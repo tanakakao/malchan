@@ -1,15 +1,16 @@
 # malchan FastAPI application
 
-`malchan.app` provides an opt-in FastAPI layer for training, serving, and
-inverse-analyzing single-output and multi-output `malchan` models through HTTP.
+`malchan.app` provides an opt-in FastAPI layer for training, serving,
+comparing, tuning, and inverse-analyzing single-output and multi-output
+`malchan` models through HTTP.
 
 ## Install and run
 
-Prediction-only usage requires the `web` extra. Inverse analysis also requires
-Optuna from the `inverse` extra.
+Model training and comparison require the `models` extra. Inverse analysis also
+requires Optuna from the `inverse` extra.
 
 ```bash
-pip install -e ".[web,inverse]"
+pip install -e ".[web,models,inverse]"
 uvicorn "malchan.app:create_app" --factory --reload
 ```
 
@@ -26,8 +27,11 @@ The API prefix defaults to `/api` and can be changed with
 | `GET` | `/api/models` | List registered models |
 | `GET` | `/api/models/{model_id}` | Read model metadata |
 | `POST` | `/api/models/{model_id}/predict` | Run prediction or class-probability inference |
+| `POST` | `/api/models/{model_id}/compare` | Compare model families and optionally tune the best |
+| `GET` | `/api/models/{model_id}/comparison` | Read the latest comparison and tuning state |
+| `POST` | `/api/models/{model_id}/comparison/tune-best` | Tune selected best models after comparison |
 | `POST` | `/api/models/{model_id}/inverse-analysis` | Search input candidates with Optuna |
-| `DELETE` | `/api/models/{model_id}` | Remove a registered model |
+| `DELETE` | `/api/models/{model_id}` | Remove a registered model and its comparison state |
 
 ## Train a single-output regression model
 
@@ -104,21 +108,151 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/predict \
   }'
 ```
 
+Regression and classification targets can be mixed. When `"proba": true` is
+specified, classification targets return class-probability columns while
+regression targets continue to return normal predictions.
+
+## Compare candidate models
+
+Comparison reuses the registered model's training data, feature definitions,
+material featurizers, and preprocessing settings. Regression candidates are
+ranked by test RMSE by default and classification candidates by test F1.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_names": [
+      "線形回帰",
+      "Ridge",
+      "ランダムフォレスト回帰",
+      "LightGBM"
+    ],
+    "method": "kfold",
+    "n_splits": 5
+  }'
+```
+
 Example response:
 
 ```json
 {
   "model_id": "<model_id>",
-  "predictions": [
-    {"strength": 458.2, "cost": 143.1},
-    {"strength": 481.7, "cost": 158.4}
-  ]
+  "targets": {
+    "y": {
+      "target": "y",
+      "metric": "RMSE",
+      "higher_is_better": false,
+      "ranking": [
+        {
+          "rank": 1,
+          "model_name": "LightGBM",
+          "target": "y",
+          "task": "regression",
+          "test_RMSE": 1.23
+        }
+      ],
+      "failures": {},
+      "best_model_name": "LightGBM",
+      "best_params": null,
+      "best_is_tuned": false,
+      "best_cv_scores": {
+        "train": [{"RMSE": 0.52, "MAE": 0.41, "MAPE": 0.03, "R2": 0.97}],
+        "test": [{"RMSE": 1.23, "MAE": 0.95, "MAPE": 0.07, "R2": 0.84}]
+      }
+    }
+  }
 }
 ```
 
-Regression and classification targets can be mixed. When `"proba": true` is
-specified, classification targets return class-probability columns while
-regression targets continue to return their normal predictions.
+Use `metric` to change the ranking metric and `model_params` to supply
+candidate-specific parameters.
+
+### Compare and tune only the best model
+
+`tune_best` runs the recommended two-stage workflow: compare untuned model
+families fairly, select the best family, tune only that family, and evaluate the
+tuned model with the same CV settings.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_names": ["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+    "n_splits": 5,
+    "tune_best": true,
+    "tuning_trials": 100,
+    "tuning_verbose": 0
+  }'
+```
+
+The original `ranking` remains the untuned comparison record. The response's
+`best_model_name`, `best_params`, `best_is_tuned`, and `best_cv_scores` describe
+the selected and tuned model.
+
+`tuning: true` instead tunes every candidate before comparison. Because this is
+more expensive, `tuning` and `tune_best` cannot both be true.
+
+### Tune the best model later
+
+Run comparison first, inspect the result, and then tune the selected candidate:
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/api/models/<model_id>/comparison/tune-best \
+  -H "Content-Type: application/json" \
+  -d '{
+    "n_trials": 100,
+    "verbose": 0,
+    "evaluate": true
+  }'
+```
+
+Set `evaluate` to `false` to skip the post-tuning CV. Calling this endpoint
+before `/compare` returns HTTP `409`.
+
+The latest state can be fetched without rerunning comparison:
+
+```bash
+curl http://127.0.0.1:8000/api/models/<model_id>/comparison
+```
+
+### Multi-output comparison and tuning
+
+Candidate lists, ranking metrics, and trial counts can be specified by target.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_names": {
+      "strength": ["Ridge", "ランダムフォレスト回帰"],
+      "cost": ["線形回帰", "LightGBM"]
+    },
+    "metric": {
+      "strength": "R2",
+      "cost": "RMSE"
+    },
+    "tune_best": true,
+    "tuning_trials": {
+      "strength": 100,
+      "cost": 50
+    }
+  }'
+```
+
+A deferred request can tune only selected outputs:
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/api/models/<model_id>/comparison/tune-best \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targets": ["strength"],
+    "n_trials": {"strength": 150},
+    "evaluate": true
+  }'
+```
 
 ## Run inverse analysis
 
@@ -155,38 +289,13 @@ curl -X POST \
   }'
 ```
 
-Example response:
-
-```json
-{
-  "model_id": "<model_id>",
-  "objectives": [
-    {"target": "strength", "direction": "max", "target_value": null},
-    {"target": "cost", "direction": "min", "target_value": null}
-  ],
-  "candidates": [
-    {
-      "temperature": 810,
-      "pressure": 1.25,
-      "pred_strength": 482.4,
-      "pred_cost": 146.8
-    }
-  ],
-  "n_trials": 500,
-  "n_completed_trials": 500,
-  "pareto_size": 17
-}
-```
-
 ### Search controls
 
 - `bounds` overrides the observed training-data range for numeric features.
 - `categories` sets allowed values for categorical, SMILES, or composition
   inputs. When omitted, observed training values are used.
-- `fixed_values` removes selected features from the search and fixes them to a
-  specified value.
-- `sum_constraint` requires selected numeric columns to sum to one value. It is
-  useful for composition ratios.
+- `fixed_values` fixes selected features to specified values.
+- `sum_constraint` requires selected numeric columns to sum to one value.
 - `sampler_type` supports `TPE`, `MOTPE`, `CmaEs`, `GP`, `QMS`, `NSGAII`, and
   `NSGAIII`.
 
@@ -202,29 +311,14 @@ A classification objective must use `target_value` with a fitted class label:
 {"target": "quality", "target_value": "OK"}
 ```
 
-A composition-style equality constraint can be specified as follows:
-
-```json
-{
-  "sum_constraint": {
-    "columns": ["component_a", "component_b", "component_c"],
-    "value": 1.0
-  },
-  "fixed_values": {
-    "component_c": 0.2
-  }
-}
-```
-
-Inverse analysis currently runs synchronously in the API request. Large trial
-counts can therefore occupy one server worker for a long time. A production
-service should move expensive searches to a persistent background-job system.
-
 ## Current lifecycle behavior
 
-The initial implementation stores fitted models in memory. Models are removed
-when the process restarts and are not shared between multiple Uvicorn workers.
-This is suitable for local analysis, prototypes, and a single-process internal
-service. A production deployment should replace `InMemoryModelService` with a
-persistent model registry and add authentication, request-size limits, and a
-background job system for expensive training and inverse-analysis workloads.
+Fitted models, comparison results, tuned models, and inverse-analysis state are
+stored in memory. They are removed when the process restarts and are not shared
+between multiple Uvicorn workers.
+
+Training, comparison, tuning, and inverse analysis currently run synchronously.
+Large candidate sets, high Optuna trial counts, or expensive CV settings can
+occupy one server worker for a long time. A production deployment should use a
+persistent model registry, authentication, request-size limits, and a
+background-job system for expensive workloads.
