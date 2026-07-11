@@ -12,6 +12,12 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
+def _is_direction(value: Any) -> bool:
+    """Return whether an inverse-analysis objective is ``min`` or ``max``."""
+
+    return isinstance(value, str) and value in {"min", "max"}
+
+
 def single_output_inverse_analysis(
     self: Any,
     objective: Any,
@@ -33,10 +39,7 @@ def single_output_inverse_analysis(
 
     if getattr(self, "target_col", None) in (None, "AD"):
         raise ValueError("Fit a supervised model before calling inverse_analysis().")
-    if getattr(self, "task", None) == "classification" and objective in {
-        "min",
-        "max",
-    }:
+    if getattr(self, "task", None) == "classification" and _is_direction(objective):
         raise ValueError(
             "Classification inverse analysis requires a fitted class label as "
             "the objective."
@@ -113,10 +116,7 @@ def multi_output_inverse_analysis(
 
     task_by_target = dict(zip(fitted_targets, self.tasks))
     for target, objective in zip(resolved_targets, resolved_objectives):
-        if task_by_target[target] == "classification" and objective in {
-            "min",
-            "max",
-        }:
+        if task_by_target[target] == "classification" and _is_direction(objective):
             raise ValueError(
                 f"Classification target {target!r} requires a fitted class label "
                 "as its objective."
