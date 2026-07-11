@@ -46,7 +46,10 @@ def _target_models(registered: Any) -> dict[str, Any]:
             for target in registered.info.target_cols
             if target in model_map
         }
-    return {registered.info.target_cols[0]: registered.model}
+    return {
+        target: registered.model
+        for target in registered.info.target_cols
+    }
 
 
 def _shared_columns(model: Any, name: str) -> list[str]:
