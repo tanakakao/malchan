@@ -1,0 +1,136 @@
+.xai-panel {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--primary) 4%, var(--surface)));
+}
+
+.xai-controls {
+  margin-bottom: 16px;
+}
+
+.xai-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.xai-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.xai-pdp-card {
+  grid-column: 1 / -1;
+}
+
+.xai-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.xai-card-head span {
+  color: var(--primary);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.xai-card-head strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xai-card > .simple-chart,
+.xai-card > div:not(.xai-card-head):not(.xai-importance-list) {
+  margin: 0;
+}
+
+.xai-importance-list {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+}
+
+.xai-importance-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) minmax(90px, 1fr) 70px;
+  gap: 9px;
+  align-items: center;
+}
+
+.xai-importance-row > span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xai-importance-row > div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.xai-importance-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--cyan));
+}
+
+.xai-importance-row strong {
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xai-error {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.xai-card .table-wrap {
+  max-height: 430px;
+  border: 0;
+  border-radius: 0;
+}
+
+.xai-card .pagination {
+  padding: 10px 12px;
+}
+
+@media (max-width: 960px) {
+  .xai-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .xai-pdp-card {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .xai-importance-row {
+    grid-template-columns: minmax(80px, 120px) minmax(70px, 1fr) 58px;
+  }
+}
