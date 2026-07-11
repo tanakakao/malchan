@@ -23,6 +23,8 @@ from malchan.app.services import (
     ModelNotFoundError,
 )
 
+from .xai_routes import create_xai_router
+
 
 def create_api_router(service: Any, app_name: str) -> APIRouter:
     """Create API routes bound to a model service instance."""
@@ -208,4 +210,5 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
             ) from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    router.include_router(create_xai_router(service))
     return router

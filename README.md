@@ -14,9 +14,11 @@
 - 最良候補だけを対象とした二段階ハイパーパラメータチューニング
 - Optuna によるハイパーパラメータチューニング
 - SHAP、Permutation Feature Importance、Partial Dependence などの可視化補助
+- 学習時に事前計算したSHAP・PDPを返すFastAPIキャッシュAPI
 - SMILES や組成式を使った特徴量生成の補助
 - 学習済みモデルから直接実行できる逆解析・候補探索
-- FastAPI 経由の学習、予測、比較、チューニング、逆解析
+- FastAPI 経由の学習、予測、比較、チューニング、XAI、逆解析
+- ReactによるData・Explore・Prepare・Model・Explain・Optimize・Reportワークベンチ
 - 学習結果や図表の Excel 出力
 
 ---
@@ -25,7 +27,7 @@
 
 ```text
 src/malchan/
-├── app/                 # FastAPI / Web アプリ用のアプリケーション層
+├── app/                 # FastAPI / React Webアプリ用のアプリケーション層
 ├── pipeline/            # 単一・複数目的の学習済みモデル本体
 ├── models/              # モデル生成、比較、前処理、説明可能性
 ├── visualization/       # Plotly ベースの可視化
@@ -38,7 +40,7 @@ src/malchan/
 | Module | Purpose |
 |---|---|
 | `malchan.pipeline` | 学習、予測、比較、逆解析を行うモデル本体 |
-| `malchan.app` | FastAPI アプリファクトリと HTTP API |
+| `malchan.app` | FastAPIアプリファクトリ、React配信、HTTP API |
 | `malchan.models` | モデルパイプライン、比較結果型、前処理、説明可能性の処理 |
 | `malchan.visualization` | モデル結果・逆解析結果の可視化 |
 | `malchan.inverse_analysis` | Optuna ベースの低水準な逆解析関数 |
@@ -328,44 +330,51 @@ import malchan
 print(malchan.__version__)
 ```
 
-## FastAPIで比較・チューニングする
+## React + FastAPIワークベンチ
 
-FastAPIから学習、予測、モデル比較、ベストモデルのチューニング、逆解析を実行する場合:
+FastAPIから学習、予測、モデル比較、ベストモデルのチューニング、XAI、逆解析を実行する場合:
 
 ```bash
-pip install -e ".[web,models,inverse]"
+pip install -e ".[web,models,inverse,visualization,test]"
 uvicorn "malchan.app:create_app" --factory --reload
 ```
 
-```python
-from malchan.app import create_app
-
-app = create_app()
-```
-
-比較と同時に最良モデルだけをチューニングします。
+React開発サーバー:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model_names": ["Ridge", "ランダムフォレスト回帰", "LightGBM"],
-    "n_splits": 5,
-    "tune_best": true,
-    "tuning_trials": 100
-  }'
+cd frontend
+npm install
+npm run dev
 ```
 
-比較結果を確認してから、後でチューニングすることもできます。
+学習リクエストでは`compute_xai`が既定で`true`です。モデル学習後に`shap()`と`get_xai()`を一度だけ実行し、通常のXAI GET APIでは保存済みキャッシュだけを返します。
 
-```bash
-curl -X POST \
-  http://127.0.0.1:8000/api/models/<model_id>/comparison/tune-best \
-  -H "Content-Type: application/json" \
-  -d '{
-    "n_trials": 100,
-    "evaluate": true
-  }'
+```json
+{
+  "compute_xai": true
+}
+```
+
+主なXAI API:
+
+```text
+GET  /api/models/{model_id}/xai
+GET  /api/models/{model_id}/xai/{target}/importance
+GET  /api/models/{model_id}/xai/{target}/shap?feature=x1
+GET  /api/models/{model_id}/xai/{target}/pdp?feature=x1
+POST /api/models/{model_id}/xai/recompute
+```
+
+比較と同時に最良モデルだけをチューニングし、後続の予測・XAI・逆解析へ反映する例:
+
+```json
+{
+  "model_names": ["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+  "n_splits": 5,
+  "tune_best": true,
+  "tuning_trials": 100,
+  "activate_best": true
+}
 ```
 
 最新のランキング、最良モデル名、パラメータ、チューニング状態、再CV結果を取得します。
@@ -374,27 +383,7 @@ curl -X POST \
 curl http://127.0.0.1:8000/api/models/<model_id>/comparison
 ```
 
-複数目的では目的変数ごとに候補、評価指標、試行数を指定できます。
-
-```json
-{
-  "model_names": {
-    "strength": ["Ridge", "ランダムフォレスト回帰"],
-    "cost": ["線形回帰", "LightGBM"]
-  },
-  "metric": {
-    "strength": "R2",
-    "cost": "RMSE"
-  },
-  "tune_best": true,
-  "tuning_trials": {
-    "strength": 100,
-    "cost": 50
-  }
-}
-```
-
-詳細なエンドポイント、リクエスト、レスポンス例は `src/malchan/app/README.md` を参照してください。
+詳細なReact起動方法は`frontend/README.md`、API仕様は`src/malchan/app/README.md`を参照してください。
 
 ---
 

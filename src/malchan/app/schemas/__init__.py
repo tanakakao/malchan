@@ -21,6 +21,16 @@ from .models import (
     PredictionResponse,
     TrainModelRequest,
 )
+from .xai import (
+    RecomputeXaiRequest,
+    XaiImportanceItem,
+    XaiImportanceResponse,
+    XaiPdpResponse,
+    XaiPdpSeries,
+    XaiShapResponse,
+    XaiSummaryResponse,
+    XaiTargetSummary,
+)
 
 __all__ = [
     "CompareModelsRequest",
@@ -34,8 +44,16 @@ __all__ = [
     "NumericSearchRange",
     "PredictRequest",
     "PredictionResponse",
+    "RecomputeXaiRequest",
     "SumConstraint",
     "TargetComparisonResponse",
     "TrainModelRequest",
     "TuneBestModelRequest",
+    "XaiImportanceItem",
+    "XaiImportanceResponse",
+    "XaiPdpResponse",
+    "XaiPdpSeries",
+    "XaiShapResponse",
+    "XaiSummaryResponse",
+    "XaiTargetSummary",
 ]

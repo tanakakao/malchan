@@ -131,6 +131,9 @@ Issues = "https://github.com/tanakakao/malchan/issues"
 package-dir = { "" = "src" }
 include-package-data = true
 
+[tool.setuptools.package-data]
+malchan = ["app/web/static/**/*"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["malchan*"]
