@@ -1,4 +1,5 @@
 import importlib.util
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -17,11 +18,24 @@ class FakePipeline:
         """Initialize the recorded fit arguments."""
 
         self.fit_kwargs = None
+        self.X = None
+        self.num_cols = []
+        self.cat_cols = []
+        self.smiles_cols = []
+        self.comp_cols = []
+        self.target_col = None
+        self.target_items = None
 
     def fit(self, **kwargs) -> None:
-        """Record arguments passed by the model service."""
+        """Record arguments and training metadata passed by the service."""
 
         self.fit_kwargs = kwargs
+        self.X = kwargs["df"][kwargs["num_cols"] + kwargs["cat_cols"]]
+        self.num_cols = list(kwargs["num_cols"])
+        self.cat_cols = list(kwargs["cat_cols"])
+        self.smiles_cols = list(kwargs["smiles_cols"])
+        self.comp_cols = list(kwargs["comp_cols"])
+        self.target_col = kwargs["target_col"]
 
     def predict(self, X, proba=False, idx2item=False):
         """Return deterministic predictions for the supplied rows."""
@@ -29,19 +43,36 @@ class FakePipeline:
         assert list(X.columns) == ["x"]
         return pd.DataFrame({"y": [float(value) * 2 for value in X["x"]]})
 
+    def predict_objective(self, X, obj_value=None):
+        """Return deterministic objective values for inverse-analysis adapters."""
+
+        return pd.DataFrame({"y": [float(value) * 2 for value in X["x"]]})
+
 
 class FakeMultiPipeline:
     """Small multi-output pipeline double used by API and service tests."""
 
     def __init__(self) -> None:
-        """Initialize the recorded fit arguments."""
+        """Initialize the recorded fit arguments and model metadata."""
 
         self.fit_kwargs = None
+        self.X = None
+        self.num_cols = []
+        self.cat_cols = []
+        self.smiles_cols = []
+        self.comp_cols = []
+        self.target_cols = []
 
     def fit(self, **kwargs) -> None:
-        """Record arguments passed by the model service."""
+        """Record arguments and training metadata passed by the service."""
 
         self.fit_kwargs = kwargs
+        self.X = kwargs["df"][kwargs["num_cols"] + kwargs["cat_cols"]]
+        self.num_cols = list(kwargs["num_cols"])
+        self.cat_cols = list(kwargs["cat_cols"])
+        self.smiles_cols = list(kwargs["smiles_cols"])
+        self.comp_cols = list(kwargs["comp_cols"])
+        self.target_cols = list(kwargs["target_cols"])
 
     def predict(self, X, proba=False, idx2item=False):
         """Return deterministic predictions for both requested targets."""
@@ -53,6 +84,11 @@ class FakeMultiPipeline:
                 "cost": [float(value) + 1 for value in X["x"]],
             }
         )
+
+    def predict_objective(self, X, obj_values=None):
+        """Return deterministic objective values for inverse analysis."""
+
+        return self.predict(X)[self.target_cols]
 
 
 def _train_payload() -> dict:
@@ -94,10 +130,49 @@ def _multi_train_payload() -> dict:
     }
 
 
+def _inverse_payload() -> dict:
+    """Return a valid two-objective inverse-analysis request."""
+
+    return {
+        "objectives": [
+            {"target": "strength", "direction": "max"},
+            {"target": "cost", "direction": "min"},
+        ],
+        "sampler_type": "NSGAII",
+        "bounds": {
+            "x": {"min": 0.0, "max": 5.0, "dtype": "float", "step": 0.5}
+        },
+        "trials": 20,
+        "n_candidates": 2,
+    }
+
+
+def _fake_inverse_analysis(captured: dict):
+    """Create an injected inverse-analysis function recording normalized inputs."""
+
+    def run(**kwargs):
+        captured.update(kwargs)
+        candidates = pd.DataFrame(
+            [
+                {"x": 4.5, "pred_strength": 9.0, "pred_cost": 5.5},
+                {"x": 4.0, "pred_strength": 8.0, "pred_cost": 5.0},
+            ]
+        )
+        complete_state = SimpleNamespace(name="COMPLETE")
+        study = SimpleNamespace(
+            trials=[SimpleNamespace(state=complete_state) for _ in range(20)],
+            best_trials=[object(), object()],
+        )
+        return candidates, study
+
+    return run
+
+
 def _make_client(
     model_factory=FakePipeline,
     multi_model_factory=None,
     id_factory=None,
+    inverse_analysis_func=None,
 ):
     """Create a test client with an injected in-memory model service."""
 
@@ -110,6 +185,7 @@ def _make_client(
         model_factory=model_factory,
         multi_model_factory=multi_model_factory,
         id_factory=id_factory,
+        inverse_analysis_func=inverse_analysis_func,
     )
     return TestClient(create_app(model_service=service))
 
@@ -230,6 +306,63 @@ def test_create_app_exposes_multi_output_prediction() -> None:
     }
 
 
+def test_create_app_exposes_inverse_analysis() -> None:
+    """FastAPI should normalize and forward multi-objective search settings."""
+
+    captured = {}
+    client = _make_client(
+        multi_model_factory=FakeMultiPipeline,
+        id_factory=lambda: "multi-model",
+        inverse_analysis_func=_fake_inverse_analysis(captured),
+    )
+    client.post("/api/models", json=_multi_train_payload())
+
+    response = client.post(
+        "/api/models/multi-model/inverse-analysis",
+        json=_inverse_payload(),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "model_id": "multi-model",
+        "objectives": _inverse_payload()["objectives"],
+        "candidates": [
+            {"x": 4.5, "pred_strength": 9.0, "pred_cost": 5.5},
+            {"x": 4.0, "pred_strength": 8.0, "pred_cost": 5.0},
+        ],
+        "n_trials": 20,
+        "n_completed_trials": 20,
+        "pareto_size": 2,
+    }
+    assert captured["target_cols"] == ["strength", "cost"]
+    assert captured["obj_directions"] == ["max", "min"]
+    assert captured["bounds_min"] == [0.0]
+    assert captured["bounds_max"] == [5.0]
+    assert captured["dtypes"] == ["float"]
+    assert captured["steps"] == [0.5]
+
+
+def test_inverse_analysis_rejects_unknown_target() -> None:
+    """Inverse analysis should reject objectives absent from the model."""
+
+    client = _make_client(
+        multi_model_factory=FakeMultiPipeline,
+        id_factory=lambda: "multi-model",
+        inverse_analysis_func=_fake_inverse_analysis({}),
+    )
+    client.post("/api/models", json=_multi_train_payload())
+    payload = _inverse_payload()
+    payload["objectives"][0]["target"] = "unknown"
+
+    response = client.post(
+        "/api/models/multi-model/inverse-analysis",
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert "unknown targets" in response.text
+
+
 def test_train_request_rejects_missing_columns() -> None:
     """Request validation should report rows missing declared columns."""
 
@@ -257,13 +390,22 @@ def test_train_request_rejects_misaligned_multi_output_tasks() -> None:
 
 
 def test_unknown_model_is_404() -> None:
-    """Inference should return 404 for unknown model identifiers."""
+    """Inference and inverse analysis should return 404 for unknown models."""
 
     client = _make_client()
 
-    response = client.post(
+    predict_response = client.post(
         "/api/models/missing/predict",
         json={"data": [{"x": 1.0}]},
     )
+    inverse_response = client.post(
+        "/api/models/missing/inverse-analysis",
+        json={
+            "objectives": [{"target": "y", "direction": "max"}],
+            "trials": 2,
+            "n_candidates": 1,
+        },
+    )
 
-    assert response.status_code == 404
+    assert predict_response.status_code == 404
+    assert inverse_response.status_code == 404
