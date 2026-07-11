@@ -1,4 +1,4 @@
-"""FastAPI routes for model lifecycle and inference."""
+"""FastAPI routes for model lifecycle, inference, and inverse analysis."""
 
 from typing import Any
 
@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, Response, status
 from malchan import __version__
 from malchan.app.schemas import (
     HealthResponse,
+    InverseAnalysisRequest,
+    InverseAnalysisResponse,
     ModelInfo,
     ModelListResponse,
     PredictRequest,
@@ -20,7 +22,7 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
     """Create API routes bound to a model service instance.
 
     Args:
-        service: Model training and inference service.
+        service: Model training, inference, and inverse-analysis service.
         app_name: Human-readable application name used by the health endpoint.
 
     Returns:
@@ -91,6 +93,30 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
                 detail=str(exc),
             ) from exc
         return PredictionResponse(model_id=model_id, predictions=predictions)
+
+    @router.post(
+        "/models/{model_id}/inverse-analysis",
+        response_model=InverseAnalysisResponse,
+        tags=["inverse-analysis"],
+    )
+    def run_inverse_analysis(
+        model_id: str,
+        request: InverseAnalysisRequest,
+    ) -> InverseAnalysisResponse:
+        """Search for feature candidates satisfying requested objectives."""
+
+        try:
+            return service.run_inverse_analysis(model_id, request)
+        except ModelNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found.",
+            ) from exc
+        except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     @router.delete(
         "/models/{model_id}",
