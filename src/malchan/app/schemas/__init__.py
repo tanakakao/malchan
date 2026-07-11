@@ -1,3 +1,19 @@
-"""Request and response schema package for future API endpoints."""
+"""Request and response schemas for the FastAPI application."""
 
-__all__: list[str] = []
+from .models import (
+    HealthResponse,
+    ModelInfo,
+    ModelListResponse,
+    PredictRequest,
+    PredictionResponse,
+    TrainModelRequest,
+)
+
+__all__ = [
+    "HealthResponse",
+    "ModelInfo",
+    "ModelListResponse",
+    "PredictRequest",
+    "PredictionResponse",
+    "TrainModelRequest",
+]
