@@ -89,6 +89,52 @@ class _InverseAnalysisModelView:
         )
 
 
+def _normalize_integer_search_settings(
+    bounds_min: list[float],
+    bounds_max: list[float],
+    steps: list[float | None],
+    dtypes: list[str],
+) -> tuple[list[float | int], list[float | int], list[float | int | None]]:
+    """Validate and cast integer search settings for Optuna.
+
+    Args:
+        bounds_min: Lower numeric bounds.
+        bounds_max: Upper numeric bounds.
+        steps: Optional numeric search steps.
+        dtypes: Optuna search types aligned with the numeric columns.
+
+    Returns:
+        Bounds and steps with integer-search entries converted to ``int``.
+
+    Raises:
+        ValueError: If an integer search setting contains a fractional value.
+    """
+
+    normalized_min: list[float | int] = []
+    normalized_max: list[float | int] = []
+    normalized_steps: list[float | int | None] = []
+    for index, dtype in enumerate(dtypes):
+        lower = bounds_min[index]
+        upper = bounds_max[index]
+        step = steps[index]
+        if dtype == "int":
+            values = [lower, upper, step]
+            if any(
+                value is not None and not float(value).is_integer()
+                for value in values
+            ):
+                raise ValueError(
+                    "Integer inverse-analysis bounds and steps must be integral."
+                )
+            lower = int(lower)
+            upper = int(upper)
+            step = 1 if step is None else int(step)
+        normalized_min.append(lower)
+        normalized_max.append(upper)
+        normalized_steps.append(step)
+    return normalized_min, normalized_max, normalized_steps
+
+
 def inverse_analysis(
     model: Any,
     sampler_type: str = "TPE",
@@ -147,6 +193,12 @@ def inverse_analysis(
         steps,
         dtypes,
         fix_values,
+    )
+    bounds_min, bounds_max, steps = _normalize_integer_search_settings(
+        bounds_min,
+        bounds_max,
+        steps,
+        dtypes,
     )
 
     df_range, y_cols, x_cols, obj_cols, obj_values, directions = search_setting(
