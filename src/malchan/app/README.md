@@ -111,7 +111,7 @@ XAIを学習時に計算しない場合:
 }
 ```
 
-この場合、`xai_status`は`not_requested`になり、XAIデータ取得はHTTP `409`を返します。
+この場合、`xai_status`は`not_requested`になり、重要度・SHAP・PDP取得はHTTP `409`を返します。状態確認用の`GET /xai`は常に利用できます。
 
 ## XAI APIの利用例
 
@@ -153,7 +153,7 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/xai/recompute \
   -d '{"targets": ["strength"]}'
 ```
 
-再計算を行うのは、このPOSTまたは`activate_best=true`による登録モデル置換時だけです。
+再計算を行うのは、このPOSTまたは`activate_best=true`による登録モデル置換時だけです。概要・重要度・SHAP・PDPのGETを繰り返しても、計算回数は増えません。
 
 ## XAI状態
 
