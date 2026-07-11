@@ -22,6 +22,7 @@
 
 ```text
 src/malchan/
+├── app/                 # FastAPI / Web アプリ用のアプリケーション層
 ├── models/              # モデル、学習、前処理、説明可能性
 ├── visualization/       # Plotly ベースの可視化
 ├── inverse_analysis/    # Optuna による逆解析
@@ -32,6 +33,7 @@ src/malchan/
 
 | Module | Purpose |
 |---|---|
+| `malchan.app` | FastAPI アプリファクトリ、設定、将来の Web UI 用アプリケーション層 |
 | `malchan.models` | モデルパイプライン、モデル比較、前処理、説明可能性の処理 |
 | `malchan.visualization` | モデル結果・逆解析結果の可視化 |
 | `malchan.inverse_analysis` | Optuna ベースの逆解析 |
@@ -58,7 +60,7 @@ pip install -e ".[models,materials,visualization,inverse,export]"
 開発用ツールを含める場合:
 
 ```bash
-pip install -e ".[dev,models,materials,visualization,inverse,export]"
+pip install -e ".[dev,models,materials,visualization,inverse,export,web]"
 ```
 
 すべての optional dependencies を入れる場合:
@@ -105,6 +107,18 @@ print(pred)
 import malchan
 
 print(malchan.__version__)
+```
+
+FastAPI / Web アプリケーション層だけを追加して使う場合:
+
+```bash
+pip install -e ".[web]"
+```
+
+```python
+from malchan.app import create_app
+
+app = create_app()
 ```
 
 ---
