@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -18,6 +18,9 @@ class ModelComparisonResult:
     failures: dict[str, str]
     metric: str
     higher_is_better: bool
+    _source_model: Any = field(repr=False)
+    method: str = "kfold"
+    n_splits: int = 5
 
     @property
     def best_model_name(self) -> str | None:
@@ -33,6 +36,71 @@ class ModelComparisonResult:
 
         name = self.best_model_name
         return None if name is None else self.models[name]
+
+    @property
+    def best_params(self) -> Any:
+        """Return the current best model's fitted or tuned parameters."""
+
+        model = self.best_model
+        return None if model is None else getattr(model, "model_params", None)
+
+    @property
+    def best_is_tuned(self) -> bool:
+        """Return whether the current best model has been parameter-tuned."""
+
+        model = self.best_model
+        return bool(model is not None and getattr(model, "tuning", False))
+
+    @property
+    def best_cv_scores(self) -> dict[str, pd.DataFrame] | None:
+        """Return CV scores for the current best model."""
+
+        model = self.best_model
+        return None if model is None else getattr(model, "cv_scores", None)
+
+    def tune_best(
+        self,
+        *,
+        n_trials: int = 30,
+        verbose: int = 0,
+        evaluate: bool = True,
+    ) -> Any:
+        """Tune and replace the highest-ranked candidate model.
+
+        The original ranking remains unchanged because it represents the fair,
+        common-configuration comparison used to select the candidate family.
+        When ``evaluate`` is true, the tuned model is evaluated with the same CV
+        method and split count and its scores are available through
+        :attr:`best_cv_scores`.
+
+        Args:
+            n_trials: Number of OptunaSearchCV trials.
+            verbose: OptunaSearchCV verbosity.
+            evaluate: Whether to run the original comparison CV after tuning.
+
+        Returns:
+            The tuned, fully fitted ``SingleOutputMLModelPipeline``.
+        """
+
+        if n_trials < 1:
+            raise ValueError("n_trials must be at least 1.")
+        name = self.best_model_name
+        if name is None:
+            raise RuntimeError("No successful comparison model is available to tune.")
+
+        tuned_model = _fit_candidate(
+            source_model=self._source_model,
+            context=_comparison_context(self._source_model),
+            model_name=name,
+            model_params=None,
+            tuning=True,
+            tuning_trials=n_trials,
+            tuning_verbose=verbose,
+        )
+        if evaluate:
+            tuned_model.cv_score(method=self.method, n_splits=self.n_splits)
+        self.models[name] = tuned_model
+        return tuned_model
 
 
 @dataclass(slots=True)
@@ -67,6 +135,71 @@ class MultiOutputModelComparisonResult:
             target: result.best_model
             for target, result in self.results.items()
         }
+
+    @property
+    def best_params(self) -> dict[str, Any]:
+        """Return current best-model parameters for every target."""
+
+        return {
+            target: result.best_params
+            for target, result in self.results.items()
+        }
+
+    @property
+    def best_are_tuned(self) -> dict[str, bool]:
+        """Return per-target tuning state for the selected models."""
+
+        return {
+            target: result.best_is_tuned
+            for target, result in self.results.items()
+        }
+
+    def tune_best(
+        self,
+        *,
+        targets: Sequence[str] | None = None,
+        n_trials: int | Mapping[str, int] = 30,
+        verbose: int = 0,
+        evaluate: bool = True,
+    ) -> dict[str, Any]:
+        """Tune the selected best model for each requested output target.
+
+        Args:
+            targets: Targets to tune. ``None`` tunes every target.
+            n_trials: Shared trial count or per-target trial-count mapping.
+            verbose: OptunaSearchCV verbosity.
+            evaluate: Whether to run each target's original comparison CV.
+
+        Returns:
+            Mapping from target name to tuned fitted model.
+        """
+
+        resolved_targets = list(self.results) if targets is None else list(targets)
+        if len(resolved_targets) != len(set(resolved_targets)):
+            raise ValueError("targets must not contain duplicates.")
+        unknown_targets = sorted(set(resolved_targets).difference(self.results))
+        if unknown_targets:
+            raise ValueError(f"Unknown comparison targets: {unknown_targets}")
+        if isinstance(n_trials, Mapping):
+            unknown_trial_targets = sorted(set(n_trials).difference(self.results))
+            if unknown_trial_targets:
+                raise ValueError(
+                    f"n_trials contains unknown targets: {unknown_trial_targets}"
+                )
+
+        tuned_models: dict[str, Any] = {}
+        for target in resolved_targets:
+            target_trials = (
+                n_trials.get(target, 30)
+                if isinstance(n_trials, Mapping)
+                else n_trials
+            )
+            tuned_models[target] = self.results[target].tune_best(
+                n_trials=target_trials,
+                verbose=verbose,
+                evaluate=evaluate,
+            )
+        return tuned_models
 
 
 def _available_model_names(task: str) -> list[str]:
@@ -143,12 +276,57 @@ def _comparison_context(model: Any) -> Any:
     )
 
 
+def _tune_fitted_candidate(
+    candidate: Any,
+    *,
+    n_trials: int,
+    verbose: int,
+) -> Any:
+    """Tune an initialized candidate and refresh its fitted model metadata."""
+
+    from .training import tune_model
+    from .utils import feature_names_from_pipeline
+
+    if n_trials < 1:
+        raise ValueError("tuning_trials must be at least 1.")
+
+    X_train = candidate._get_X()
+    y_train = candidate._get_y()
+    tuned_model, best_params, best_base_params = tune_model(
+        X=X_train,
+        y=y_train,
+        model_pipeline=candidate._make_pipeline(),
+        model_names=candidate.model_names,
+        base_model=candidate.base_model,
+        ens_type=candidate.ens_type,
+        sampling_method=candidate.sampling_method,
+        cat_index=candidate.cat_index,
+        cat_index_fit=candidate.cat_index_fit,
+        task=candidate.task,
+        n_trials=n_trials,
+        verbose=verbose,
+    )
+    candidate.model = tuned_model
+    candidate.model_params = best_params
+    candidate.base_model_param = best_base_params
+    candidate.tuning = True
+    candidate.tuning_trials = n_trials
+    candidate.feature_names = feature_names_from_pipeline(candidate.model)
+    candidate.df_prerpocessed = pd.DataFrame(
+        candidate.model["preprocess"].transform(X_train),
+        columns=candidate.feature_names,
+    )
+    return candidate
+
+
 def _fit_candidate(
     source_model: Any,
     context: Any,
     model_name: str,
     model_params: Mapping[str, Any] | None,
     tuning: bool,
+    tuning_trials: int = 30,
+    tuning_verbose: int = 0,
 ) -> Any:
     """Fit one candidate using the source model's preprocessing settings."""
 
@@ -162,7 +340,7 @@ def _fit_candidate(
         comp_method=source_model.comp_method,
         comp_feats=source_model.comp_feats,
         ad=False,
-        tuning=tuning,
+        tuning=False,
         ensemble=False,
         ens_type=None,
         base_model=None,
@@ -179,6 +357,12 @@ def _fit_candidate(
         dec_n_components=source_model.dec_n_components,
         sampling_method=source_model.sampling_method,
     )
+    if tuning:
+        candidate = _tune_fitted_candidate(
+            candidate,
+            n_trials=tuning_trials,
+            verbose=tuning_verbose,
+        )
     return candidate
 
 
@@ -191,35 +375,41 @@ def compare_single_output_model(
     n_splits: int = 5,
     metric: str | None = None,
     tuning: bool = False,
+    tune_best: bool = False,
+    tuning_trials: int = 30,
+    tuning_verbose: int = 0,
     continue_on_error: bool = True,
 ) -> ModelComparisonResult:
     """Fit and rank candidate estimators for one fitted model pipeline.
 
-    The candidate pipelines reuse the source model's training data, feature
-    definitions, material featurizers, and preprocessing settings. Every
-    candidate is evaluated using the same cross-validation configuration.
-
     Args:
         model: Fitted ``SingleOutputMLModelPipeline``-compatible object.
-        model_names: Candidate estimator names. ``None`` compares all models
-            registered for the task.
+        model_names: Candidate estimator names. ``None`` compares all models.
         model_params: Optional estimator parameters keyed by model name.
         method: ``"kfold"`` or ``"loo"``.
         n_splits: Number of K-fold splits.
-        metric: Ranking metric. Defaults to ``RMSE`` for regression and ``F1``
-            for classification.
-        tuning: Whether to tune every candidate before cross-validation.
+        metric: Ranking metric. Defaults to RMSE or F1.
+        tuning: Tune every candidate before ranking. This is expensive.
+        tune_best: Tune only the highest-ranked candidate after comparison.
+        tuning_trials: Number of Optuna trials for candidate or best tuning.
+        tuning_verbose: OptunaSearchCV verbosity.
         continue_on_error: Keep comparing when one candidate fails.
 
     Returns:
-        ``ModelComparisonResult`` containing ranking, fitted candidates, and
-        per-candidate failure messages.
+        Comparison result containing ranking and fitted candidate models.
     """
 
     if getattr(model, "target_col", None) in (None, "AD"):
         raise ValueError("Fit a supervised model before calling compare().")
     if method not in {"kfold", "loo"}:
         raise ValueError("method must be 'kfold' or 'loo'.")
+    if tuning_trials < 1:
+        raise ValueError("tuning_trials must be at least 1.")
+    if tuning and tune_best:
+        raise ValueError(
+            "Use either tuning=True for every candidate or tune_best=True for "
+            "two-stage comparison, not both."
+        )
 
     context = _comparison_context(model)
     if method == "kfold" and not 2 <= n_splits <= len(context.X):
@@ -258,6 +448,8 @@ def compare_single_output_model(
                 model_name=model_name,
                 model_params=parameter_map.get(model_name),
                 tuning=tuning,
+                tuning_trials=tuning_trials,
+                tuning_verbose=tuning_verbose,
             )
             candidate.cv_score(method=method, n_splits=n_splits)
             train_scores = candidate.cv_scores["train"].iloc[0].to_dict()
@@ -299,13 +491,23 @@ def compare_single_output_model(
     ).reset_index(drop=True)
     ranking.insert(0, "rank", np.arange(1, len(ranking) + 1))
 
-    return ModelComparisonResult(
+    result = ModelComparisonResult(
         ranking=ranking,
         models=fitted_models,
         failures=failures,
         metric=selected_metric,
         higher_is_better=higher_is_better,
+        _source_model=model,
+        method=method,
+        n_splits=n_splits,
     )
+    if tune_best:
+        result.tune_best(
+            n_trials=tuning_trials,
+            verbose=tuning_verbose,
+            evaluate=True,
+        )
+    return result
 
 
 def compare_multi_output_model(
@@ -317,6 +519,9 @@ def compare_multi_output_model(
     n_splits: int = 5,
     metric: str | Mapping[str, str] | None = None,
     tuning: bool = False,
+    tune_best: bool = False,
+    tuning_trials: int | Mapping[str, int] = 30,
+    tuning_verbose: int = 0,
     continue_on_error: bool = True,
 ) -> MultiOutputModelComparisonResult:
     """Compare candidate estimators independently for every output target."""
@@ -335,6 +540,12 @@ def compare_multi_output_model(
         unknown_targets = sorted(set(metric).difference(target_set))
         if unknown_targets:
             raise ValueError(f"metric contains unknown targets: {unknown_targets}")
+    if isinstance(tuning_trials, Mapping):
+        unknown_targets = sorted(set(tuning_trials).difference(target_set))
+        if unknown_targets:
+            raise ValueError(
+                f"tuning_trials contains unknown targets: {unknown_targets}"
+            )
 
     nested_params = (
         isinstance(model_params, Mapping)
@@ -353,6 +564,11 @@ def compare_multi_output_model(
             if nested_params and model_params is not None
             else model_params
         )
+        target_trials = (
+            tuning_trials.get(target, 30)
+            if isinstance(tuning_trials, Mapping)
+            else tuning_trials
+        )
         results[target] = compare_single_output_model(
             model.models[target],
             model_names=target_names,
@@ -361,6 +577,9 @@ def compare_multi_output_model(
             n_splits=n_splits,
             metric=target_metric,
             tuning=tuning,
+            tune_best=tune_best,
+            tuning_trials=target_trials,
+            tuning_verbose=tuning_verbose,
             continue_on_error=continue_on_error,
         )
     return MultiOutputModelComparisonResult(results=results)
