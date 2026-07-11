@@ -109,3 +109,23 @@ def test_inverse_model_view_maps_single_objective_signature() -> None:
     assert view.target_cols == ["y"]
     assert model.received_obj_value == 5.0
     assert objective.to_dict(orient="records") == [{"y": 6.0}]
+
+
+def test_integer_search_settings_are_cast_for_optuna() -> None:
+    """Integral float values should be normalized before suggest_int calls."""
+
+    from malchan.inverse_analysis.models import _normalize_integer_search_settings
+
+    lower, upper, steps = _normalize_integer_search_settings(
+        bounds_min=[0.0, 0.1],
+        bounds_max=[10.0, 0.9],
+        steps=[2.0, None],
+        dtypes=["int", "float"],
+    )
+
+    assert lower == [0, 0.1]
+    assert upper == [10, 0.9]
+    assert steps == [2, None]
+    assert isinstance(lower[0], int)
+    assert isinstance(upper[0], int)
+    assert isinstance(steps[0], int)
