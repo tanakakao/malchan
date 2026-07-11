@@ -1,8 +1,8 @@
 # malchan FastAPI application
 
 `malchan.app` provides an opt-in FastAPI layer for training, serving,
-comparing, tuning, and inverse-analyzing single-output and multi-output
-`malchan` models through HTTP.
+comparing, tuning, activating, and inverse-analyzing single-output and
+multi-output `malchan` models through HTTP.
 
 ## Install and run
 
@@ -27,15 +27,13 @@ The API prefix defaults to `/api` and can be changed with
 | `GET` | `/api/models` | List registered models |
 | `GET` | `/api/models/{model_id}` | Read model metadata |
 | `POST` | `/api/models/{model_id}/predict` | Run prediction or class-probability inference |
-| `POST` | `/api/models/{model_id}/compare` | Compare model families and optionally tune the best |
+| `POST` | `/api/models/{model_id}/compare` | Compare model families and optionally tune or activate the best |
 | `GET` | `/api/models/{model_id}/comparison` | Read the latest comparison and tuning state |
 | `POST` | `/api/models/{model_id}/comparison/tune-best` | Tune selected best models after comparison |
 | `POST` | `/api/models/{model_id}/inverse-analysis` | Search input candidates with Optuna |
 | `DELETE` | `/api/models/{model_id}` | Remove a registered model and its comparison state |
 
 ## Train a single-output regression model
-
-The existing `target_col` and `task` request fields remain supported.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/models \
@@ -58,12 +56,9 @@ curl -X POST http://127.0.0.1:8000/api/models \
 ## Train a multi-objective model
 
 Use `target_cols` and `tasks` to train multiple outputs from the same input
-features. The number and order of `tasks` must match `target_cols`.
-
-`model_names` is applied to every target by default. Use
-`model_names_by_target` when each objective should use a different estimator.
-`model_params_by_target` and `base_model_params_by_target` provide the same
-per-target override mechanism for predictor parameters.
+features. `model_names` applies to all targets by default; per-target overrides
+are available through `model_names_by_target`, `model_params_by_target`, and
+`base_model_params_by_target`.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/models \
@@ -81,21 +76,11 @@ curl -X POST http://127.0.0.1:8000/api/models \
     "model_names": ["ランダムフォレスト回帰"],
     "model_names_by_target": {
       "cost": ["線形回帰"]
-    },
-    "model_params_by_target": {
-      "strength": {"n_estimators": 200}
     }
   }'
 ```
 
-The registered model metadata contains `target_cols`, `tasks`, and
-`model_names_by_target`. For a single-output request, the legacy `target_col`,
-`task`, and `model_names` response fields are also populated.
-
-## Predict all objectives
-
-The training response contains a `model_id`. Prediction returns one record per
-input row containing every objective.
+## Predict
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/models/<model_id>/predict \
@@ -108,9 +93,9 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/predict \
   }'
 ```
 
-Regression and classification targets can be mixed. When `"proba": true` is
-specified, classification targets return class-probability columns while
-regression targets continue to return normal predictions.
+Regression and classification targets can be mixed. With `"proba": true`,
+classification targets return probability columns while regression targets
+continue to return normal predictions.
 
 ## Compare candidate models
 
@@ -133,7 +118,7 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
   }'
 ```
 
-Example response:
+The response contains one result per target:
 
 ```json
 {
@@ -168,11 +153,11 @@ Example response:
 Use `metric` to change the ranking metric and `model_params` to supply
 candidate-specific parameters.
 
-### Compare and tune only the best model
+## Compare and tune only the best model
 
-`tune_best` runs the recommended two-stage workflow: compare untuned model
-families fairly, select the best family, tune only that family, and evaluate the
-tuned model with the same CV settings.
+`tune_best` performs a two-stage workflow: compare untuned model families under
+identical CV settings, select the best family, tune only that family, and then
+re-evaluate it with the same CV configuration.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
@@ -186,14 +171,14 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
   }'
 ```
 
-The original `ranking` remains the untuned comparison record. The response's
-`best_model_name`, `best_params`, `best_is_tuned`, and `best_cv_scores` describe
-the selected and tuned model.
+The original `ranking` remains the untuned model-family comparison. The
+response's `best_params`, `best_is_tuned`, and `best_cv_scores` describe the
+tuned model.
 
-`tuning: true` instead tunes every candidate before comparison. Because this is
+`tuning: true` instead tunes every candidate before ranking. Because this is
 more expensive, `tuning` and `tune_best` cannot both be true.
 
-### Tune the best model later
+## Tune the best model later
 
 Run comparison first, inspect the result, and then tune the selected candidate:
 
@@ -217,7 +202,44 @@ The latest state can be fetched without rerunning comparison:
 curl http://127.0.0.1:8000/api/models/<model_id>/comparison
 ```
 
-### Multi-output comparison and tuning
+## Activate the selected best model
+
+Comparison results hold fitted best models, but the registered model used by
+`/predict` and `/inverse-analysis` is unchanged by default. Set
+`activate_best: true` to promote the selected best model explicitly.
+
+Activation can be performed during comparison:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_names": ["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+    "tune_best": true,
+    "tuning_trials": 100,
+    "activate_best": true
+  }'
+```
+
+Or after deferred tuning:
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/api/models/<model_id>/comparison/tune-best \
+  -H "Content-Type: application/json" \
+  -d '{
+    "n_trials": 100,
+    "evaluate": true,
+    "activate_best": true
+  }'
+```
+
+After activation, subsequent prediction and inverse-analysis requests use the
+selected model. The model metadata endpoint also reports the activated model
+name. Keeping `activate_best` false allows comparison and tuning without
+changing the serving model.
+
+## Multi-output comparison and tuning
 
 Candidate lists, ranking metrics, and trial counts can be specified by target.
 
@@ -237,7 +259,8 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
     "tuning_trials": {
       "strength": 100,
       "cost": 50
-    }
+    },
+    "activate_best": true
   }'
 ```
 
@@ -254,11 +277,10 @@ curl -X POST \
   }'
 ```
 
-## Run inverse analysis
+When `activate_best` is true for a multi-output model, each target's selected
+best child model is installed in the registered multi-output pipeline.
 
-Inverse analysis searches the registered model's input space with Optuna. Each
-objective can be minimized, maximized, or optimized toward a requested numeric
-value or classification label.
+## Run inverse analysis
 
 ```bash
 curl -X POST \
@@ -289,27 +311,10 @@ curl -X POST \
   }'
 ```
 
-### Search controls
-
-- `bounds` overrides the observed training-data range for numeric features.
-- `categories` sets allowed values for categorical, SMILES, or composition
-  inputs. When omitted, observed training values are used.
-- `fixed_values` fixes selected features to specified values.
-- `sum_constraint` requires selected numeric columns to sum to one value.
-- `sampler_type` supports `TPE`, `MOTPE`, `CmaEs`, `GP`, `QMS`, `NSGAII`, and
-  `NSGAIII`.
-
-For a regression objective, specify either `direction` or `target_value`:
-
-```json
-{"target": "strength", "target_value": 450.0}
-```
-
-A classification objective must use `target_value` with a fitted class label:
-
-```json
-{"target": "quality", "target_value": "OK"}
-```
+Search controls include numeric bounds and steps, observed or explicit category
+candidates, fixed values, equality sum constraints, target values or class
+labels, and `TPE`, `MOTPE`, `CmaEs`, `GP`, `QMS`, `NSGAII`, and `NSGAIII`
+samplers.
 
 ## Current lifecycle behavior
 
