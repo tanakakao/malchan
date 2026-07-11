@@ -21,6 +21,7 @@ class FakeSinglePipeline:
         self.target_col = None
         self.task = None
         self.model_names = None
+        self.model_params = None
         self.fingerprints = []
         self.comp_method = None
         self.comp_feats = []
@@ -35,6 +36,7 @@ class FakeSinglePipeline:
         self.dec_n_components = 2
         self.sampling_method = None
         self.le = None
+        self.tuning = False
 
     @classmethod
     def fitted(cls) -> "FakeSinglePipeline":
@@ -79,6 +81,11 @@ class FakeSinglePipeline:
         """Populate deterministic train and test CV score tables."""
 
         scores = self.score_by_model[self.model_names[0]]
+        if self.tuning:
+            scores = {
+                key: value * (0.5 if key != "R2" else 1.1)
+                for key, value in scores.items()
+            }
         self.cv_scores = {
             "train": pd.DataFrame(
                 [{key: value * 0.8 for key, value in scores.items()}]
@@ -96,6 +103,33 @@ class FakeMultiPipeline:
         self.target_cols = ["strength", "cost"]
         self.tasks = ["regression", "regression"]
         self.models = {}
+
+
+def _install_fake_tuning(monkeypatch, compare_module):
+    """Replace expensive Optuna tuning while preserving comparison refits."""
+
+    original_fit_candidate = compare_module._fit_candidate
+    tuning_calls = []
+
+    def fake_fit_candidate(*args, **kwargs):
+        tuning = kwargs.get("tuning", False)
+        candidate = original_fit_candidate(
+            *args,
+            **{
+                **kwargs,
+                "tuning": False,
+            },
+        )
+        if tuning:
+            trials = kwargs["tuning_trials"]
+            candidate.tuning = True
+            candidate.tuning_trials = trials
+            candidate.model_params = {"optimized": True, "n_trials": trials}
+            tuning_calls.append((candidate.model_names[0], trials))
+        return candidate
+
+    monkeypatch.setattr(compare_module, "_fit_candidate", fake_fit_candidate)
+    return tuning_calls
 
 
 def test_public_pipeline_classes_have_analysis_methods() -> None:
@@ -140,7 +174,64 @@ def test_model_compare_ranks_candidates_and_retains_best_model(monkeypatch) -> N
     assert result.ranking["model_name"].tolist() == ["model-b", "model-a"]
     assert result.ranking["rank"].tolist() == [1, 2]
     assert result.failures == {}
+    assert result.best_is_tuned is False
     assert model.comparison_result is result
+
+
+def test_compare_can_tune_only_best_model_from_arguments(monkeypatch) -> None:
+    """compare(tune_best=True) should tune only the selected model family."""
+
+    from malchan.models import compare as compare_module
+    from malchan.pipeline.analysis_extensions import install_analysis_extensions
+
+    monkeypatch.setattr(
+        compare_module,
+        "_available_model_names",
+        lambda task: ["model-a", "model-b"],
+    )
+    tuning_calls = _install_fake_tuning(monkeypatch, compare_module)
+    install_analysis_extensions(FakeSinglePipeline, FakeMultiPipeline)
+
+    result = FakeSinglePipeline.fitted().compare(
+        model_names=["model-a", "model-b"],
+        n_splits=2,
+        tune_best=True,
+        tuning_trials=17,
+    )
+
+    assert tuning_calls == [("model-b", 17)]
+    assert result.best_model_name == "model-b"
+    assert result.best_is_tuned is True
+    assert result.best_params == {"optimized": True, "n_trials": 17}
+    assert result.best_cv_scores["test"].iloc[0]["RMSE"] == 0.5
+    assert result.ranking.iloc[0]["test_RMSE"] == 1.0
+
+
+def test_comparison_result_can_tune_best_model_later(monkeypatch) -> None:
+    """comparison.tune_best() should replace the selected model after ranking."""
+
+    from malchan.models import compare as compare_module
+    from malchan.pipeline.analysis_extensions import install_analysis_extensions
+
+    monkeypatch.setattr(
+        compare_module,
+        "_available_model_names",
+        lambda task: ["model-a", "model-b"],
+    )
+    tuning_calls = _install_fake_tuning(monkeypatch, compare_module)
+    install_analysis_extensions(FakeSinglePipeline, FakeMultiPipeline)
+
+    result = FakeSinglePipeline.fitted().compare(
+        model_names=["model-a", "model-b"],
+        n_splits=2,
+    )
+    tuned_model = result.tune_best(n_trials=23)
+
+    assert tuning_calls == [("model-b", 23)]
+    assert tuned_model is result.best_model
+    assert result.best_is_tuned is True
+    assert result.best_params == {"optimized": True, "n_trials": 23}
+    assert result.ranking.iloc[0]["test_RMSE"] == 1.0
 
 
 def test_single_model_inverse_analysis_is_model_native(monkeypatch) -> None:
