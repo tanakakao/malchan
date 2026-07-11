@@ -167,7 +167,11 @@ def _compute_xai_for_registered(
     return get_xai_summary(service, model_id)
 
 
-def _available_summary(target: str, child: Any, state: Mapping[str, Any]) -> XaiTargetSummary:
+def _available_summary(
+    target: str,
+    child: Any,
+    state: Mapping[str, Any],
+) -> XaiTargetSummary:
     """Build target-level availability metadata from the cached model state."""
 
     cache = getattr(child, "importances", None)
@@ -240,7 +244,10 @@ def recompute_xai(
     )
 
 
-def refresh_xai_after_activation(service: Any, model_id: str) -> XaiSummaryResponse | None:
+def refresh_xai_after_activation(
+    service: Any,
+    model_id: str,
+) -> XaiSummaryResponse | None:
     """Recompute XAI after activating a compared model when originally requested."""
 
     state = _state_store(service).get(model_id)
@@ -249,7 +256,11 @@ def refresh_xai_after_activation(service: Any, model_id: str) -> XaiSummaryRespo
     return _compute_xai_for_registered(service, model_id)
 
 
-def _cached_target(service: Any, model_id: str, target: str) -> tuple[Any, Mapping[str, Any]]:
+def _cached_target(
+    service: Any,
+    model_id: str,
+    target: str,
+) -> tuple[Any, Mapping[str, Any]]:
     """Return a child model and its XAI cache without recomputing it."""
 
     registered = service._get_registered(model_id)
@@ -318,9 +329,8 @@ def get_xai_importance(
     key = f"{method}_combine" if combined else method
     values = cache.get(key)
     if values is None and combined:
-        key = method
         combined = False
-        values = cache.get(key)
+        values = cache.get(method)
     if values is None:
         raise XaiNotReadyError(
             f"Cached {method} importance is unavailable for target {target!r}."
@@ -372,7 +382,11 @@ def get_xai_shap(
         )
     frame = value if isinstance(value, pd.DataFrame) else pd.DataFrame(value)
     records = json.loads(frame.to_json(orient="records", date_format="iso"))
-    value_columns = [str(column) for column in frame.columns if str(column).startswith("shap")]
+    value_columns = [
+        str(column)
+        for column in frame.columns
+        if str(column).startswith("shap")
+    ]
     return XaiShapResponse(
         model_id=model_id,
         target=target,
@@ -412,6 +426,7 @@ def get_xai_pdp(
         raise XaiNotReadyError(
             f"Cached PDP data is unavailable for feature {feature!r}."
         )
+
     values, ticks = cached
     array = np.asarray(values, dtype=float)
     if array.ndim == 1:
@@ -425,7 +440,11 @@ def get_xai_pdp(
     else:
         mean_values = array.mean(axis=1)
         target_items = getattr(child, "target_items", None)
-        labels = [str(value) for value in list(target_items or [])]
+        labels = (
+            []
+            if target_items is None
+            else [str(value) for value in list(target_items)]
+        )
         if len(labels) != mean_values.shape[1]:
             labels = [f"output_{index}" for index in range(mean_values.shape[1])]
 
@@ -444,11 +463,13 @@ def get_xai_pdp(
                 ice_values=ice_values,
             )
         )
+
+    tick_values = np.asarray(ticks).tolist()
     return XaiPdpResponse(
         model_id=model_id,
         target=target,
         feature=feature,
-        x_values=[_json_scalar(value) for value in np.asarray(ticks).tolist()],
+        x_values=[_json_scalar(value) for value in tick_values],
         series=series,
     )
 
