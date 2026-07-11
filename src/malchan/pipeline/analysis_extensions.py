@@ -23,19 +23,7 @@ def single_output_inverse_analysis(
     objective: Any,
     **kwargs: Any,
 ) -> tuple[Any, Any]:
-    """Run inverse analysis for a fitted single-output pipeline.
-
-    Args:
-        objective: ``"min"`` or ``"max"`` for directional regression
-            optimization, a numeric target value for regression target matching,
-            or a fitted class label for classification.
-        **kwargs: Remaining arguments accepted by
-            :func:`malchan.inverse_analysis.inverse_analysis`, such as bounds,
-            fixed values, constraints, sampler type, and trial count.
-
-    Returns:
-        Candidate dataframe and completed Optuna study.
-    """
+    """Run inverse analysis for a fitted single-output pipeline."""
 
     if getattr(self, "target_col", None) in (None, "AD"):
         raise ValueError("Fit a supervised model before calling inverse_analysis().")
@@ -70,19 +58,7 @@ def multi_output_inverse_analysis(
     target_cols: Sequence[str] | None = None,
     **kwargs: Any,
 ) -> tuple[Any, Any]:
-    """Run inverse analysis for selected outputs of a fitted multi-output model.
-
-    Args:
-        objectives: Prefer a mapping from target column to objective, for example
-            ``{"strength": "max", "cost": "min"}``. A sequence is also
-            accepted when ``target_cols`` supplies the aligned target order.
-        target_cols: Target order used when ``objectives`` is a sequence. When
-            omitted, all fitted target columns are used.
-        **kwargs: Remaining inverse-analysis settings.
-
-    Returns:
-        Candidate dataframe and completed Optuna study.
-    """
+    """Run inverse analysis for selected outputs of a fitted multi-output model."""
 
     fitted_targets = list(getattr(self, "target_cols", None) or [])
     if not fitted_targets:
@@ -144,9 +120,12 @@ def single_output_compare(
     n_splits: int = 5,
     metric: str | None = None,
     tuning: bool = False,
+    tune_best: bool = False,
+    tuning_trials: int = 30,
+    tuning_verbose: int = 0,
     continue_on_error: bool = True,
 ) -> Any:
-    """Fit and rank candidate estimators using one common CV configuration."""
+    """Fit and rank candidates, optionally tuning only the selected best model."""
 
     from ..models.compare import compare_single_output_model
 
@@ -158,6 +137,9 @@ def single_output_compare(
         n_splits=n_splits,
         metric=metric,
         tuning=tuning,
+        tune_best=tune_best,
+        tuning_trials=tuning_trials,
+        tuning_verbose=tuning_verbose,
         continue_on_error=continue_on_error,
     )
     self.comparison_result = result
@@ -173,9 +155,12 @@ def multi_output_compare(
     n_splits: int = 5,
     metric: str | Mapping[str, str] | None = None,
     tuning: bool = False,
+    tune_best: bool = False,
+    tuning_trials: int | Mapping[str, int] = 30,
+    tuning_verbose: int = 0,
     continue_on_error: bool = True,
 ) -> Any:
-    """Compare candidate estimators independently for every fitted target."""
+    """Compare target models and optionally tune each selected best candidate."""
 
     from ..models.compare import compare_multi_output_model
 
@@ -187,6 +172,9 @@ def multi_output_compare(
         n_splits=n_splits,
         metric=metric,
         tuning=tuning,
+        tune_best=tune_best,
+        tuning_trials=tuning_trials,
+        tuning_verbose=tuning_verbose,
         continue_on_error=continue_on_error,
     )
     self.comparison_result = result
