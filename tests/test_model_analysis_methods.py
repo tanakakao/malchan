@@ -72,7 +72,7 @@ class FakeSinglePipeline:
         self.task = kwargs["task"]
         self.model_names = kwargs["model_names"]
         for name, value in kwargs.items():
-            if name != "task" and name != "model_names":
+            if name not in {"task", "model_names"}:
                 setattr(self, name, value)
 
     def cv_score(self, method="kfold", n_splits=5):
@@ -80,7 +80,9 @@ class FakeSinglePipeline:
 
         scores = self.score_by_model[self.model_names[0]]
         self.cv_scores = {
-            "train": pd.DataFrame([{key: value * 0.8 for key, value in scores.items()}]),
+            "train": pd.DataFrame(
+                [{key: value * 0.8 for key, value in scores.items()}]
+            ),
             "test": pd.DataFrame([scores]),
         }
 
@@ -113,19 +115,21 @@ def test_public_pipeline_classes_have_analysis_methods() -> None:
     assert callable(MLModelPipeline.inverse_analysis)
 
 
-def test_compare_ranks_candidates_and_retains_best_model(monkeypatch) -> None:
-    """Comparison should rank CV metrics and retain fitted candidate objects."""
+def test_model_compare_ranks_candidates_and_retains_best_model(monkeypatch) -> None:
+    """model.compare() should rank CV metrics and retain fitted candidates."""
 
     from malchan.models import compare as compare_module
+    from malchan.pipeline.analysis_extensions import install_analysis_extensions
 
     monkeypatch.setattr(
         compare_module,
         "_available_model_names",
         lambda task: ["model-a", "model-b"],
     )
+    install_analysis_extensions(FakeSinglePipeline, FakeMultiPipeline)
 
-    result = compare_module.compare_single_output_model(
-        FakeSinglePipeline.fitted(),
+    model = FakeSinglePipeline.fitted()
+    result = model.compare(
         model_names=["model-a", "model-b"],
         n_splits=2,
     )
@@ -136,6 +140,7 @@ def test_compare_ranks_candidates_and_retains_best_model(monkeypatch) -> None:
     assert result.ranking["model_name"].tolist() == ["model-b", "model-a"]
     assert result.ranking["rank"].tolist() == [1, 2]
     assert result.failures == {}
+    assert model.comparison_result is result
 
 
 def test_single_model_inverse_analysis_is_model_native(monkeypatch) -> None:
