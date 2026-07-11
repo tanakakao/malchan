@@ -199,7 +199,7 @@ print(comparison.best_cv_scores)
 
 `evaluate=False`にすると、チューニング後の追加CVを省略できます。
 
-全候補をチューニングしてから比較する従来の動作は` tuning=True`で利用できますが、計算量が大きくなります。`tuning=True`と`tune_best=True`は同時指定できません。
+全候補をチューニングしてから比較する従来の動作は`tuning=True`で利用できますが、計算量が大きくなります。`tuning=True`と`tune_best=True`は同時指定できません。
 
 ```python
 comparison = model.compare(
