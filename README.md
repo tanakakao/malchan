@@ -11,6 +11,7 @@
 - scikit-learn 互換の機械学習パイプライン作成
 - 回帰・分類モデルの学習、予測、交差検証
 - 学習済みモデルからの候補モデル比較と最良モデル選定
+- 最良候補だけを対象とした二段階ハイパーパラメータチューニング
 - Optuna によるハイパーパラメータチューニング
 - SHAP、Permutation Feature Importance、Partial Dependence などの可視化補助
 - SMILES や組成式を使った特徴量生成の補助
@@ -151,13 +152,70 @@ comparison = model.compare(
 )
 ```
 
+### 比較後に最良モデルだけチューニング
+
+候補モデルを同じ条件で比較した後、最良候補だけを OptunaSearchCV でチューニングできます。比較表は選定根拠としてそのまま保持され、`best_model`がチューニング済みモデルへ置き換わります。
+
+```python
+comparison = model.compare(
+    model_names=[
+        "線形回帰",
+        "Ridge",
+        "ランダムフォレスト回帰",
+        "LightGBM",
+    ],
+    n_splits=5,
+    tune_best=True,
+    tuning_trials=100,
+)
+
+print(comparison.ranking)          # チューニング前の公平な比較結果
+print(comparison.best_model_name) # 選択されたモデル種別
+print(comparison.best_params)     # Optunaで選ばれたパラメータ
+print(comparison.best_cv_scores)  # チューニング後モデルの再CV結果
+
+best_model = comparison.best_model
+```
+
+先に比較結果だけ確認し、後からチューニングすることもできます。
+
+```python
+comparison = model.compare(
+    model_names=["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+    n_splits=5,
+)
+
+# 比較結果を確認してから実行
+best_model = comparison.tune_best(
+    n_trials=100,
+    verbose=0,
+    evaluate=True,
+)
+
+print(comparison.best_is_tuned)
+print(comparison.best_params)
+print(comparison.best_cv_scores)
+```
+
+`evaluate=False`にすると、チューニング後の追加CVを省略できます。
+
+全候補をチューニングしてから比較する従来の動作は` tuning=True`で利用できますが、計算量が大きくなります。`tuning=True`と`tune_best=True`は同時指定できません。
+
+```python
+comparison = model.compare(
+    model_names=["Ridge", "ランダムフォレスト回帰"],
+    tuning=True,
+    tuning_trials=50,
+)
+```
+
 失敗した候補は、比較を継続した上で確認できます。
 
 ```python
 print(comparison.failures)
 ```
 
-複数目的モデルでは、共通候補または目的変数ごとの候補を指定します。
+複数目的モデルでは、共通候補または目的変数ごとの候補を指定します。`tune_best=True`では各目的変数の最良候補だけをチューニングします。
 
 ```python
 comparison = multi_model.compare(
@@ -169,10 +227,26 @@ comparison = multi_model.compare(
         "strength": "R2",
         "cost": "RMSE",
     },
+    tune_best=True,
+    tuning_trials={
+        "strength": 100,
+        "cost": 50,
+    },
 )
 
 print(comparison.ranking)
 print(comparison.best_model_names)
+print(comparison.best_params)
+print(comparison.best_are_tuned)
+```
+
+複数目的でも後から対象を絞ってチューニングできます。
+
+```python
+tuned_models = comparison.tune_best(
+    targets=["strength"],
+    n_trials={"strength": 150},
+)
 ```
 
 ## 学習済みモデルから逆解析
