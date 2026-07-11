@@ -105,11 +105,13 @@ export default function ExplainPage() {
     if (!modelInfo?.model_id || !xaiTarget || !targetSummary) return undefined;
     setXaiBusy(true);
     setXaiError("");
-    const importanceRequest = api.xaiImportance(modelInfo.model_id, xaiTarget, {
-      method,
-      combined: true,
-      top_n: 20,
-    });
+    const importanceRequest = targetSummary.importance_methods.includes(method)
+      ? api.xaiImportance(modelInfo.model_id, xaiTarget, {
+          method,
+          combined: true,
+          top_n: 20,
+        })
+      : Promise.resolve(null);
     const shapRequest = feature && targetSummary.shap_features.includes(feature)
       ? api.xaiShap(modelInfo.model_id, xaiTarget, feature)
       : Promise.resolve(null);
