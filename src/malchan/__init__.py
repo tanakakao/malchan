@@ -8,6 +8,8 @@ __version__ = "0.1.0"
 _LAZY_EXPORTS = {
     "MLModelPipeline": "malchan.pipeline",
     "SingleOutputMLModelPipeline": "malchan.pipeline",
+    "ModelComparisonResult": "malchan.models.compare",
+    "MultiOutputModelComparisonResult": "malchan.models.compare",
     "feature_names_from_pipeline": "malchan.models.utils",
     "train_and_evaluate_models": "malchan.models.compare",
     "inverse_analysis": "malchan.inverse_analysis",

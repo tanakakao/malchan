@@ -1,6 +1,13 @@
 """Public API for :mod:`malchan.models`."""
 
-from ..pipeline.single_output import SingleOutputMLModelPipeline
-from ..pipeline.multi_output import MLModelPipeline
+from . import compare
+from ..pipeline import MLModelPipeline, SingleOutputMLModelPipeline
+from .compare import ModelComparisonResult, MultiOutputModelComparisonResult
 
-__all__ = ["SingleOutputMLModelPipeline", "MLModelPipeline"]
+__all__ = [
+    "MLModelPipeline",
+    "ModelComparisonResult",
+    "MultiOutputModelComparisonResult",
+    "SingleOutputMLModelPipeline",
+    "compare",
+]

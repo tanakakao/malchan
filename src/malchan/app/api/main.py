@@ -2,15 +2,17 @@
 
 from typing import Any
 
+from malchan import __version__
 from malchan.app.core import AppSettings, get_settings
 
 
-def create_app(settings: AppSettings | None = None) -> Any:
+def create_app(settings: AppSettings | None = None, model_service: Any | None = None) -> Any:
     """Create and configure the FastAPI application.
 
     Args:
-        settings: Optional settings object. When omitted, environment-backed
-            settings are loaded with :func:`malchan.app.core.get_settings`.
+        settings: Optional settings object. Environment-backed settings are used
+            when omitted.
+        model_service: Optional service implementation for dependency injection.
 
     Returns:
         A configured :class:`fastapi.FastAPI` application instance.
@@ -24,17 +26,22 @@ def create_app(settings: AppSettings | None = None) -> Any:
     except ImportError as exc:
         raise RuntimeError("FastAPI support requires installing malchan with the 'web' extra.") from exc
 
+    from malchan.app.api.routes import create_api_router
+    from malchan.app.services import InMemoryModelService
+
     resolved_settings = settings or get_settings()
-    app = FastAPI(title=resolved_settings.app_name, debug=resolved_settings.debug)
-
-    @app.get(f"{resolved_settings.api_prefix}/health", tags=["system"])
-    def health_check() -> dict[str, str]:
-        """Return a lightweight health-check response.
-
-        Returns:
-            Service status metadata for load balancers and smoke tests.
-        """
-
-        return {"status": "ok", "service": resolved_settings.app_name}
-
+    resolved_service = model_service or InMemoryModelService()
+    app = FastAPI(
+        title=resolved_settings.app_name,
+        debug=resolved_settings.debug,
+        version=__version__,
+    )
+    app.state.model_service = resolved_service
+    app.include_router(
+        create_api_router(
+            service=resolved_service,
+            app_name=resolved_settings.app_name,
+        ),
+        prefix=resolved_settings.api_prefix,
+    )
     return app

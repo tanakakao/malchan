@@ -10,10 +10,13 @@
 
 - scikit-learn 互換の機械学習パイプライン作成
 - 回帰・分類モデルの学習、予測、交差検証
+- 学習済みモデルからの候補モデル比較と最良モデル選定
+- 最良候補だけを対象とした二段階ハイパーパラメータチューニング
 - Optuna によるハイパーパラメータチューニング
 - SHAP、Permutation Feature Importance、Partial Dependence などの可視化補助
 - SMILES や組成式を使った特徴量生成の補助
-- Optuna を使った逆解析・候補探索
+- 学習済みモデルから直接実行できる逆解析・候補探索
+- FastAPI 経由の学習、予測、比較、チューニング、逆解析
 - 学習結果や図表の Excel 出力
 
 ---
@@ -23,7 +26,8 @@
 ```text
 src/malchan/
 ├── app/                 # FastAPI / Web アプリ用のアプリケーション層
-├── models/              # モデル、学習、前処理、説明可能性
+├── pipeline/            # 単一・複数目的の学習済みモデル本体
+├── models/              # モデル生成、比較、前処理、説明可能性
 ├── visualization/       # Plotly ベースの可視化
 ├── inverse_analysis/    # Optuna による逆解析
 └── export/              # Excel 出力関連
@@ -33,10 +37,11 @@ src/malchan/
 
 | Module | Purpose |
 |---|---|
-| `malchan.app` | FastAPI アプリファクトリ、設定、将来の Web UI 用アプリケーション層 |
-| `malchan.models` | モデルパイプライン、モデル比較、前処理、説明可能性の処理 |
+| `malchan.pipeline` | 学習、予測、比較、逆解析を行うモデル本体 |
+| `malchan.app` | FastAPI アプリファクトリと HTTP API |
+| `malchan.models` | モデルパイプライン、比較結果型、前処理、説明可能性の処理 |
 | `malchan.visualization` | モデル結果・逆解析結果の可視化 |
-| `malchan.inverse_analysis` | Optuna ベースの逆解析 |
+| `malchan.inverse_analysis` | Optuna ベースの低水準な逆解析関数 |
 | `malchan.export` | Excel レポート出力 |
 
 ---
@@ -71,7 +76,7 @@ pip install -e ".[all]"
 
 ---
 
-## 使い方の例
+## モデルの学習と予測
 
 ```python
 import pandas as pd
@@ -101,6 +106,220 @@ pred = model.predict(df[["x1", "x2"]])
 print(pred)
 ```
 
+## 学習済みモデルから候補モデルを比較
+
+`compare()` は、現在のモデルが保持する学習データ、列定義、材料特徴量、前処理設定を再利用します。候補ごとに同じ交差検証条件で学習・評価し、回帰では既定でテスト RMSE の昇順、分類ではテスト F1 の降順に順位付けします。
+
+```python
+comparison = model.compare(
+    model_names=[
+        "線形回帰",
+        "Ridge",
+        "ランダムフォレスト回帰",
+        "LightGBM",
+    ],
+    method="kfold",
+    n_splits=5,
+)
+
+print(comparison.ranking)
+print(comparison.best_model_name)
+
+best_model = comparison.best_model
+best_pred = best_model.predict(df[["x1", "x2"]])
+```
+
+`metric` を指定すると順位付け指標を変更できます。
+
+```python
+comparison = model.compare(
+    model_names=["線形回帰", "Ridge", "ランダムフォレスト回帰"],
+    metric="R2",
+)
+```
+
+一部の候補だけ個別パラメータを指定できます。
+
+```python
+comparison = model.compare(
+    model_names=["Ridge", "ランダムフォレスト回帰"],
+    model_params={
+        "Ridge": {"alpha": 0.1},
+        "ランダムフォレスト回帰": {
+            "n_estimators": 300,
+            "max_depth": 8,
+        },
+    },
+)
+```
+
+### 比較後に最良モデルだけチューニング
+
+候補モデルを同じ条件で比較した後、最良候補だけを OptunaSearchCV でチューニングできます。比較表は選定根拠としてそのまま保持され、`best_model`がチューニング済みモデルへ置き換わります。
+
+```python
+comparison = model.compare(
+    model_names=[
+        "線形回帰",
+        "Ridge",
+        "ランダムフォレスト回帰",
+        "LightGBM",
+    ],
+    n_splits=5,
+    tune_best=True,
+    tuning_trials=100,
+)
+
+print(comparison.ranking)          # チューニング前の公平な比較結果
+print(comparison.best_model_name) # 選択されたモデル種別
+print(comparison.best_params)     # Optunaで選ばれたパラメータ
+print(comparison.best_cv_scores)  # チューニング後モデルの再CV結果
+
+best_model = comparison.best_model
+```
+
+先に比較結果だけ確認し、後からチューニングすることもできます。
+
+```python
+comparison = model.compare(
+    model_names=["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+    n_splits=5,
+)
+
+best_model = comparison.tune_best(
+    n_trials=100,
+    verbose=0,
+    evaluate=True,
+)
+
+print(comparison.best_is_tuned)
+print(comparison.best_params)
+print(comparison.best_cv_scores)
+```
+
+`evaluate=False`にすると、チューニング後の追加CVを省略できます。
+
+全候補をチューニングしてから比較する従来の動作は`tuning=True`で利用できますが、計算量が大きくなります。`tuning=True`と`tune_best=True`は同時指定できません。
+
+```python
+comparison = model.compare(
+    model_names=["Ridge", "ランダムフォレスト回帰"],
+    tuning=True,
+    tuning_trials=50,
+)
+```
+
+失敗した候補は、比較を継続した上で確認できます。
+
+```python
+print(comparison.failures)
+```
+
+複数目的モデルでは、共通候補または目的変数ごとの候補を指定します。`tune_best=True`では各目的変数の最良候補だけをチューニングします。
+
+```python
+comparison = multi_model.compare(
+    model_names={
+        "strength": ["Ridge", "ランダムフォレスト回帰"],
+        "cost": ["線形回帰", "LightGBM"],
+    },
+    metric={
+        "strength": "R2",
+        "cost": "RMSE",
+    },
+    tune_best=True,
+    tuning_trials={
+        "strength": 100,
+        "cost": 50,
+    },
+)
+
+print(comparison.ranking)
+print(comparison.best_model_names)
+print(comparison.best_params)
+print(comparison.best_are_tuned)
+```
+
+複数目的でも後から対象を絞ってチューニングできます。
+
+```python
+tuned_models = comparison.tune_best(
+    targets=["strength"],
+    n_trials={"strength": 150},
+)
+```
+
+## 学習済みモデルから逆解析
+
+単一目的回帰では、`"min"`、`"max"`、または到達させたい数値を目的として指定します。
+
+```python
+candidates, study = model.inverse_analysis(
+    "max",
+    bounds_min=[0.0, 0.0],
+    bounds_max=[1.0, 1.0],
+    trials=300,
+    n_candidate=10,
+)
+
+print(candidates)
+```
+
+指定値へ近づける場合:
+
+```python
+candidates, study = model.inverse_analysis(
+    15.0,
+    trials=300,
+)
+```
+
+分類では、確率を高めたい学習済みクラスラベルを指定します。
+
+```python
+candidates, study = classification_model.inverse_analysis(
+    "OK",
+    trials=300,
+)
+```
+
+複数目的では、目的変数名と方向または目標値を辞書で指定します。
+
+```python
+candidates, study = multi_model.inverse_analysis(
+    {
+        "strength": "max",
+        "cost": "min",
+    },
+    sampler_type="NSGAII",
+    trials=500,
+    n_candidate=20,
+)
+```
+
+組成比の合計制約や固定値も従来の逆解析引数をそのまま利用できます。
+
+```python
+candidates, study = multi_model.inverse_analysis(
+    {
+        "strength": "max",
+        "cost": "min",
+    },
+    constraint_cols=["component_a", "component_b", "component_c"],
+    constraint_value=1.0,
+    fix_values=[None, None, 0.2],
+    trials=500,
+)
+```
+
+直近の結果はモデルにも保持されます。
+
+```python
+model.comparison_result
+model.inverse_candidates
+model.inverse_study
+```
+
 トップレベルの `malchan` パッケージは、重い依存関係を import 時に即座に読み込まないように、主要 API を遅延 import します。
 
 ```python
@@ -109,10 +328,13 @@ import malchan
 print(malchan.__version__)
 ```
 
-FastAPI / Web アプリケーション層だけを追加して使う場合:
+## FastAPIで比較・チューニングする
+
+FastAPIから学習、予測、モデル比較、ベストモデルのチューニング、逆解析を実行する場合:
 
 ```bash
-pip install -e ".[web]"
+pip install -e ".[web,models,inverse]"
+uvicorn "malchan.app:create_app" --factory --reload
 ```
 
 ```python
@@ -120,6 +342,59 @@ from malchan.app import create_app
 
 app = create_app()
 ```
+
+比較と同時に最良モデルだけをチューニングします。
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/models/<model_id>/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_names": ["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+    "n_splits": 5,
+    "tune_best": true,
+    "tuning_trials": 100
+  }'
+```
+
+比較結果を確認してから、後でチューニングすることもできます。
+
+```bash
+curl -X POST \
+  http://127.0.0.1:8000/api/models/<model_id>/comparison/tune-best \
+  -H "Content-Type: application/json" \
+  -d '{
+    "n_trials": 100,
+    "evaluate": true
+  }'
+```
+
+最新のランキング、最良モデル名、パラメータ、チューニング状態、再CV結果を取得します。
+
+```bash
+curl http://127.0.0.1:8000/api/models/<model_id>/comparison
+```
+
+複数目的では目的変数ごとに候補、評価指標、試行数を指定できます。
+
+```json
+{
+  "model_names": {
+    "strength": ["Ridge", "ランダムフォレスト回帰"],
+    "cost": ["線形回帰", "LightGBM"]
+  },
+  "metric": {
+    "strength": "R2",
+    "cost": "RMSE"
+  },
+  "tune_best": true,
+  "tuning_trials": {
+    "strength": 100,
+    "cost": 50
+  }
+}
+```
+
+詳細なエンドポイント、リクエスト、レスポンス例は `src/malchan/app/README.md` を参照してください。
 
 ---
 
