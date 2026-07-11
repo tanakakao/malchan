@@ -185,6 +185,46 @@ def test_inverse_model_view_normalizes_numeric_class_label() -> None:
     assert child.received_obj_value == "1"
 
 
+def test_public_inverse_analysis_infers_categories_and_unwraps_adapter(
+    monkeypatch,
+) -> None:
+    """The public wrapper should infer observed categories from the raw model."""
+
+    import malchan.inverse_analysis as inverse_package
+
+    captured = {}
+
+    def fake_inverse_analysis(model, *args, **kwargs):
+        captured["model"] = model
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return pd.DataFrame(), SimpleNamespace()
+
+    monkeypatch.setattr(inverse_package, "_inverse_analysis", fake_inverse_analysis)
+    model = SimpleNamespace(
+        X=pd.DataFrame(
+            {
+                "x": [1.0, 2.0],
+                "grade": ["A", "B"],
+            }
+        ),
+        num_cols=["x"],
+        cat_cols=["grade"],
+        smiles_cols=[],
+        comp_cols=[],
+    )
+    adapter = SimpleNamespace(_model=model)
+
+    inverse_package.inverse_analysis(
+        adapter,
+        obj_directions=["max"],
+        target_cols=["y"],
+    )
+
+    assert captured["model"] is model
+    assert captured["kwargs"]["cat_dict"] == {"grade": ["A", "B"]}
+
+
 def test_integer_search_settings_are_cast_for_optuna() -> None:
     """Integral float values should be normalized before suggest_int calls."""
 
