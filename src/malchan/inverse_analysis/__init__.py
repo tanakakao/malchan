@@ -45,14 +45,15 @@ def inverse_analysis(model: Any, *args: Any, **kwargs: Any):
     """Run inverse analysis against a model or an application-layer adapter."""
 
     resolved_model = getattr(model, "_model", model)
-    inferred_categories = _infer_category_candidates(resolved_model)
-    provided_categories = kwargs.get("cat_dict")
-    if provided_categories is None:
-        kwargs["cat_dict"] = inferred_categories
-    else:
-        merged_categories = dict(inferred_categories)
-        merged_categories.update(dict(provided_categories))
-        kwargs["cat_dict"] = merged_categories
+    if len(args) < 2:
+        inferred_categories = _infer_category_candidates(resolved_model)
+        provided_categories = kwargs.get("cat_dict")
+        if provided_categories is None:
+            kwargs["cat_dict"] = inferred_categories
+        else:
+            merged_categories = dict(inferred_categories)
+            merged_categories.update(dict(provided_categories))
+            kwargs["cat_dict"] = merged_categories
     return _inverse_analysis(resolved_model, *args, **kwargs)
 
 
