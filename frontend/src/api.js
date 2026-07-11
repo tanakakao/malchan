@@ -38,6 +38,17 @@ async function request(path, options = {}) {
   return payload;
 }
 
+function query(params) {
+  const values = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      values.set(key, String(value));
+    }
+  });
+  const encoded = values.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
 export const api = {
   health: () => request("/health"),
   train: (payload) => request("/models", { method: "POST", body: JSON.stringify(payload) }),
@@ -65,6 +76,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  xaiSummary: (modelId) =>
+    request(`/models/${encodeURIComponent(modelId)}/xai`),
+  recomputeXai: (modelId, payload = {}) =>
+    request(`/models/${encodeURIComponent(modelId)}/xai/recompute`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  xaiImportance: (modelId, target, options = {}) =>
+    request(
+      `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/importance${query(options)}`,
+    ),
+  xaiShap: (modelId, target, feature) =>
+    request(
+      `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/shap${query({ feature })}`,
+    ),
+  xaiPdp: (modelId, target, feature, options = {}) =>
+    request(
+      `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/pdp${query({ feature, ...options })}`,
+    ),
   deleteModel: (modelId) =>
     request(`/models/${encodeURIComponent(modelId)}`, { method: "DELETE" }),
 };
