@@ -23,6 +23,7 @@ class _InverseAnalysisModelView:
         if not self.target_cols:
             raise ValueError("No target columns are available for inverse analysis.")
 
+        self.active_target_cols = list(self.target_cols)
         self.num_cols = self._resolve_columns("num_cols")
         self.cat_cols = self._resolve_columns("cat_cols")
         self.smiles_cols = self._resolve_columns("smiles_cols")
@@ -53,40 +54,118 @@ class _InverseAnalysisModelView:
             )
         return training_data
 
+    def _child_model(self, target: str) -> Any:
+        """Return the fitted single-output model for one target."""
+
+        models = getattr(self._model, "models", None)
+        if models is None:
+            return self._model
+        try:
+            return models[target]
+        except KeyError as exc:
+            raise ValueError(f"No fitted model exists for target {target!r}.") from exc
+
+    def _normalize_class_objective(self, target: str, value: Any) -> Any:
+        """Validate a class objective and convert it to a probability-column suffix."""
+
+        child = self._child_model(target)
+        if getattr(child, "task", None) != "classification" or value is None:
+            return value
+
+        target_items = getattr(child, "target_items", None)
+        if target_items is not None:
+            matches = [
+                item
+                for item in list(target_items)
+                if item == value or str(item) == str(value)
+            ]
+            if not matches:
+                raise ValueError(
+                    f"Unknown class label {value!r} for target {target!r}."
+                )
+        return str(value)
+
+    def set_active_targets(self, target_cols: list[str]) -> None:
+        """Set the target subset and order used during one inverse-analysis run."""
+
+        if not target_cols:
+            raise ValueError("At least one inverse-analysis target is required.")
+        if len(target_cols) != len(set(target_cols)):
+            raise ValueError("Inverse-analysis targets must not contain duplicates.")
+        unknown = sorted(set(target_cols).difference(self.target_cols))
+        if unknown:
+            raise ValueError(f"Unknown inverse-analysis targets: {unknown}")
+        self.active_target_cols = list(target_cols)
+
+    def validate_objectives(
+        self,
+        target_cols: list[str],
+        objectives: list[Any],
+    ) -> None:
+        """Validate target alignment and classification objectives."""
+
+        self.set_active_targets(target_cols)
+        if len(target_cols) != len(objectives):
+            raise ValueError("target_cols and obj_directions must have the same length.")
+        for target, value in zip(target_cols, objectives):
+            child = self._child_model(target)
+            if (
+                getattr(child, "task", None) == "classification"
+                and isinstance(value, str)
+                and value in {"min", "max"}
+            ):
+                raise ValueError(
+                    f"Classification target {target!r} requires a fitted class "
+                    "label rather than 'min' or 'max'."
+                )
+            self._normalize_class_objective(target, value)
+
     def predict(
         self,
         X: pd.DataFrame | None = None,
         proba: bool = False,
         idx2item: bool = False,
     ) -> pd.DataFrame:
-        """Delegate model prediction through the normalized interface."""
+        """Predict only the active inverse-analysis targets in their chosen order."""
 
-        return self._model.predict(
-            X=X,
-            proba=proba,
-            idx2item=idx2item,
-        )
+        predictions = []
+        for target in self.active_target_cols:
+            child = self._child_model(target)
+            predictions.append(
+                child.predict(
+                    X=X,
+                    proba=proba and getattr(child, "task", None) == "classification",
+                    idx2item=idx2item,
+                )
+            )
+        return pd.concat(predictions, axis=1)
 
     def predict_objective(
         self,
         X: pd.DataFrame | None = None,
         obj_values: list[Any] | None = None,
     ) -> pd.DataFrame:
-        """Call the appropriate objective-prediction signature."""
+        """Evaluate objective values for the active target subset."""
 
-        resolved_values = [None] * len(self.target_cols)
+        resolved_values = [None] * len(self.active_target_cols)
         if obj_values is not None:
             resolved_values = list(obj_values)
-
-        if getattr(self._model, "target_cols", None) is not None:
-            return self._model.predict_objective(
-                X=X,
-                obj_values=resolved_values,
+        if len(resolved_values) != len(self.active_target_cols):
+            raise ValueError(
+                "Objective values must align with the active inverse-analysis targets."
             )
-        return self._model.predict_objective(
-            X=X,
-            obj_value=resolved_values[0],
-        )
+
+        objectives = []
+        for target, value in zip(self.active_target_cols, resolved_values):
+            child = self._child_model(target)
+            normalized_value = self._normalize_class_objective(target, value)
+            objectives.append(
+                child.predict_objective(
+                    X=X,
+                    obj_value=normalized_value,
+                )
+            )
+        return pd.concat(objectives, axis=1)
 
 
 def _normalize_integer_search_settings(
@@ -186,6 +265,9 @@ def inverse_analysis(
     fix_values = [] if fix_values is None else list(fix_values)
     target_cols = [] if target_cols is None else list(target_cols)
 
+    resolved_targets = normalized_model.target_cols if not target_cols else target_cols
+    normalized_model.validate_objectives(resolved_targets, obj_directions)
+
     bounds_min, bounds_max, steps, dtypes, fix_values = default_settings(
         normalized_model,
         bounds_min,
@@ -209,8 +291,9 @@ def inverse_analysis(
         dtypes,
         steps,
         fix_values,
-        target_cols,
+        resolved_targets,
     )
+    normalized_model.set_active_targets(y_cols)
 
     sampler = get_sampler(sampler_type)
     if sampler is None:
