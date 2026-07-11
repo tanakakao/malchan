@@ -97,6 +97,7 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
     @router.post(
         "/models/{model_id}/inverse-analysis",
         response_model=InverseAnalysisResponse,
+        response_model_exclude_none=True,
         tags=["inverse-analysis"],
     )
     def run_inverse_analysis(
