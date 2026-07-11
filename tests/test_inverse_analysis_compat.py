@@ -10,6 +10,43 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+class TargetModel:
+    """Single-target child model used by a multi-output test double."""
+
+    def __init__(self, target, offset=0.0, task="regression", target_items=None):
+        """Initialize deterministic prediction behavior."""
+
+        self.target_col = target
+        self.offset = offset
+        self.task = task
+        self.target_items = target_items
+        self.received_obj_value = None
+
+    def predict(self, X=None, proba=False, idx2item=False):
+        """Return regression values or deterministic class probabilities."""
+
+        if self.task == "classification" and proba:
+            return pd.DataFrame(
+                {
+                    f"{self.target_col}_0": [0.25] * len(X),
+                    f"{self.target_col}_1": [0.75] * len(X),
+                }
+            )
+        return pd.DataFrame(
+            {
+                self.target_col: [
+                    float(value) + self.offset for value in X["x"]
+                ]
+            }
+        )
+
+    def predict_objective(self, X=None, obj_value=None):
+        """Record the target value received from the normalized view."""
+
+        self.received_obj_value = obj_value
+        return self.predict(X)
+
+
 class SharedMultiModel:
     """Multi-output test double storing training data in shared context."""
 
@@ -29,23 +66,10 @@ class SharedMultiModel:
             smiles_cols=[],
             comp_cols=[],
         )
-        self.received_obj_values = None
-
-    def predict(self, X=None, proba=False, idx2item=False):
-        """Return deterministic multi-output predictions."""
-
-        return pd.DataFrame(
-            {
-                "strength": [float(value) * 2 for value in X["x"]],
-                "cost": [float(value) + 1 for value in X["x"]],
-            }
-        )
-
-    def predict_objective(self, X=None, obj_values=None):
-        """Record multi-output objective values."""
-
-        self.received_obj_values = obj_values
-        return self.predict(X)
+        self.models = {
+            "strength": TargetModel("strength", offset=3.0),
+            "cost": TargetModel("cost", offset=1.0),
+        }
 
 
 class SingleModel:
@@ -60,6 +84,8 @@ class SingleModel:
         self.cat_cols = []
         self.smiles_cols = []
         self.comp_cols = []
+        self.task = "regression"
+        self.target_items = None
         self.received_obj_value = None
 
     def predict(self, X=None, proba=False, idx2item=False):
@@ -74,8 +100,8 @@ class SingleModel:
         return self.predict(X)
 
 
-def test_inverse_model_view_reads_shared_context() -> None:
-    """The normalized view should expose shared MLModelPipeline training data."""
+def test_inverse_model_view_reads_shared_context_and_child_models() -> None:
+    """The normalized view should use shared data and target child pipelines."""
 
     from malchan.inverse_analysis.models import _InverseAnalysisModelView
 
@@ -88,10 +114,29 @@ def test_inverse_model_view_reads_shared_context() -> None:
 
     assert view.target_cols == ["strength", "cost"]
     assert view.X.equals(model.context.X)
-    assert model.received_obj_values == [None, 100.0]
+    assert model.models["strength"].received_obj_value is None
+    assert model.models["cost"].received_obj_value == 100.0
     assert objective.to_dict(orient="records") == [
         {"strength": 6.0, "cost": 4.0}
     ]
+
+
+def test_inverse_model_view_supports_reordered_target_subset() -> None:
+    """Selected targets should be evaluated in the requested order."""
+
+    from malchan.inverse_analysis.models import _InverseAnalysisModelView
+
+    model = SharedMultiModel()
+    view = _InverseAnalysisModelView(model)
+    view.set_active_targets(["cost"])
+    objective = view.predict_objective(
+        pd.DataFrame({"x": [3.0]}),
+        obj_values=[5.0],
+    )
+
+    assert objective.columns.tolist() == ["cost"]
+    assert objective.to_dict(orient="records") == [{"cost": 4.0}]
+    assert model.models["cost"].received_obj_value == 5.0
 
 
 def test_inverse_model_view_maps_single_objective_signature() -> None:
@@ -109,6 +154,35 @@ def test_inverse_model_view_maps_single_objective_signature() -> None:
     assert view.target_cols == ["y"]
     assert model.received_obj_value == 5.0
     assert objective.to_dict(orient="records") == [{"y": 6.0}]
+
+
+def test_inverse_model_view_normalizes_numeric_class_label() -> None:
+    """Numeric class labels should map to probability-column string suffixes."""
+
+    from malchan.inverse_analysis.models import _InverseAnalysisModelView
+
+    child = TargetModel(
+        "quality",
+        task="classification",
+        target_items=[0, 1],
+    )
+    model = SimpleNamespace(
+        X=pd.DataFrame({"x": [1.0, 2.0]}),
+        target_col="quality",
+        num_cols=["x"],
+        cat_cols=[],
+        smiles_cols=[],
+        comp_cols=[],
+        task="classification",
+        target_items=[0, 1],
+        predict=child.predict,
+        predict_objective=child.predict_objective,
+    )
+    view = _InverseAnalysisModelView(model)
+    view.validate_objectives(["quality"], [1])
+    view.predict_objective(pd.DataFrame({"x": [3.0]}), obj_values=[1])
+
+    assert child.received_obj_value == "1"
 
 
 def test_integer_search_settings_are_cast_for_optuna() -> None:
