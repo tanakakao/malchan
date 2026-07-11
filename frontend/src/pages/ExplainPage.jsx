@@ -213,6 +213,13 @@ export default function ExplainPage() {
           </span>
         </div>
 
+        {!modelInfo && <p className="settings-note">先にModel画面でモデルを作成してください。</p>}
+        {modelInfo && summary && summary.status !== "ready" && summary.status !== "partial" && (
+          <p className="settings-note">
+            XAI状態は「{summary.status}」です。詳細を確認し、必要な場合だけ「XAIを再計算」を実行してください。
+          </p>
+        )}
+
         <div className="form-grid xai-controls">
           <label>目的変数
             <select value={xaiTarget} onChange={(event) => setXaiTarget(event.target.value)}>
