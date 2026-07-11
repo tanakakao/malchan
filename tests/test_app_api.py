@@ -1,14 +1,13 @@
-import pytest
-
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
+import importlib.util
 
 import pandas as pd
-from fastapi.testclient import TestClient
+import pytest
 
-from malchan.app import create_app
-from malchan.app.schemas import PredictRequest, TrainModelRequest
-from malchan.app.services import InMemoryModelService
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("fastapi") is None
+    or importlib.util.find_spec("httpx") is None,
+    reason="FastAPI API tests require the web and test extras.",
+)
 
 
 class FakePipeline:
@@ -47,8 +46,26 @@ def _train_payload() -> dict:
     }
 
 
+def _make_client(model_factory=FakePipeline, id_factory=None):
+    """Create a test client with an injected in-memory model service."""
+
+    from fastapi.testclient import TestClient
+
+    from malchan.app import create_app
+    from malchan.app.services import InMemoryModelService
+
+    service = InMemoryModelService(
+        model_factory=model_factory,
+        id_factory=id_factory,
+    )
+    return TestClient(create_app(model_service=service))
+
+
 def test_model_service_trains_and_predicts() -> None:
     """The service should connect API schemas to the model pipeline."""
+
+    from malchan.app.schemas import PredictRequest, TrainModelRequest
+    from malchan.app.services import InMemoryModelService
 
     pipeline = FakePipeline()
     service = InMemoryModelService(
@@ -70,11 +87,7 @@ def test_model_service_trains_and_predicts() -> None:
 def test_create_app_exposes_model_lifecycle() -> None:
     """FastAPI should expose training, listing, inference, and deletion."""
 
-    service = InMemoryModelService(
-        model_factory=FakePipeline,
-        id_factory=lambda: "model-1",
-    )
-    client = TestClient(create_app(model_service=service))
+    client = _make_client(id_factory=lambda: "model-1")
 
     health = client.get("/api/health")
     trained = client.post("/api/models", json=_train_payload())
@@ -100,11 +113,7 @@ def test_create_app_exposes_model_lifecycle() -> None:
 def test_train_request_rejects_missing_columns() -> None:
     """Request validation should report rows missing declared columns."""
 
-    client = TestClient(
-        create_app(
-            model_service=InMemoryModelService(model_factory=FakePipeline)
-        )
-    )
+    client = _make_client()
     payload = _train_payload()
     payload["data"][1].pop("x")
 
@@ -117,11 +126,7 @@ def test_train_request_rejects_missing_columns() -> None:
 def test_unknown_model_is_404() -> None:
     """Inference should return 404 for unknown model identifiers."""
 
-    client = TestClient(
-        create_app(
-            model_service=InMemoryModelService(model_factory=FakePipeline)
-        )
-    )
+    client = _make_client()
 
     response = client.post(
         "/api/models/missing/predict",
