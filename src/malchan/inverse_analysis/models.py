@@ -8,6 +8,87 @@ import pandas as pd
 from .utils import default_settings, get_result, get_sampler, objective, search_setting
 
 
+class _InverseAnalysisModelView:
+    """Expose one stable interface for single-output and multi-output models."""
+
+    def __init__(self, model: Any) -> None:
+        """Resolve training data and metadata from local or shared storage."""
+
+        self._model = model
+        target_cols = getattr(model, "target_cols", None)
+        if target_cols is None:
+            target_col = getattr(model, "target_col", None)
+            target_cols = [] if target_col is None else [target_col]
+        self.target_cols = list(target_cols)
+        if not self.target_cols:
+            raise ValueError("No target columns are available for inverse analysis.")
+
+        self.num_cols = self._resolve_columns("num_cols")
+        self.cat_cols = self._resolve_columns("cat_cols")
+        self.smiles_cols = self._resolve_columns("smiles_cols")
+        self.comp_cols = self._resolve_columns("comp_cols")
+        self.X = self._resolve_training_data()
+
+    def _resolve_columns(self, name: str) -> list[str]:
+        """Resolve one feature-column group from a model or shared context."""
+
+        value = getattr(self._model, name, None)
+        context = getattr(self._model, "context", None)
+        if value is None and context is not None:
+            value = getattr(context, name, None)
+        return [] if value is None else list(value)
+
+    def _resolve_training_data(self) -> pd.DataFrame:
+        """Return training features required for automatic search settings."""
+
+        training_data = getattr(self._model, "X", None)
+        context = getattr(self._model, "context", None)
+        if training_data is None and context is not None:
+            training_data = getattr(context, "X", None)
+        if training_data is None and hasattr(self._model, "_get_X"):
+            training_data = self._model._get_X()
+        if training_data is None:
+            raise ValueError(
+                "Training features are unavailable for inverse analysis."
+            )
+        return training_data
+
+    def predict(
+        self,
+        X: pd.DataFrame | None = None,
+        proba: bool = False,
+        idx2item: bool = False,
+    ) -> pd.DataFrame:
+        """Delegate model prediction through the normalized interface."""
+
+        return self._model.predict(
+            X=X,
+            proba=proba,
+            idx2item=idx2item,
+        )
+
+    def predict_objective(
+        self,
+        X: pd.DataFrame | None = None,
+        obj_values: list[Any] | None = None,
+    ) -> pd.DataFrame:
+        """Call the appropriate objective-prediction signature."""
+
+        resolved_values = [None] * len(self.target_cols)
+        if obj_values is not None:
+            resolved_values = list(obj_values)
+
+        if getattr(self._model, "target_cols", None) is not None:
+            return self._model.predict_objective(
+                X=X,
+                obj_values=resolved_values,
+            )
+        return self._model.predict_objective(
+            X=X,
+            obj_value=resolved_values[0],
+        )
+
+
 def inverse_analysis(
     model: Any,
     sampler_type: str = "TPE",
@@ -48,6 +129,7 @@ def inverse_analysis(
         Ranked candidate dataframe and the completed Optuna study.
     """
 
+    normalized_model = _InverseAnalysisModelView(model)
     cat_dict = {} if cat_dict is None else dict(cat_dict)
     constraint_cols = [] if constraint_cols is None else list(constraint_cols)
     obj_directions = [] if obj_directions is None else list(obj_directions)
@@ -59,7 +141,7 @@ def inverse_analysis(
     target_cols = [] if target_cols is None else list(target_cols)
 
     bounds_min, bounds_max, steps, dtypes, fix_values = default_settings(
-        model,
+        normalized_model,
         bounds_min,
         bounds_max,
         steps,
@@ -68,7 +150,7 @@ def inverse_analysis(
     )
 
     df_range, y_cols, x_cols, obj_cols, obj_values, directions = search_setting(
-        model,
+        normalized_model,
         obj_directions,
         bounds_min,
         bounds_max,
@@ -86,7 +168,7 @@ def inverse_analysis(
     study.optimize(
         lambda trial: objective(
             trial,
-            model=model,
+            model=normalized_model,
             cat_dict=cat_dict,
             y_cols=y_cols,
             obj_values=obj_values,
@@ -99,7 +181,7 @@ def inverse_analysis(
     )
 
     _, df_trials = get_result(
-        model,
+        normalized_model,
         study,
         df_range,
         constraint_cols,
