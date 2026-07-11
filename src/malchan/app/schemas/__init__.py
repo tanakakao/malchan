@@ -1,5 +1,11 @@
 """Request and response schemas for the FastAPI application."""
 
+from .comparison import (
+    CompareModelsRequest,
+    ModelComparisonResponse,
+    TargetComparisonResponse,
+    TuneBestModelRequest,
+)
 from .inverse_analysis import (
     InverseAnalysisRequest,
     InverseAnalysisResponse,
@@ -17,15 +23,19 @@ from .models import (
 )
 
 __all__ = [
+    "CompareModelsRequest",
     "HealthResponse",
     "InverseAnalysisRequest",
     "InverseAnalysisResponse",
     "InverseObjective",
+    "ModelComparisonResponse",
     "ModelInfo",
     "ModelListResponse",
     "NumericSearchRange",
     "PredictRequest",
     "PredictionResponse",
     "SumConstraint",
+    "TargetComparisonResponse",
     "TrainModelRequest",
+    "TuneBestModelRequest",
 ]
