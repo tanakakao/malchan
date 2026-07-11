@@ -104,6 +104,37 @@ def _validate_target_mapping(
         raise ValueError(f"{field_name} contains unknown targets: {unknown}")
 
 
+def _activate_best_models(registered: Any, result: Any) -> None:
+    """Promote selected best candidates for later prediction and inverse analysis."""
+
+    child_results = getattr(result, "results", None)
+    if child_results is None:
+        best_model = getattr(result, "best_model", None)
+        if best_model is None:
+            raise RuntimeError("No successful best model is available to activate.")
+        best_model.comparison_result = result
+        registered.model = best_model
+        target = registered.info.target_cols[0]
+        registered.info.model_names_by_target[target] = [result.best_model_name]
+        registered.info.model_names = [result.best_model_name]
+        return
+
+    model_map = getattr(registered.model, "models", None)
+    if model_map is None:
+        raise RuntimeError("The multi-output model does not expose target models.")
+    for target, child_result in child_results.items():
+        best_model = getattr(child_result, "best_model", None)
+        if best_model is None:
+            raise RuntimeError(
+                f"No successful best model is available for target {target!r}."
+            )
+        model_map[target] = best_model
+        registered.info.model_names_by_target[target] = [
+            child_result.best_model_name
+        ]
+    registered.model.comparison_result = result
+
+
 def run_comparison(
     self: Any,
     model_id: str,
@@ -171,6 +202,8 @@ def run_comparison(
         )
 
     registered.model.comparison_result = result
+    if request.activate_best:
+        _activate_best_models(registered, result)
     return _serialize_comparison(model_id, target_cols, result)
 
 
@@ -229,6 +262,8 @@ def tune_best_comparison(
         )
 
     registered.model.comparison_result = result
+    if request.activate_best:
+        _activate_best_models(registered, result)
     return _serialize_comparison(model_id, target_cols, result)
 
 
