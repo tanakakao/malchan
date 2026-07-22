@@ -178,6 +178,89 @@ def test_model_compare_ranks_candidates_and_retains_best_model(monkeypatch) -> N
     assert model.comparison_result is result
 
 
+def test_single_output_compare_fits_from_raw_data_before_comparing(monkeypatch) -> None:
+    """An unfitted single-output pipeline should accept fit inputs in compare."""
+
+    from malchan.models import compare as compare_module
+    from malchan.pipeline.analysis_extensions import install_analysis_extensions
+
+    class UnfittedSinglePipeline(FakeSinglePipeline):
+        """Pipeline double that records the initial fit invocation."""
+
+        def fit(self, df, **kwargs):
+            """Record raw-data fitting inputs and establish fitted state."""
+
+            self.fit_df = df
+            self.fit_kwargs = kwargs
+            self.__dict__.update(FakeSinglePipeline.fitted().__dict__)
+
+    install_analysis_extensions(UnfittedSinglePipeline, FakeMultiPipeline)
+    sentinel = SimpleNamespace()
+    monkeypatch.setattr(compare_module, "compare_single_output_model", lambda model, **kwargs: sentinel)
+
+    df = pd.DataFrame({"x": [1.0, 2.0], "y": [2.0, 4.0]})
+    model = UnfittedSinglePipeline()
+    result = model.compare(
+        df=df,
+        target_col="y",
+        task="regression",
+        num_cols=["x"],
+        cat_cols=[],
+        model_names=["model-a"],
+        poly=True,
+    )
+
+    assert result is sentinel
+    assert model.fit_df is df
+    assert model.fit_kwargs["model_names"] == ["model-a"]
+    assert model.fit_kwargs["poly"] is True
+    assert model.comparison_result is sentinel
+
+
+def test_multi_output_compare_fits_from_raw_data_before_comparing(monkeypatch) -> None:
+    """An unfitted multi-output pipeline should accept fit inputs in compare."""
+
+    from malchan.models import compare as compare_module
+    from malchan.pipeline.analysis_extensions import install_analysis_extensions
+
+    class UnfittedMultiPipeline:
+        """Pipeline double that records the initial fit invocation."""
+
+        def __init__(self):
+            """Initialize an unfitted pipeline."""
+
+            self.target_cols = None
+
+        def fit(self, df, **kwargs):
+            """Record raw-data fitting inputs and establish fitted state."""
+
+            self.fit_df = df
+            self.fit_kwargs = kwargs
+            self.target_cols = kwargs["target_cols"]
+
+    install_analysis_extensions(FakeSinglePipeline, UnfittedMultiPipeline)
+    sentinel = SimpleNamespace()
+    monkeypatch.setattr(compare_module, "compare_multi_output_model", lambda model, **kwargs: sentinel)
+
+    df = pd.DataFrame({"x": [1.0, 2.0], "y1": [2.0, 4.0], "y2": [3.0, 6.0]})
+    model = UnfittedMultiPipeline()
+    result = model.compare(
+        df=df,
+        target_cols=["y1", "y2"],
+        tasks=["regression", "regression"],
+        num_cols=["x"],
+        cat_cols=[],
+        model_names={"y1": ["model-a"], "y2": ["model-b"]},
+        poly=True,
+    )
+
+    assert result is sentinel
+    assert model.fit_df is df
+    assert model.fit_kwargs["model_names"] == [["model-a"], ["model-b"]]
+    assert model.fit_kwargs["poly"] is True
+    assert model.comparison_result is sentinel
+
+
 def test_compare_can_tune_only_best_model_from_arguments(monkeypatch) -> None:
     """compare(tune_best=True) should tune only the selected model family."""
 

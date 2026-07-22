@@ -90,8 +90,8 @@ def multi_output_inverse_analysis(
     if unknown_targets:
         raise ValueError(f"Unknown inverse-analysis targets: {unknown_targets}")
 
-    task_by_target = dict(zip(fitted_targets, self.tasks))
-    for target, objective in zip(resolved_targets, resolved_objectives):
+    task_by_target = dict(zip(fitted_targets, self.tasks, strict=True))
+    for target, objective in zip(resolved_targets, resolved_objectives, strict=True):
         if task_by_target[target] == "classification" and _is_direction(objective):
             raise ValueError(
                 f"Classification target {target!r} requires a fitted class label "
@@ -115,6 +115,7 @@ def single_output_compare(
     self: Any,
     model_names: Sequence[str] | None = None,
     *,
+    df: Any | None = None,
     model_params: Mapping[str, Mapping[str, Any] | None] | None = None,
     method: str = "kfold",
     n_splits: int = 5,
@@ -124,8 +125,55 @@ def single_output_compare(
     tuning_trials: int = 30,
     tuning_verbose: int = 0,
     continue_on_error: bool = True,
+    **fit_kwargs: Any,
 ) -> Any:
-    """Fit and rank candidates, optionally tuning only the selected best model."""
+    """Fit and rank single-output candidates, optionally from raw data.
+
+    Calling this method on an unfitted pipeline requires ``df`` and the
+    remaining arguments accepted by :meth:`SingleOutputMLModelPipeline.fit`,
+    such as ``target_col``, ``task``, ``num_cols``, and ``cat_cols``.  The
+    comparison candidates in ``model_names`` are also used to initialize the
+    pipeline.  On a fitted pipeline, data and fitting options must be omitted
+    and the existing fitted configuration is used unchanged.
+
+    Args:
+        model_names: Candidate estimator names. ``None`` compares all models.
+        df: Raw training dataframe when the pipeline has not been fitted.
+        model_params: Optional estimator parameters keyed by model name.
+        method: Cross-validation method, ``"kfold"`` or ``"loo"``.
+        n_splits: Number of K-fold splits.
+        metric: Ranking metric. Defaults to RMSE or F1.
+        tuning: Whether to tune every candidate before ranking.
+        tune_best: Whether to tune only the selected best candidate.
+        tuning_trials: Number of tuning trials.
+        tuning_verbose: OptunaSearchCV verbosity.
+        continue_on_error: Whether to retain failures and compare remaining candidates.
+        **fit_kwargs: Remaining arguments accepted by :meth:`fit` when ``df``
+            is supplied, including columns and preprocessing settings.
+
+    Returns:
+        A single-output model comparison result.
+
+    Raises:
+        ValueError: If raw data is absent before fitting or supplied after fitting.
+    """
+
+    fitted = getattr(self, "target_col", None) not in (None, "AD")
+    if not fitted:
+        if df is None:
+            raise ValueError("df is required when calling compare() before fit().")
+        task = fit_kwargs.get("task")
+        if task is None:
+            raise ValueError("task is required when calling compare() before fit().")
+        if model_names is None:
+            from ..models.compare import _available_model_names
+
+            initial_model_names = [_available_model_names(task)[0]]
+        else:
+            initial_model_names = list(model_names)
+        self.fit(df=df, model_names=initial_model_names, **fit_kwargs)
+    elif df is not None or fit_kwargs:
+        raise ValueError("Data and fitting options can only be supplied before fit().")
 
     from ..models.compare import compare_single_output_model
 
@@ -150,6 +198,7 @@ def multi_output_compare(
     self: Any,
     model_names: Sequence[str] | Mapping[str, Sequence[str]] | None = None,
     *,
+    df: Any | None = None,
     model_params: Mapping[str, Any] | None = None,
     method: str = "kfold",
     n_splits: int = 5,
@@ -159,8 +208,68 @@ def multi_output_compare(
     tuning_trials: int | Mapping[str, int] = 30,
     tuning_verbose: int = 0,
     continue_on_error: bool = True,
+    **fit_kwargs: Any,
 ) -> Any:
-    """Compare target models and optionally tune each selected best candidate."""
+    """Compare multi-output candidates, optionally fitting from raw data first.
+
+    On an unfitted pipeline, provide ``df`` plus the remaining arguments of
+    :meth:`MLModelPipeline.fit`, including ``target_cols``, ``tasks``, feature
+    columns, and preprocessing settings.  ``model_names`` selects comparison
+    candidates and initializes each target with its first candidate.  Fitted
+    pipelines retain their existing behavior and do not accept fitting inputs.
+
+    Args:
+        model_names: Shared or per-target candidate estimator names.
+        df: Raw training dataframe when the pipeline has not been fitted.
+        model_params: Shared or per-target estimator parameters.
+        method: Cross-validation method, ``"kfold"`` or ``"loo"``.
+        n_splits: Number of K-fold splits.
+        metric: Shared or per-target ranking metric.
+        tuning: Whether to tune every candidate before ranking.
+        tune_best: Whether to tune only each selected best candidate.
+        tuning_trials: Shared or per-target number of tuning trials.
+        tuning_verbose: OptunaSearchCV verbosity.
+        continue_on_error: Whether to retain failures and compare remaining candidates.
+        **fit_kwargs: Remaining arguments accepted by :meth:`fit` when ``df``
+            is supplied, including columns and preprocessing settings.
+
+    Returns:
+        A multi-output model comparison result.
+
+    Raises:
+        ValueError: If raw data is absent before fitting or supplied after fitting.
+    """
+
+    fitted = bool(getattr(self, "target_cols", None))
+    if not fitted:
+        if df is None:
+            raise ValueError("df is required when calling compare() before fit().")
+        target_cols = fit_kwargs.get("target_cols")
+        tasks = fit_kwargs.get("tasks")
+        if target_cols is None or tasks is None:
+            raise ValueError(
+                "target_cols and tasks are required when calling compare() before fit()."
+            )
+        target_cols = list(target_cols)
+        task_list = [tasks] * len(target_cols) if isinstance(tasks, str) else list(tasks)
+        if len(target_cols) != len(task_list):
+            raise ValueError("target_cols and tasks must have the same length.")
+
+        from ..models.compare import _available_model_names
+
+        initial_model_names = []
+        for target, task in zip(target_cols, task_list, strict=True):
+            candidates = (
+                model_names.get(target)
+                if isinstance(model_names, Mapping)
+                else model_names
+            )
+            initial_model_names.append(
+                [_available_model_names(task)[0]] if candidates is None else list(candidates)
+            )
+        self.fit(df=df, model_names=initial_model_names, **fit_kwargs)
+    elif df is not None or fit_kwargs:
+        raise ValueError("Data and fitting options can only be supplied before fit().")
 
     from ..models.compare import compare_multi_output_model
 

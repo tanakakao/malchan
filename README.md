@@ -112,6 +112,52 @@ print(pred)
 
 `compare()` は、現在のモデルが保持する学習データ、列定義、材料特徴量、前処理設定を再利用します。候補ごとに同じ交差検証条件で学習・評価し、回帰では既定でテスト RMSE の昇順、分類ではテスト F1 の降順に順位付けします。
 
+### 学習前のデータから直接比較
+
+`fit()` 前の `SingleOutputMLModelPipeline` でも、`compare()` に `df` と `fit()` で指定する列定義・前処理設定を渡すことで比較を開始できます。この場合、比較前にパイプラインを初期学習し、指定した候補を同じ設定で交差検証します。`model_names` は初期学習と比較の候補の両方に使用されます。
+
+```python
+comparison = SingleOutputMLModelPipeline().compare(
+    df=df,
+    target_col="y",
+    task="regression",
+    num_cols=["x1", "x2"],
+    cat_cols=[],
+    num_impute_type="mean",
+    num_scale_type="StandardScaler",
+    poly=True,
+    poly_degree=2,
+    model_names=["線形回帰", "Ridge", "ランダムフォレスト回帰"],
+    n_splits=5,
+)
+
+print(comparison.ranking)
+```
+
+複数目的の場合も、`MLModelPipeline` の未学習インスタンスに `df`、`target_cols`、`tasks`、特徴量カラム、前処理設定を渡せます。`model_names` には全目的で共通の候補リスト、または目的変数ごとの候補辞書を指定します。
+
+```python
+from malchan.models import MLModelPipeline
+
+comparison = MLModelPipeline().compare(
+    df=df,
+    target_cols=["strength", "cost"],
+    tasks=["regression", "regression"],
+    num_cols=["x1", "x2"],
+    cat_cols=[],
+    num_scale_type="StandardScaler",
+    model_names={
+        "strength": ["Ridge", "ランダムフォレスト回帰"],
+        "cost": ["線形回帰", "LightGBM"],
+    },
+    n_splits=5,
+)
+
+print(comparison.ranking)
+```
+
+学習済みのパイプラインでは従来どおり `df` や列定義を渡さずに `compare()` を呼び出します。
+
 ```python
 comparison = model.compare(
     model_names=[
