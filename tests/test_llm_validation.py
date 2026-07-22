@@ -157,3 +157,26 @@ def test_validator_requires_comparison_for_multiple_non_ensemble_models():
         issue.code == "multiple_models_without_ensemble"
         for issue in result.issues
     )
+
+
+def test_validator_rejects_ensemble_member_parameters_from_target_mapping():
+    suggestion = TrainingSuggestion(
+        training=TrainingConfigSuggestion(
+            model_names_by_target={"y": ["Ridge"]},
+            model_params_by_target={"y": {"alpha": 1.0}},
+            ensemble=True,
+            ens_type="バギング",
+            base_model="Ridge",
+        )
+    )
+
+    result = SuggestionValidator(_registry()).validate(
+        _regression_summary(),
+        suggestion,
+    )
+
+    assert result.status == "rejected"
+    assert any(
+        issue.code == "ambiguous_ensemble_parameters"
+        for issue in result.issues
+    )
