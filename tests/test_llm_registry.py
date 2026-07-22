@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from malchan.llm import ModelSpec, ModelSpecRegistry
@@ -45,3 +47,17 @@ def test_model_spec_validates_allowed_parameters():
 
     assert spec.accepts_parameter("n_neighbors")
     assert not spec.accepts_parameter("max_depth")
+
+
+def test_model_spec_to_dict_serializes_non_json_default_values():
+    spec = ModelSpec(
+        name="Gaussian process",
+        task="regression",
+        family="gaussian_process",
+        default_params={"kernel": object()},
+    )
+
+    payload = spec.to_dict()
+
+    assert isinstance(payload["default_params"]["kernel"], str)
+    json.dumps(payload)
