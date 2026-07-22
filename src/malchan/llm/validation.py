@@ -234,9 +234,8 @@ class SuggestionValidator:
                 )
             )
         for target in summary.target_columns:
-            names = config.model_names_by_target.get(target) or []
             params = config.model_params_by_target.get(target)
-            if len(names) > 1 and params is not None:
+            if params is not None:
                 issues.append(
                     ValidationIssue(
                         severity="error",
@@ -245,10 +244,10 @@ class SuggestionValidator:
                             f"training.model_params_by_target.{target}"
                         ),
                         message=(
-                            "The current training schema has one parameter "
-                            "dictionary per target, so parameters for multiple "
-                            "ensemble members are ambiguous. Use default member "
-                            "parameters for now."
+                            "The current training API exposes one parameter "
+                            "dictionary per target, while the ensemble builder "
+                            "requires parameters aligned to each member model. "
+                            "Use default ensemble-member parameters for now."
                         ),
                     )
                 )
