@@ -250,3 +250,47 @@ def test_lightgbm_single_tuning_passes_categorical_feature(monkeypatch):
 
     assert captured["fit_params"]["predictor__categorical_feature"] == [0]
     assert "predictor__callbacks" in captured["fit_params"]
+
+
+def test_gradient_boosting_defaults_use_valid_library_parameter_names() -> None:
+    """XGBoostとCatBoostのデフォルトは有効なパラメータ名だけを使用する。"""
+    pytest.importorskip("catboost")
+    pytest.importorskip("xgboost")
+    from malchan.models.pipelines.predictor_pipeline import make_model
+    from malchan.models.utils import cls_default_params, reg_default_params
+
+    xgboost_model = make_model("XGBoost", "regression", reg_default_params["XGBoost"])
+    catboost_model = make_model("CatBoost", "classification", cls_default_params["CatBoost"])
+
+    assert xgboost_model.get_params()["min_child_weight"] == 1
+    assert "min_child_samples" not in xgboost_model.get_params()
+    assert catboost_model.get_params()["depth"] == 6
+    assert "max_depth" not in catboost_model.get_params()
+
+
+def test_logistic_grid_only_contains_compatible_solver_penalty_pairs() -> None:
+    """ロジスティック回帰の探索範囲はsolverとpenaltyの非互換組合せを作らない。"""
+    pytest.importorskip("optuna")
+    from malchan.models.utils import get_param_grid_cls
+
+    params = get_param_grid_cls("ロジスティック回帰")
+
+    assert params["predictor__solver"].choices == ("liblinear",)
+    assert set(params["predictor__penalty"].choices) == {"l1", "l2"}
+
+
+def test_knn_grid_is_limited_to_each_cv_training_fold() -> None:
+    """K近傍法の候補近傍数は最小のCV学習fold数を超えない。"""
+    pytest.importorskip("optuna")
+    from malchan.models.training import adjust_param_grid_for_data
+    from malchan.models.utils import get_param_grid_reg
+
+    params = adjust_param_grid_for_data(
+        get_param_grid_reg("K近傍法"),
+        ["K近傍法"],
+        [[0.0], [1.0], [2.0]],
+        cv=3,
+    )
+
+    assert params["predictor__n_neighbors"].low == 1
+    assert params["predictor__n_neighbors"].high == 2

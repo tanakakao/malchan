@@ -113,7 +113,7 @@ reg_default_params = {
     '線形回帰':{
     },
     'Ridge':{
-        'alpha': 1e-2
+        'alpha': 1.0
     },
     'Lasso':{
         'alpha': 1e-2
@@ -127,7 +127,7 @@ reg_default_params = {
         'n_components': 2
     },
     'ロバスト回帰':{
-        'epsilon': 2
+        'epsilon': 1.35
     },
     '一般化線形モデル':{
         'alpha': 1e-2,
@@ -172,41 +172,48 @@ reg_default_params = {
         'min_samples_leaf': 2,
     },
     'XGBoost':{
-        'n_estimators': 150, # 予測器の数
-        'max_depth': 6, # 最大深さ
-        'learning_rate': 0.1, # 学習率
-        'reg_alpha': 0.0, # L1正則化項の係数
-        'reg_lambda': 0.0, # L2正則化項の係数
+        'n_estimators': 300,
+        'max_depth': 6,
+        'learning_rate': 0.05,
+        'reg_alpha': 0.0,
+        'reg_lambda': 1.0,
         'subsample': 0.8,
-        'min_child_samples': 2,
-        'verbose': -1
+        'colsample_bytree': 0.8,
+        'min_child_weight': 1,
+        'n_jobs': -1,
+        'random_state': 42,
+        'verbosity': 0
     },
     'LightGBM': {
-        'n_estimators': 250,  # 予測器の数（デフォルトより少し多め）
-        'max_depth': 6,  # デフォルト（-1）より制限をつけるが、20よりは浅めに
-        'num_leaves': 7,  # デフォルトに戻す
-        'learning_rate': 0.3,  # 変更なし
-        'reg_alpha': 0.02,  # 正則化を少し入れる（デフォルト 0.0）
-        'reg_lambda': 0.02,  # 正則化を少し入れる（デフォルト 0.0）
-        'colsample_bytree': 1.0,  # サブサンプリングをオフ
-        'subsample': 1.0,  # サブサンプリングをオフ
-        'min_child_samples': 3,  # デフォルトに戻す
+        'n_estimators': 300,
+        'max_depth': -1,
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        'reg_alpha': 0.0,
+        'reg_lambda': 0.0,
+        'colsample_bytree': 1.0,
+        'subsample': 1.0,
+        'min_child_samples': 20,
+        'n_jobs': -1,
+        'random_state': 42,
         'verbose': -1
     },
     'CatBoost':{
-        'learning_rate': 1e-2,
-        'iterations': 50,
-        'max_depth' : 6,
-        'l2_leaf_reg': 1e-2,
-        'bagging_temperature': 0,
+        'learning_rate': 0.05,
+        'iterations': 500,
+        'depth': 6,
+        'l2_leaf_reg': 3.0,
+        'random_seed': 42,
+        'verbose': False,
     },
     'サポートベクター回帰':{
         'kernel': 'rbf',
-        'C': 1e-3,
-        'epsilon': 1e-3
+        'C': 1.0,
+        'epsilon': 0.1,
+        'gamma': 'scale'
     },
     'K近傍法':{
-        'n_neighbors': 3,
+        'n_neighbors': 5,
         'weights': 'distance'
     },
     'ガウス過程回帰':{
@@ -233,12 +240,15 @@ reg_default_params = {
     '直交マッチング追跡':{
     },
     '多層パーセプトロン':{
-        'hidden_layer_sizes': (10,10),
-        'activation': "identity",
+        'hidden_layer_sizes': (100,),
+        'activation': "relu",
         'solver': 'adam',
-        'alpha':0.0001,
-        'learning_rate_init':0.01,
-        'learning_rate': "constant"
+        'alpha': 1e-4,
+        'learning_rate_init': 1e-3,
+        'learning_rate': "constant",
+        'early_stopping': True,
+        'max_iter': 500,
+        'random_state': 42
     }
 }
 
@@ -263,8 +273,10 @@ CLS_MODEL_DICT = {
 
 cls_default_params = {
     'ロジスティック回帰':{
-        'penalty' : 'l2',
-        'C': 1.0
+        'penalty': 'l2',
+        'C': 1.0,
+        'solver': 'lbfgs',
+        'max_iter': 1000
     },
     # 'Ridge':{
     #     'alpha': 1e-2
@@ -307,41 +319,48 @@ cls_default_params = {
         'min_samples_leaf': 2,
     },
     'XGBoost':{
-        'n_estimators': 150, # 予測器の数
-        'max_depth': 5, # 最大深さ
-        'learning_rate': 0.1, # 学習率
-        'reg_alpha': 0.0, # L1正則化項の係数
-        'reg_lambda': 0.0, # L2正則化項の係数
+        'n_estimators': 300,
+        'max_depth': 6,
+        'learning_rate': 0.05,
+        'reg_alpha': 0.0,
+        'reg_lambda': 1.0,
         'subsample': 0.8,
-        'min_child_samples': 2,
-        'verbose': -1
+        'colsample_bytree': 0.8,
+        'min_child_weight': 1,
+        'n_jobs': -1,
+        'random_state': 42,
+        'verbosity': 0
     },
     'LightGBM': {
-        'n_estimators': 250,  # 予測器の数（デフォルトより少し多め）
-        'max_depth': -1,  # デフォルト（-1）より制限をつけるが、20よりは浅めに
-        'num_leaves': 7,  # デフォルトに戻す
-        'learning_rate': 0.3,  # 変更なし
-        'reg_alpha': 0.02,  # 正則化を少し入れる（デフォルト 0.0）
-        'reg_lambda': 0.02,  # 正則化を少し入れる（デフォルト 0.0）
-        'colsample_bytree': 1.0,  # サブサンプリングをオフ
-        'subsample': 1.0,  # サブサンプリングをオフ
-        'min_child_samples': 3,  # デフォルトに戻す
+        'n_estimators': 300,
+        'max_depth': -1,
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        'reg_alpha': 0.0,
+        'reg_lambda': 0.0,
+        'colsample_bytree': 1.0,
+        'subsample': 1.0,
+        'min_child_samples': 20,
+        'n_jobs': -1,
+        'random_state': 42,
         'verbose': -1
     },
     'CatBoost':{
-        'learning_rate': 1e-2,
-        'iterations': 100,
-        'max_depth' :5,
-        'l2_leaf_reg': 1e-2,
-        'bagging_temperature': 0,
+        'learning_rate': 0.05,
+        'iterations': 500,
+        'depth': 6,
+        'l2_leaf_reg': 3.0,
+        'random_seed': 42,
+        'verbose': False,
     },
     'サポートベクターマシン':{
         'kernel': 'rbf',
-        'C': 1e-3,
+        'C': 1.0,
+        'gamma': 'scale',
         'probability': True
     },
     'K近傍法':{
-        'n_neighbors': 3,
+        'n_neighbors': 5,
         'weights': 'distance'
     },
     'ガウス過程分類':{
@@ -353,12 +372,15 @@ cls_default_params = {
     #     'C': 0.1,
     # },
     '多層パーセプトロン':{
-        'hidden_layer_sizes': (10,10),
-        'activation': "identity",
+        'hidden_layer_sizes': (100,),
+        'activation': "relu",
         'solver': 'adam',
-        'alpha':0.0001,
-        'learning_rate_init':0.01,
-        'learning_rate': "constant"
+        'alpha': 1e-4,
+        'learning_rate_init': 1e-3,
+        'learning_rate': "constant",
+        'early_stopping': True,
+        'max_iter': 500,
+        'random_state': 42
     }
 }
 
@@ -520,8 +542,8 @@ def get_param_grid_reg(model_name: str) -> dict:
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'Gradient Boosting': {
-            'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__n_estimators': IntDistribution(100, 1000, step=50),
             'predictor__max_depth': IntDistribution(3, 30),
             'predictor__max_features': CategoricalDistribution(['sqrt', None]),
             'predictor__min_samples_split': IntDistribution(2, 10),
@@ -534,10 +556,10 @@ def get_param_grid_reg(model_name: str) -> dict:
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'XGBoost': {
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
-            'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
-            'predictor__gamma': FloatDistribution(0, 1, step=0.1),
+            'predictor__n_estimators': IntDistribution(100, 800, step=50),
+            'predictor__max_depth': IntDistribution(2, 12),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__gamma': FloatDistribution(1e-8, 10, log=True),
             'predictor__reg_alpha': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__reg_lambda': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__min_child_weight': IntDistribution(1, 10),
@@ -547,23 +569,22 @@ def get_param_grid_reg(model_name: str) -> dict:
             'predictor__colsample_bynode': FloatDistribution(0.1, 1.0, step=0.1)
         },
         'LightGBM': {
-            'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
-            'predictor__num_leaves': IntDistribution(5, 50),
-            'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__min_child_samples': IntDistribution(2, 50),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__n_estimators': IntDistribution(100, 1000, step=50),
+            'predictor__num_leaves': IntDistribution(8, 128),
+            'predictor__max_depth': CategoricalDistribution([-1, 3, 4, 5, 6, 8, 10, 12]),
+            'predictor__min_child_samples': IntDistribution(5, 100),
             'predictor__reg_alpha': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__reg_lambda': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__colsample_bytree': FloatDistribution(0.1, 1.0, step=0.1),
             # 'predictor__subsample': FloatDistribution(0.5, 1.0, step=0.1)
         },
         'CatBoost': {
-            'predictor__learning_rate': FloatDistribution(1e-5, 1., log=True),
-            'predictor__iterations': IntDistribution(50, 300, step=50),
-            'predictor__max_depth': IntDistribution(2, 15),
-            'predictor__min_child_samples': IntDistribution(2, 50),
-            'predictor__colsample_bylevel': FloatDistribution(0.1, 1.0, step=0.1),
-            'predictor__l2_leaf_reg': FloatDistribution(1e-5, 0.9, log=True),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__iterations': IntDistribution(200, 1000, step=50),
+            'predictor__depth': IntDistribution(4, 10),
+            'predictor__random_strength': FloatDistribution(1e-3, 10, log=True),
+            'predictor__l2_leaf_reg': FloatDistribution(1e-1, 1e2, log=True),
             # 'predictor__subsample': FloatDistribution(0.2, 0.8, step=0.1),
         },
         'サポートベクター回帰': {
@@ -601,10 +622,10 @@ def get_param_grid_reg(model_name: str) -> dict:
         },
         '多層パーセプトロン': {
             'predictor__hidden_layer_sizes': CategoricalDistribution(get_mlp_hidden_layer_size_candidates()),
-            'predictor__activation': CategoricalDistribution(["identity", "logistic", "tanh", "relu"]),
+            'predictor__activation': CategoricalDistribution(["relu", "tanh", "logistic"]),
             'predictor__solver': CategoricalDistribution(["lbfgs", "adam"]),
-            'predictor__alpha':FloatDistribution(1e-8, 1e-2, log=True),
-            'predictor__learning_rate_init':FloatDistribution(1e-8, 1e-2, log=True),
+            'predictor__alpha': FloatDistribution(1e-6, 1e-1, log=True),
+            'predictor__learning_rate_init': FloatDistribution(1e-4, 1e-2, log=True),
             'predictor__learning_rate': CategoricalDistribution(["constant"]),
         }
     }
@@ -636,8 +657,9 @@ def get_param_grid_cls(model_name: str) -> dict:
     
     param_grids = {
         'ロジスティック回帰': {
-            'predictor__penalty': CategoricalDistribution(['l1','l2','elasticnet',None]),
-            'predictor__C': FloatDistribution(1e-3, 1000, log=True)
+            'predictor__penalty': CategoricalDistribution(['l1', 'l2']),
+            'predictor__solver': CategoricalDistribution(['liblinear']),
+            'predictor__C': FloatDistribution(1e-4, 1e2, log=True)
         },
         # 'Ridge': {
         #     'predictor__alpha': FloatDistribution(1e-3, 1e+3, log=True)
@@ -663,8 +685,8 @@ def get_param_grid_cls(model_name: str) -> dict:
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'Gradient Boosting': {
-            'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__n_estimators': IntDistribution(100, 1000, step=50),
             'predictor__max_depth': IntDistribution(3, 30),
             'predictor__max_features': CategoricalDistribution(['sqrt', None]),
             'predictor__min_samples_split': IntDistribution(2, 10),
@@ -677,10 +699,10 @@ def get_param_grid_cls(model_name: str) -> dict:
             'predictor__min_samples_leaf': IntDistribution(1, 4)
         },
         'XGBoost': {
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
-            'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
-            'predictor__gamma': FloatDistribution(0, 1, step=0.1),
+            'predictor__n_estimators': IntDistribution(100, 800, step=50),
+            'predictor__max_depth': IntDistribution(2, 12),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__gamma': FloatDistribution(1e-8, 10, log=True),
             'predictor__reg_alpha': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__reg_lambda': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__min_child_weight': IntDistribution(1, 10),
@@ -690,23 +712,22 @@ def get_param_grid_cls(model_name: str) -> dict:
             'predictor__colsample_bynode': FloatDistribution(0.1, 1.0, step=0.1)
         },
         'LightGBM': {
-            'predictor__learning_rate': FloatDistribution(1e-3, 1., log=True),
-            'predictor__n_estimators': IntDistribution(50, 300, step=50),
-            'predictor__num_leaves': IntDistribution(5, 50),
-            'predictor__max_depth': IntDistribution(3, 30),
-            'predictor__min_child_samples': IntDistribution(2, 50),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__n_estimators': IntDistribution(100, 1000, step=50),
+            'predictor__num_leaves': IntDistribution(8, 128),
+            'predictor__max_depth': CategoricalDistribution([-1, 3, 4, 5, 6, 8, 10, 12]),
+            'predictor__min_child_samples': IntDistribution(5, 100),
             'predictor__reg_alpha': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__reg_lambda': FloatDistribution(1e-3, 1e+1, log=True),
             'predictor__colsample_bytree': FloatDistribution(0.1, 1.0, step=0.1),
             # 'predictor__subsample': FloatDistribution(0.5, 1.0, step=0.1)
         },
         'CatBoost': {
-            'predictor__learning_rate': FloatDistribution(1e-5, 1., log=True),
-            'predictor__iterations': IntDistribution(50, 300, step=50),
-            'predictor__max_depth': IntDistribution(2, 15),
-            'predictor__min_child_samples': IntDistribution(2, 50),
-            'predictor__colsample_bylevel': FloatDistribution(0.1, 1.0, step=0.1),
-            'predictor__l2_leaf_reg': FloatDistribution(1e-5, 0.9, log=True),
+            'predictor__learning_rate': FloatDistribution(1e-2, 3e-1, log=True),
+            'predictor__iterations': IntDistribution(200, 1000, step=50),
+            'predictor__depth': IntDistribution(4, 10),
+            'predictor__random_strength': FloatDistribution(1e-3, 10, log=True),
+            'predictor__l2_leaf_reg': FloatDistribution(1e-1, 1e2, log=True),
             # 'predictor__subsample': FloatDistribution(0.2, 0.8, step=0.1),
         },
         'サポートベクターマシン': {
@@ -729,10 +750,10 @@ def get_param_grid_cls(model_name: str) -> dict:
         # },
         '多層パーセプトロン': {
             'predictor__hidden_layer_sizes': CategoricalDistribution(get_mlp_hidden_layer_size_candidates()),
-            'predictor__activation': CategoricalDistribution(["identity", "logistic", "tanh", "relu"]),
+            'predictor__activation': CategoricalDistribution(["relu", "tanh", "logistic"]),
             'predictor__solver': CategoricalDistribution(["lbfgs", "adam"]),
-            'predictor__alpha':FloatDistribution(1e-8, 1e-2, log=True),
-            'predictor__learning_rate_init':FloatDistribution(1e-8, 1e-2, log=True),
+            'predictor__alpha': FloatDistribution(1e-6, 1e-1, log=True),
+            'predictor__learning_rate_init': FloatDistribution(1e-4, 1e-2, log=True),
             'predictor__learning_rate': CategoricalDistribution(["constant"]),
         }
     }

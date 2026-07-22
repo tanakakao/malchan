@@ -197,6 +197,9 @@ def adjust_param_grid_for_data(
 ) -> Dict[str, Any]:
     """入力データのサイズに合わせて探索範囲を安全な値へ調整する。
 
+    PLSの潜在成分数とK近傍法の近傍数は、各交差検証foldで利用できる
+    学習データ数を超えない値に制限する。
+
     Args:
         params (Dict[str, Any]): OptunaSearchCVに渡すハイパーパラメータ探索範囲。
         model_names (List[str]): チューニング対象のモデル名。
@@ -212,16 +215,23 @@ def adjust_param_grid_for_data(
 
     for key, distribution in list(adjusted_params.items()):
         is_pls_components = key.endswith("__n_components") and "PLS回帰" in model_names
-        if is_pls_components and isinstance(distribution, IntDistribution):
+        is_neighbors = key.endswith("__n_neighbors") and "K近傍法" in model_names
+        if not isinstance(distribution, IntDistribution):
+            continue
+
+        if is_pls_components:
             high = min(distribution.high, n_features, min_train_samples)
-            if high < distribution.low:
-                high = distribution.low
-            adjusted_params[key] = IntDistribution(
-                low=distribution.low,
-                high=high,
-                step=distribution.step,
-                log=distribution.log,
-            )
+        elif is_neighbors:
+            high = min(distribution.high, min_train_samples)
+        else:
+            continue
+
+        adjusted_params[key] = IntDistribution(
+            low=distribution.low,
+            high=max(distribution.low, high),
+            step=distribution.step,
+            log=distribution.log,
+        )
 
     return adjusted_params
 
