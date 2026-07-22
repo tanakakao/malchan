@@ -8,12 +8,29 @@ models that malchan can construct for each task.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
 TaskType = Literal["regression", "classification", "AD"]
 ComputationalCost = Literal["low", "medium", "high"]
+
+
+def _to_jsonable(value: Any) -> Any:
+    """Convert registry metadata to values accepted by ``json.dumps``."""
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Mapping):
+        return {
+            str(key): _to_jsonable(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [_to_jsonable(item) for item in value]
+    if hasattr(value, "tolist"):
+        return _to_jsonable(value.tolist())
+    return repr(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +79,7 @@ class ModelSpec:
         """Return a JSON-friendly representation."""
 
         data = asdict(self)
-        data["default_params"] = dict(self.default_params)
+        data["default_params"] = _to_jsonable(dict(self.default_params))
         data["allowed_params"] = sorted(self.allowed_params)
         data["notes"] = list(self.notes)
         return data
@@ -91,8 +108,8 @@ class ModelSpecRegistry:
         key = (spec.task, spec.name)
         if key in self._specs and not replace:
             raise ValueError(
-                f"Model specification is already registered for task={spec.task!r}, "
-                f"name={spec.name!r}."
+                f"Model specification is already registered for task="
+                f"{spec.task!r}, name={spec.name!r}."
             )
         self._specs[key] = spec
 
@@ -106,7 +123,9 @@ class ModelSpecRegistry:
         try:
             return self._specs[(task, name)]
         except KeyError as exc:
-            raise KeyError(f"Unknown model {name!r} for task {task!r}.") from exc
+            raise KeyError(
+                f"Unknown model {name!r} for task {task!r}."
+            ) from exc
 
     def find(self, task: str, name: str) -> ModelSpec | None:
         """Return a registered specification or ``None``."""
@@ -128,7 +147,10 @@ class ModelSpecRegistry:
 
         return [spec.name for spec in self.list(task)]
 
-    def to_prompt_payload(self, task: str | None = None) -> list[dict[str, Any]]:
+    def to_prompt_payload(
+        self,
+        task: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Return compact metadata suitable for a structured planner prompt."""
 
         return [spec.to_dict() for spec in self.list(task)]
@@ -149,7 +171,10 @@ def _constructor_parameters(model_class: type[Any]) -> frozenset[str]:
         for name, parameter in signature.parameters.items()
         if name != "self"
         and parameter.kind
-        not in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+        not in {
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        }
     )
 
 
@@ -163,9 +188,25 @@ def _model_family(name: str) -> str:
         return "gaussian_process"
     if "フォレスト" in name or "trees" in normalized:
         return "tree_ensemble"
-    if any(token in normalized for token in ("boost", "xgboost", "lightgbm", "catboost")):
+    if any(
+        token in normalized
+        for token in ("boost", "xgboost", "lightgbm", "catboost")
+    ):
         return "boosting"
-    if any(token in normalized for token in ("ridge", "lasso", "elastic")) or "線形" in name:
+    if (
+        any(
+            token in normalized
+            for token in ("ridge", "lasso", "elastic")
+        )
+        or "線形" in name
+        or name
+        in {
+            "ロジスティック回帰",
+            "ロバスト回帰",
+            "オンライン学習",
+            "直交マッチング追跡",
+        }
+    ):
         return "linear"
     if "サポートベクター" in name:
         return "svm"
@@ -216,7 +257,10 @@ def build_runtime_model_registry() -> ModelSpecRegistry:
         for name, model_class in model_dict.items():
             family = _model_family(name)
             defaults = dict(default_params.get(name, {}))
-            allowed = _constructor_parameters(model_class) | frozenset(defaults)
+            allowed = (
+                _constructor_parameters(model_class)
+                | frozenset(defaults)
+            )
             registry.register(
                 ModelSpec(
                     name=name,
@@ -239,14 +283,22 @@ def build_runtime_model_registry() -> ModelSpecRegistry:
                         and hasattr(model_class, "predict_proba")
                     ),
                     supports_feature_importance=family
-                    in {"linear", "tree", "tree_ensemble", "boosting"},
+                    in {
+                        "linear",
+                        "tree",
+                        "tree_ensemble",
+                        "boosting",
+                    },
                     optional_dependency=_optional_dependency(name),
                     recommended_min_samples=(
-                        20 if family in {"tree_ensemble", "boosting"} else 5
+                        20
+                        if family in {"tree_ensemble", "boosting"}
+                        else 5
                     ),
                     computational_cost=(
                         "high"
-                        if family in {"gaussian_process", "neural_network"}
+                        if family
+                        in {"gaussian_process", "neural_network"}
                         else "medium"
                     ),
                 )
