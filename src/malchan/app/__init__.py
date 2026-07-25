@@ -7,6 +7,7 @@ _LAZY_EXPORTS = {
     "create_app": "malchan.app.api",
     "AppSettings": "malchan.app.core",
     "get_settings": "malchan.app.core",
+    "dataframe_to_records": "malchan.app.dataframe",
 }
 
 __all__ = list(_LAZY_EXPORTS)
