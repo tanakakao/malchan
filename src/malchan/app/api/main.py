@@ -1,20 +1,51 @@
 """FastAPI application factory for malchan."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from malchan import __version__
 from malchan.app.core import AppSettings, get_settings
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
-def create_app(settings: AppSettings | None = None, model_service: Any | None = None) -> Any:
-    """Create and configure the FastAPI and optional React application."""
+
+def create_app(
+    settings: AppSettings | None = None,
+    model_service: Any | None = None,
+    *,
+    title: str | None = None,
+    version: str | None = None,
+) -> "FastAPI":
+    """Create and configure the FastAPI and optional React application.
+
+    The factory can be imported from :mod:`malchan.app` and used by Uvicorn,
+    Python scripts, tests, or an in-process ``TestClient`` in Jupyter.
+
+    Args:
+        settings: Runtime settings controlling the API prefix, CORS, debug mode,
+            and optional React frontend mounting. Environment-backed defaults
+            are used when omitted.
+        model_service: Optional model service implementation. A process-local
+            :class:`~malchan.app.services.InMemoryModelService` is created when
+            omitted.
+        title: Optional OpenAPI application title. This overrides
+            ``settings.app_name`` without mutating the settings object.
+        version: Optional OpenAPI and health-endpoint version. The installed
+            package version is used when omitted.
+
+    Returns:
+        Configured FastAPI application.
+
+    Raises:
+        RuntimeError: If the FastAPI optional dependencies are not installed.
+    """
 
     try:
         from fastapi import FastAPI
         from fastapi.middleware.cors import CORSMiddleware
     except ImportError as exc:
         raise RuntimeError(
-            "FastAPI support requires installing malchan with the 'web' extra."
+            "FastAPI support requires installing malchan with the 'api' or 'web' extra."
         ) from exc
 
     from malchan.app.api.routes import create_api_router
@@ -23,10 +54,13 @@ def create_app(settings: AppSettings | None = None, model_service: Any | None = 
 
     resolved_settings = settings or get_settings()
     resolved_service = model_service or InMemoryModelService()
+    resolved_title = title or resolved_settings.app_name
+    resolved_version = version or __version__
+
     app = FastAPI(
-        title=resolved_settings.app_name,
+        title=resolved_title,
         debug=resolved_settings.debug,
-        version=__version__,
+        version=resolved_version,
     )
     if resolved_settings.cors_origins:
         app.add_middleware(
@@ -37,11 +71,13 @@ def create_app(settings: AppSettings | None = None, model_service: Any | None = 
             allow_headers=["*"],
         )
 
+    app.state.settings = resolved_settings
     app.state.model_service = resolved_service
     app.include_router(
         create_api_router(
             service=resolved_service,
-            app_name=resolved_settings.app_name,
+            app_name=resolved_title,
+            app_version=resolved_version,
         ),
         prefix=resolved_settings.api_prefix,
     )
