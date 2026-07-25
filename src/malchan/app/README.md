@@ -94,24 +94,35 @@ display(prediction_df)
 
 ## NotebookでXAIを利用
 
-XAIを利用する場合は、SHAPと可視化関連の依存関係もインストールします。
+XAIを利用する場合は、SHAPとPlotly可視化の依存関係もインストールします。
 
 ```bash
 pip install -e ".[api,notebook,models,visualization]"
 ```
 
-XAIはモデル学習後に計算され、重要度、SHAP散布用データ、PDP/ICEが学習済みモデルのキャッシュへ保存されます。XAIのGET APIはこのキャッシュを返すだけであり、グラフを切り替えるたびにSHAPやPDPを再計算しません。
+FastAPIのXAIエンドポイントはJSONを返します。Notebookでは`malchan.visualization`の次の関数へ、`response`または`response.json()`を直接渡して可視化できます。
+
+```python
+from malchan.visualization import (
+    show_xai_importance,
+    show_xai_pd_and_ice,
+    show_xai_shap_scatter,
+)
+```
+
+| 関数 | 対応するエンドポイント | 出力 |
+|---|---|---|
+| `show_xai_importance()` | `GET .../importance` | Plotly特徴量重要度棒グラフ |
+| `show_xai_shap_scatter()` | `GET .../shap` | Plotly SHAP散布図 |
+| `show_xai_pd_and_ice()` | `GET .../pdp` | Plotly PDP/ICE図 |
+
+これらはFastAPIレスポンス用のアダプターです。学習済みPythonモデルを直接保持している場合は、従来の`show_importances()`、`show_shap_scatter()`、`show_pd_and_ice()`も利用できます。
 
 ### 1. XAIを有効にしてモデルを学習
 
 `compute_xai=True`を指定します。既定値も`True`ですが、Notebookでは計算の有無を明示することを推奨します。
 
 ```python
-import pandas as pd
-
-from malchan.app import dataframe_to_records
-
-
 feature_cols = ["x1", "x2"]
 target_col = "y"
 
@@ -135,7 +146,7 @@ print("model_id:", model_id)
 print("xai_status:", model_info["xai_status"])
 ```
 
-学習とXAI計算は現在同期処理です。`POST /api/models`の応答が返った時点で、成功した目的変数のキャッシュは利用可能です。XAI計算に失敗してもモデル登録自体は成功し、失敗理由は後述のXAIサマリーに保存されます。
+学習とXAI計算は現在同期処理です。`POST /api/models`の応答が返った時点で、成功した目的変数のキャッシュは利用可能です。XAI計算に失敗してもモデル登録自体は成功し、失敗理由はXAIサマリーに保存されます。
 
 ### 2. XAIサマリーを確認
 
@@ -145,8 +156,6 @@ print("xai_status:", model_info["xai_status"])
 summary_response = client.get(f"/api/models/{model_id}/xai")
 summary_response.raise_for_status()
 xai_summary = summary_response.json()
-
-print("model XAI status:", xai_summary["status"])
 
 summary_df = pd.DataFrame(
     [
@@ -189,7 +198,7 @@ target_info = xai_summary["targets"][target]
 print("selected target:", target)
 ```
 
-### 3. 特徴量重要度をDataFrameで取得
+### 3. 特徴量重要度を取得して可視化
 
 `method`には`model`、`pfi`、`shap`を指定できます。実際に利用可能な手法は`importance_methods`で確認してください。
 
@@ -205,8 +214,18 @@ importance_response = client.get(
     },
 )
 importance_response.raise_for_status()
-importance_payload = importance_response.json()
 
+importance_fig = show_xai_importance(
+    importance_response,
+    n_bar=20,
+)
+importance_fig.show()
+```
+
+`show_xai_importance()`はHTTPレスポンスと辞書の両方を受け取れます。表形式でも確認する場合は同じレスポンスをDataFrameへ変換します。
+
+```python
+importance_payload = importance_response.json()
 importance_df = pd.DataFrame(importance_payload["items"])
 display(importance_df)
 print("combined:", importance_payload["combined"])
@@ -214,26 +233,7 @@ print("combined:", importance_payload["combined"])
 
 `combined=True`では、one-hot encodingや材料特徴量生成後の多数の列を、可能な場合は元の入力列単位へ集約します。対応する集約キャッシュがない場合は、自動的に前処理後の特徴量単位へフォールバックし、応答の`combined`が`False`になります。
 
-Matplotlibで棒グラフを描く例です。
-
-```python
-import matplotlib.pyplot as plt
-
-
-plot_df = importance_df.sort_values("value", ascending=True)
-
-plt.figure(figsize=(8, max(4, len(plot_df) * 0.35)))
-plt.barh(plot_df["feature"], plot_df["value"])
-plt.xlabel(f"{importance_method} importance")
-plt.ylabel("feature")
-plt.title(f"Feature importance: {target}")
-plt.tight_layout()
-plt.show()
-```
-
-重要度は絶対値の大きい順でAPIから返されます。値に符号があるモデル重要度を表示する場合は、棒の方向も確認してください。
-
-### 4. 特徴量別SHAPデータを取得
+### 4. 特徴量別SHAPデータを取得して可視化
 
 SHAPエンドポイントは、1つの元特徴量について散布図を作るためのレコードを返します。利用可能な特徴量は`shap_features`から選択します。
 
@@ -245,50 +245,42 @@ shap_response = client.get(
     params={"feature": shap_feature},
 )
 shap_response.raise_for_status()
-shap_payload = shap_response.json()
 
-shap_df = pd.DataFrame(shap_payload["records"])
-shap_value_cols = shap_payload["value_columns"]
-
-display(shap_df.head())
-print("SHAP columns:", shap_value_cols)
+shap_fig = show_xai_shap_scatter(shap_response)
+shap_fig.show()
 ```
 
-回帰では通常1つのSHAP列、分類ではクラスごとに複数のSHAP列が返る場合があります。数値特徴量のSHAP dependence風散布図は次のように描けます。
+回帰では通常1つのSHAP系列、分類ではクラスごとに複数系列が表示されます。分類で1クラスだけを表示する場合は、クラス名を`target_item`へ指定します。
 
 ```python
-plt.figure(figsize=(7, 5))
-
-for shap_col in shap_value_cols:
-    plt.scatter(
-        shap_df[shap_feature],
-        shap_df[shap_col],
-        alpha=0.6,
-        label=shap_col,
-    )
-
-plt.axhline(0.0, linewidth=1)
-plt.xlabel(shap_feature)
-plt.ylabel("SHAP value")
-plt.title(f"SHAP: {target} / {shap_feature}")
-if len(shap_value_cols) > 1:
-    plt.legend()
-plt.tight_layout()
-plt.show()
+shap_fig = show_xai_shap_scatter(
+    shap_response,
+    target_item="OK",
+)
+shap_fig.show()
 ```
 
-カテゴリ特徴量の場合は、`shap_df.groupby(shap_feature)[shap_value_cols].mean()`などでカテゴリ別平均を確認できます。
+表形式でも確認できます。
+
+```python
+shap_payload = shap_response.json()
+shap_df = pd.DataFrame(shap_payload["records"])
+display(shap_df.head())
+print("SHAP columns:", shap_payload["value_columns"])
+```
+
+カテゴリ特徴量の場合は、必要に応じてカテゴリ別平均も確認できます。
 
 ```python
 category_shap_df = (
-    shap_df.groupby(shap_feature, dropna=False)[shap_value_cols]
+    shap_df.groupby(shap_feature, dropna=False)[shap_payload["value_columns"]]
     .mean()
     .reset_index()
 )
 display(category_shap_df)
 ```
 
-### 5. PDPとICEを取得
+### 5. PDPとICEを取得して可視化
 
 PDPだけを取得する場合は`include_ice=False`、個別サンプルのICEも含める場合は`True`を指定します。利用可能な特徴量は`pdp_features`から選択します。
 
@@ -304,46 +296,45 @@ pdp_response = client.get(
     },
 )
 pdp_response.raise_for_status()
-pdp_payload = pdp_response.json()
 
-print("x values:", pdp_payload["x_values"][:5])
-print("series:", [series["name"] for series in pdp_payload["series"]])
+pdp_fig = show_xai_pd_and_ice(
+    pdp_response,
+    ice=True,
+    max_ice=30,
+)
+pdp_fig.show()
 ```
 
-回帰では通常1系列、分類ではクラスごとに複数系列が返ります。各系列にはPDP平均の`pd_values`と、要求した場合は`ice_values`が含まれます。
+回帰では通常1系列、分類ではクラスごとに複数系列が表示されます。分類で特定クラスだけを表示する場合は`series_name`を指定します。
 
 ```python
-x_values = pdp_payload["x_values"]
+pdp_fig = show_xai_pd_and_ice(
+    pdp_response,
+    series_name="OK",
+    ice=True,
+)
+pdp_fig.show()
+```
 
-plt.figure(figsize=(8, 5))
+PDPだけ表示したい場合は、APIでICEを取得しないか、可視化時に`ice=False`を指定します。
 
-for series in pdp_payload["series"]:
-    for ice_values in series.get("ice_values") or []:
-        plt.plot(x_values, ice_values, alpha=0.15, linewidth=0.8)
-
-    plt.plot(
-        x_values,
-        series["pd_values"],
-        linewidth=2.5,
-        label=series["name"],
-    )
-
-plt.xlabel(pdp_feature)
-plt.ylabel("partial dependence")
-plt.title(f"PDP / ICE: {target} / {pdp_feature}")
-plt.legend()
-plt.tight_layout()
-plt.show()
+```python
+pdp_only_fig = show_xai_pd_and_ice(
+    pdp_response,
+    ice=False,
+)
+pdp_only_fig.show()
 ```
 
 レスポンスを表形式で確認する場合は、系列ごとにDataFrameへ変換できます。
 
 ```python
+pdp_payload = pdp_response.json()
 pdp_frames = []
 for series in pdp_payload["series"]:
     frame = pd.DataFrame(
         {
-            pdp_feature: x_values,
+            pdp_feature: pdp_payload["x_values"],
             "target": target,
             "series": series["name"],
             "pdp": series["pd_values"],
@@ -385,7 +376,7 @@ recompute_response.raise_for_status()
 
 ### 7. 複数目的モデルのXAIを順番に取得
 
-複数目的でもAPIの構造は同じです。`targets`を走査して、`ready`の目的変数だけ取得できます。
+複数目的でもAPIの構造は同じです。`targets`を走査し、`ready`の目的変数を可視化できます。
 
 ```python
 for current_target, info in xai_summary["targets"].items():
@@ -407,9 +398,8 @@ for current_target, info in xai_summary["targets"].items():
     )
     response.raise_for_status()
 
-    current_importance_df = pd.DataFrame(response.json()["items"])
     print(current_target)
-    display(current_importance_df)
+    show_xai_importance(response, n_bar=20).show()
 ```
 
 ### 8. XAI取得時のHTTPステータス
