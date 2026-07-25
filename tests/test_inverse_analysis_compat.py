@@ -243,3 +243,35 @@ def test_integer_search_settings_are_cast_for_optuna() -> None:
     assert isinstance(lower[0], int)
     assert isinstance(upper[0], int)
     assert isinstance(steps[0], int)
+
+
+def test_constraint_adjustment_does_not_replace_unfixed_values_with_nan() -> None:
+    """None fix values converted to NaN should remain adjustable, not overwrite input."""
+
+    from malchan.inverse_analysis.utils import adjust_rows_to_sum_with_constraints
+
+    columns = ["raw material 1", "raw material 2", "raw material 3"]
+    frame = pd.DataFrame([[0.3, 0.4, 0.2]], columns=columns)
+    ranges = pd.DataFrame(
+        {
+            "min": [0.0, 0.0, 0.0],
+            "max": [1.0, 1.0, 1.0],
+        },
+        index=columns,
+    )
+    # This is the representation passed by objective(): pandas coerces the
+    # unspecified None entries to NaN when mixed with a numeric fixed value.
+    fix_values = pd.Series([None, None, 0.2], dtype="float64").to_numpy()
+
+    adjusted = adjust_rows_to_sum_with_constraints(
+        frame,
+        columns,
+        fix_values,
+        columns,
+        1.0,
+        ranges,
+    )
+
+    assert adjusted.loc[0, columns].notna().all()
+    assert adjusted.loc[0, columns].sum() == pytest.approx(1.0)
+    assert adjusted.loc[0, "raw material 3"] == pytest.approx(0.2)
