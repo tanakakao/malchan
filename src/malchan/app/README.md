@@ -92,6 +92,358 @@ display(prediction_df)
 
 欠損値や日時列を含まない単純なDataFrameでは、`df.to_dict(orient="records")`でも送信できます。ただし、Notebookで扱う実データにはpandas固有型が含まれることが多いため、通常は`dataframe_to_records()`を推奨します。
 
+## NotebookでXAIを利用
+
+XAIを利用する場合は、SHAPと可視化関連の依存関係もインストールします。
+
+```bash
+pip install -e ".[api,notebook,models,visualization]"
+```
+
+XAIはモデル学習後に計算され、重要度、SHAP散布用データ、PDP/ICEが学習済みモデルのキャッシュへ保存されます。XAIのGET APIはこのキャッシュを返すだけであり、グラフを切り替えるたびにSHAPやPDPを再計算しません。
+
+### 1. XAIを有効にしてモデルを学習
+
+`compute_xai=True`を指定します。既定値も`True`ですが、Notebookでは計算の有無を明示することを推奨します。
+
+```python
+import pandas as pd
+
+from malchan.app import dataframe_to_records
+
+
+feature_cols = ["x1", "x2"]
+target_col = "y"
+
+xai_train_response = client.post(
+    "/api/models",
+    json={
+        "data": dataframe_to_records(train_df),
+        "target_col": target_col,
+        "task": "regression",
+        "num_cols": feature_cols,
+        "cat_cols": [],
+        "model_names": ["ランダムフォレスト回帰"],
+        "compute_xai": True,
+    },
+)
+xai_train_response.raise_for_status()
+
+model_info = xai_train_response.json()
+model_id = model_info["model_id"]
+print("model_id:", model_id)
+print("xai_status:", model_info["xai_status"])
+```
+
+学習とXAI計算は現在同期処理です。`POST /api/models`の応答が返った時点で、成功した目的変数のキャッシュは利用可能です。XAI計算に失敗してもモデル登録自体は成功し、失敗理由は後述のXAIサマリーに保存されます。
+
+### 2. XAIサマリーを確認
+
+最初にサマリーを取得し、利用可能な目的変数、特徴量、重要度手法を確認します。
+
+```python
+summary_response = client.get(f"/api/models/{model_id}/xai")
+summary_response.raise_for_status()
+xai_summary = summary_response.json()
+
+print("model XAI status:", xai_summary["status"])
+
+summary_df = pd.DataFrame(
+    [
+        {
+            "target": target,
+            "status": info["status"],
+            "computed_at": info["computed_at"],
+            "error": info["error"],
+            "importance_methods": ", ".join(info["importance_methods"]),
+            "shap_features": ", ".join(info["shap_features"]),
+            "pdp_features": ", ".join(info["pdp_features"]),
+        }
+        for target, info in xai_summary["targets"].items()
+    ]
+)
+display(summary_df)
+```
+
+目的変数ごとの情報には次が含まれます。
+
+| Field | 内容 |
+|---|---|
+| `status` | `ready`、`failed`、`not_requested`などの状態 |
+| `computed_at` | XAIキャッシュを計算した日時 |
+| `error` | 計算に失敗した場合の例外情報 |
+| `features` | モデルの入力特徴量 |
+| `importance_methods` | 利用可能な`model`、`pfi`、`shap` |
+| `shap_features` | SHAP散布データを取得できる特徴量 |
+| `pdp_features` | PDP/ICEを取得できる特徴量 |
+
+単一目的の場合も複数目的の場合も、目的変数は`targets`のキーから選択できます。
+
+```python
+target = next(
+    name
+    for name, info in xai_summary["targets"].items()
+    if info["status"] == "ready"
+)
+target_info = xai_summary["targets"][target]
+print("selected target:", target)
+```
+
+### 3. 特徴量重要度をDataFrameで取得
+
+`method`には`model`、`pfi`、`shap`を指定できます。実際に利用可能な手法は`importance_methods`で確認してください。
+
+```python
+importance_method = "shap"
+
+importance_response = client.get(
+    f"/api/models/{model_id}/xai/{target}/importance",
+    params={
+        "method": importance_method,
+        "combined": True,
+        "top_n": 20,
+    },
+)
+importance_response.raise_for_status()
+importance_payload = importance_response.json()
+
+importance_df = pd.DataFrame(importance_payload["items"])
+display(importance_df)
+print("combined:", importance_payload["combined"])
+```
+
+`combined=True`では、one-hot encodingや材料特徴量生成後の多数の列を、可能な場合は元の入力列単位へ集約します。対応する集約キャッシュがない場合は、自動的に前処理後の特徴量単位へフォールバックし、応答の`combined`が`False`になります。
+
+Matplotlibで棒グラフを描く例です。
+
+```python
+import matplotlib.pyplot as plt
+
+
+plot_df = importance_df.sort_values("value", ascending=True)
+
+plt.figure(figsize=(8, max(4, len(plot_df) * 0.35)))
+plt.barh(plot_df["feature"], plot_df["value"])
+plt.xlabel(f"{importance_method} importance")
+plt.ylabel("feature")
+plt.title(f"Feature importance: {target}")
+plt.tight_layout()
+plt.show()
+```
+
+重要度は絶対値の大きい順でAPIから返されます。値に符号があるモデル重要度を表示する場合は、棒の方向も確認してください。
+
+### 4. 特徴量別SHAPデータを取得
+
+SHAPエンドポイントは、1つの元特徴量について散布図を作るためのレコードを返します。利用可能な特徴量は`shap_features`から選択します。
+
+```python
+shap_feature = target_info["shap_features"][0]
+
+shap_response = client.get(
+    f"/api/models/{model_id}/xai/{target}/shap",
+    params={"feature": shap_feature},
+)
+shap_response.raise_for_status()
+shap_payload = shap_response.json()
+
+shap_df = pd.DataFrame(shap_payload["records"])
+shap_value_cols = shap_payload["value_columns"]
+
+display(shap_df.head())
+print("SHAP columns:", shap_value_cols)
+```
+
+回帰では通常1つのSHAP列、分類ではクラスごとに複数のSHAP列が返る場合があります。数値特徴量のSHAP dependence風散布図は次のように描けます。
+
+```python
+plt.figure(figsize=(7, 5))
+
+for shap_col in shap_value_cols:
+    plt.scatter(
+        shap_df[shap_feature],
+        shap_df[shap_col],
+        alpha=0.6,
+        label=shap_col,
+    )
+
+plt.axhline(0.0, linewidth=1)
+plt.xlabel(shap_feature)
+plt.ylabel("SHAP value")
+plt.title(f"SHAP: {target} / {shap_feature}")
+if len(shap_value_cols) > 1:
+    plt.legend()
+plt.tight_layout()
+plt.show()
+```
+
+カテゴリ特徴量の場合は、`shap_df.groupby(shap_feature)[shap_value_cols].mean()`などでカテゴリ別平均を確認できます。
+
+```python
+category_shap_df = (
+    shap_df.groupby(shap_feature, dropna=False)[shap_value_cols]
+    .mean()
+    .reset_index()
+)
+display(category_shap_df)
+```
+
+### 5. PDPとICEを取得
+
+PDPだけを取得する場合は`include_ice=False`、個別サンプルのICEも含める場合は`True`を指定します。利用可能な特徴量は`pdp_features`から選択します。
+
+```python
+pdp_feature = target_info["pdp_features"][0]
+
+pdp_response = client.get(
+    f"/api/models/{model_id}/xai/{target}/pdp",
+    params={
+        "feature": pdp_feature,
+        "include_ice": True,
+        "max_ice": 30,
+    },
+)
+pdp_response.raise_for_status()
+pdp_payload = pdp_response.json()
+
+print("x values:", pdp_payload["x_values"][:5])
+print("series:", [series["name"] for series in pdp_payload["series"]])
+```
+
+回帰では通常1系列、分類ではクラスごとに複数系列が返ります。各系列にはPDP平均の`pd_values`と、要求した場合は`ice_values`が含まれます。
+
+```python
+x_values = pdp_payload["x_values"]
+
+plt.figure(figsize=(8, 5))
+
+for series in pdp_payload["series"]:
+    for ice_values in series.get("ice_values") or []:
+        plt.plot(x_values, ice_values, alpha=0.15, linewidth=0.8)
+
+    plt.plot(
+        x_values,
+        series["pd_values"],
+        linewidth=2.5,
+        label=series["name"],
+    )
+
+plt.xlabel(pdp_feature)
+plt.ylabel("partial dependence")
+plt.title(f"PDP / ICE: {target} / {pdp_feature}")
+plt.legend()
+plt.tight_layout()
+plt.show()
+```
+
+レスポンスを表形式で確認する場合は、系列ごとにDataFrameへ変換できます。
+
+```python
+pdp_frames = []
+for series in pdp_payload["series"]:
+    frame = pd.DataFrame(
+        {
+            pdp_feature: x_values,
+            "target": target,
+            "series": series["name"],
+            "pdp": series["pd_values"],
+        }
+    )
+    pdp_frames.append(frame)
+
+pdp_df = pd.concat(pdp_frames, ignore_index=True)
+display(pdp_df)
+```
+
+### 6. XAIを明示的に再計算
+
+`compute_xai=False`で学習した場合や、キャッシュを明示的に更新したい場合は再計算エンドポイントを利用します。
+
+1つの目的変数だけ再計算する例です。
+
+```python
+recompute_response = client.post(
+    f"/api/models/{model_id}/xai/recompute",
+    json={"targets": [target]},
+)
+recompute_response.raise_for_status()
+xai_summary = recompute_response.json()
+print(xai_summary["status"])
+```
+
+全目的変数を再計算する場合は空のリストを指定します。
+
+```python
+recompute_response = client.post(
+    f"/api/models/{model_id}/xai/recompute",
+    json={"targets": []},
+)
+recompute_response.raise_for_status()
+```
+
+存在しない目的変数、重複した目的変数、空文字を指定するとHTTP `422`になります。
+
+### 7. 複数目的モデルのXAIを順番に取得
+
+複数目的でもAPIの構造は同じです。`targets`を走査して、`ready`の目的変数だけ取得できます。
+
+```python
+for current_target, info in xai_summary["targets"].items():
+    if info["status"] != "ready":
+        print(current_target, "is not ready:", info["error"])
+        continue
+
+    methods = info["importance_methods"]
+    if not methods:
+        continue
+
+    response = client.get(
+        f"/api/models/{model_id}/xai/{current_target}/importance",
+        params={
+            "method": methods[0],
+            "combined": True,
+            "top_n": 20,
+        },
+    )
+    response.raise_for_status()
+
+    current_importance_df = pd.DataFrame(response.json()["items"])
+    print(current_target)
+    display(current_importance_df)
+```
+
+### 8. XAI取得時のHTTPステータス
+
+| Status | 主な原因 |
+|---|---|
+| `200` | キャッシュを正常に取得 |
+| `404` | `model_id`が存在しない |
+| `409` | XAIを未計算、計算失敗、または要求したキャッシュがない |
+| `422` | 目的変数、特徴量、手法、query parameterが不正 |
+
+エラー内容をNotebookで確認する例です。
+
+```python
+response = client.get(
+    f"/api/models/{model_id}/xai/{target}/importance",
+    params={"method": "shap", "combined": True, "top_n": 20},
+)
+
+if response.status_code == 409:
+    print("XAI cache is not ready:", response.json()["detail"])
+else:
+    response.raise_for_status()
+```
+
+### XAIキャッシュのライフサイクル
+
+- `compute_xai=True`では、モデル学習直後にXAIを一度計算します。
+- XAIのGET APIは保存済みキャッシュを返すだけで再計算しません。
+- `POST /xai/recompute`を呼ぶと、選択した目的変数のキャッシュを再構築します。
+- モデル比較後に`activate_best=True`で登録モデルを置き換えた場合、元のモデルでXAIが要求されていれば、新しいモデルのXAIも再計算します。
+- `DELETE /api/models/{model_id}`でモデルを削除するとXAIキャッシュも削除されます。
+- Notebookで`create_app()`または`TestClient`を作り直すと、以前のインメモリモデルとXAIキャッシュは引き継がれません。
+
 処理後に明示的に閉じる場合:
 
 ```python
@@ -187,7 +539,7 @@ Viteの出力先は`src/malchan/app/web/static`です。ビルド後はWeb UIを
 
 ReactのModel画面では`activate_best=true`を指定でき、比較・チューニング後のベストモデルを後続の予測と逆解析へ反映します。XAIが有効なモデルでは、ベストモデルを有効化した直後に新しいモデルのSHAP/PDPキャッシュも更新します。
 
-## XAIをモデル作成後に一度だけ計算する
+## XAIの計算とHTTP API
 
 `POST /api/models`の`compute_xai`は既定で`true`です。モデルの学習後に、各目的変数の子モデルで次を実行します。
 
@@ -198,34 +550,9 @@ model.get_xai()
 
 `get_xai()`が作成した`model.importances`には、モデル重要度、Permutation Importance、SHAP重要度、特徴量別SHAPデータ、特徴量別PDP/ICEが保存されます。
 
-```json
-{
-  "data": [
-    {"x1": 0.1, "x2": 1.0, "y": 10.0},
-    {"x1": 0.2, "x2": 0.9, "y": 12.0}
-  ],
-  "target_col": "y",
-  "task": "regression",
-  "num_cols": ["x1", "x2"],
-  "cat_cols": [],
-  "model_names": ["ランダムフォレスト回帰"],
-  "compute_xai": true
-}
-```
+通常のXAI GETエンドポイントは`shap()`や`get_xai()`を呼ばず、保存済みキャッシュをシリアライズするだけです。Notebookでの詳細な取得・可視化方法は「NotebookでXAIを利用」を参照してください。
 
-通常のXAI GETエンドポイントは`shap()`や`get_xai()`を呼ばず、保存済みキャッシュをシリアライズするだけです。このため、Reactで目的変数、特徴量、重要度手法を切り替えても再計算しません。
-
-XAIを学習時に計算しない場合:
-
-```json
-{
-  "compute_xai": false
-}
-```
-
-この場合、`xai_status`は`not_requested`になり、重要度・SHAP・PDP取得はHTTP `409`を返します。状態確認用の`GET /xai`は常に利用できます。
-
-## XAI APIの利用例
+### curlでの利用例
 
 状態と利用可能な目的変数・特徴量・手法:
 
@@ -239,7 +566,7 @@ SHAP重要度:
 curl "http://127.0.0.1:8000/api/models/<model_id>/xai/y/importance?method=shap&combined=true&top_n=20"
 ```
 
-SHAP dependence用データ:
+SHAP散布用データ:
 
 ```bash
 curl "http://127.0.0.1:8000/api/models/<model_id>/xai/y/shap?feature=x1"
@@ -264,8 +591,6 @@ curl -X POST http://127.0.0.1:8000/api/models/<model_id>/xai/recompute \
   -H "Content-Type: application/json" \
   -d '{"targets": ["strength"]}'
 ```
-
-再計算を行うのは、このPOSTまたは`activate_best=true`による登録モデル置換時だけです。概要・重要度・SHAP・PDPのGETを繰り返しても、計算回数は増えません。
 
 ## XAI状態
 
