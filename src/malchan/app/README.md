@@ -2,6 +2,98 @@
 
 `malchan.app`は、モデル学習・予測・比較・ベストモデルチューニング・XAI・逆解析を提供するFastAPIと、スタンドアロンHTMLを参考にしたReactワークベンチをまとめたアプリケーション層です。
 
+## Python / JupyterからFastAPIを利用
+
+FastAPIアプリを外部サーバーとして起動せず、PythonコードやJupyter Notebookのプロセス内で直接利用できます。`TestClient`を使うため、`api` extraにはFastAPI、Uvicorn、HTTPXをまとめています。
+
+```bash
+pip install -e ".[api,notebook]"
+```
+
+`create_app()`はアプリケーションファクトリです。NotebookではReact配信とCORSを無効にした設定を渡すと、APIだけを小さく起動できます。
+
+```python
+from fastapi.testclient import TestClient
+
+from malchan.app import AppSettings, create_app
+
+
+settings = AppSettings(
+    api_prefix="/api",
+    cors_origins=(),
+    serve_frontend=False,
+)
+app = create_app(
+    settings=settings,
+    title="malchan Notebook API",
+    version="0.1.0-notebook",
+)
+client = TestClient(app)
+
+response = client.get("/api/health")
+response.raise_for_status()
+print(response.json())
+```
+
+`TestClient`は実際のポートを使用しないため、Notebookのイベントループや既存サーバーと競合しません。同じ`app`と`client`を使い続ける限り、学習済みモデルは`InMemoryModelService`に保持されます。
+
+小さな回帰モデルを学習し、同じNotebook内で予測する例です。XAIを使わない確認用途では`compute_xai=False`にすると計算を省略できます。
+
+```python
+train_payload = {
+    "data": [
+        {"x1": 0.1, "x2": 1.0, "y": 10.0},
+        {"x1": 0.2, "x2": 0.9, "y": 12.0},
+        {"x1": 0.3, "x2": 0.7, "y": 13.5},
+        {"x1": 0.4, "x2": 0.4, "y": 16.0},
+    ],
+    "target_col": "y",
+    "task": "regression",
+    "num_cols": ["x1", "x2"],
+    "cat_cols": [],
+    "model_names": ["線形回帰"],
+    "compute_xai": False,
+}
+
+train_response = client.post("/api/models", json=train_payload)
+train_response.raise_for_status()
+model_id = train_response.json()["model_id"]
+
+predict_response = client.post(
+    f"/api/models/{model_id}/predict",
+    json={
+        "data": [
+            {"x1": 0.25, "x2": 0.8},
+            {"x1": 0.35, "x2": 0.5},
+        ]
+    },
+)
+predict_response.raise_for_status()
+print(predict_response.json()["predictions"])
+```
+
+処理後に明示的に閉じる場合:
+
+```python
+client.close()
+```
+
+通常のPythonモジュールから外部サーバーとして起動する場合も、同じファクトリを利用できます。
+
+```python
+# main.py
+from malchan.app import AppSettings, create_app
+
+app = create_app(
+    settings=AppSettings(serve_frontend=False),
+    title="malchan API",
+)
+```
+
+```bash
+uvicorn main:app --reload
+```
+
 ## React開発
 
 SHAPとPDPの事前計算を利用するため、`visualization` extraもインストールします。
