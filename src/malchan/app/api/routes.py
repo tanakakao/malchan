@@ -26,8 +26,21 @@ from malchan.app.services import (
 from .xai_routes import create_xai_router
 
 
-def create_api_router(service: Any, app_name: str) -> APIRouter:
-    """Create API routes bound to a model service instance."""
+def create_api_router(
+    service: Any,
+    app_name: str,
+    app_version: str = __version__,
+) -> APIRouter:
+    """Create API routes bound to a model service instance.
+
+    Args:
+        service: Model service used by route handlers.
+        app_name: Service name returned by the health endpoint.
+        app_version: Service version returned by the health endpoint.
+
+    Returns:
+        Router containing the malchan API endpoints.
+    """
 
     router = APIRouter()
 
@@ -35,7 +48,7 @@ def create_api_router(service: Any, app_name: str) -> APIRouter:
     def health_check() -> HealthResponse:
         """Return lightweight process health metadata."""
 
-        return HealthResponse(status="ok", service=app_name, version=__version__)
+        return HealthResponse(status="ok", service=app_name, version=app_version)
 
     @router.post(
         "/models",
