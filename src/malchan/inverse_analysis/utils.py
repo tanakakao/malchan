@@ -197,7 +197,9 @@ def adjust_rows_to_sum_with_constraints(
     for i, row in adjusted_df.iterrows():
         # 固定値をセット
         for col, val in zip(x_cols, fix_values):
-            if val is not None:
+            # DataFrame construction converts ``None`` in a numeric fix-values
+            # column to ``NaN``.  Both representations mean "not fixed".
+            if not pd.isna(val):
                 adjusted_df.at[i, col] = val
 
         # 制約対象列の合計を算出
@@ -211,7 +213,7 @@ def adjust_rows_to_sum_with_constraints(
         # 可変かつ制約対象である列のみを抽出
         adjustable_cols = [
             col for col, val in zip(x_cols, fix_values)
-            if val is None and col in constraint_cols
+            if pd.isna(val) and col in constraint_cols
         ]
 
         # 大きい順に調整優先順位を決める
@@ -436,7 +438,7 @@ def objective(
         dtype = df_range.loc[t]['dtype']
         min_val, max_val, step = df_range.loc[t]['min'], df_range.loc[t]['max'], df_range.loc[t]['step']
         fix_value = df_range.loc[t]['fix']
-        is_fix_value = df_range.loc[t][['fix']].isna()[0]
+        is_fix_value = pd.isna(fix_value)
 
         if is_fix_value:
             if dtype == 'object':
