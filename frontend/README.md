@@ -40,10 +40,12 @@ Viteの出力先は`src/malchan/app/web/static`です。FastAPIはビルド済�
 1. Data: CSV/XLSX読込、型推定、表プレビュー、欠損・列統計
 2. Explore: ヒストグラム、散布図、相関ヒートマップ
 3. Prepare: 単一・複数目的、回帰/分類、説明変数選択
-4. Model: 学習、モデル比較、ベストモデルだけのOptunaチューニング、有効化
-5. Explain: Y-Y図、残差図、キャッシュ済みSHAP重要度・SHAP dependence・PDP
+4. Model: 学習前の候補比較、通常学習、ベストモデルだけのOptunaチューニング、有効化
+5. Explain: Y-Y図、特徴量重要度、SHAP Beeswarm、1D/2D Partial Dependenceを縦並びで表示
 6. Optimize: 任意条件予測、数値範囲・カテゴリ候補を使った逆解析
 7. Report: データ・比較・逆解析結果を含むレポート用プロンプト
+
+Model画面で登録モデルがない状態から「未学習から比較」を実行すると、Webアプリが現在の学習設定で比較用モデルをFastAPIへ登録し、続けて登録モデル用の比較APIを呼び出します。これにより、利用者が単独学習を先に実行しなくても候補比較を開始できます。
 
 ## XAIの事前計算とキャッシュ
 
@@ -54,7 +56,7 @@ model.shap()
 model.get_xai()
 ```
 
-計算されたモデル重要度、Permutation Importance、SHAP重要度、SHAP散布用データ、PDP/ICEデータは学習済みモデルに保持されます。Explain画面で目的変数・特徴量・重要度手法を切り替えても、通常のGET APIはキャッシュを読むだけで再計算しません。
+計算されたモデル重要度、Permutation Importance、SHAP重要度、全SHAP値、PDP/ICEデータは学習済みモデルに保持されます。Explain画面で目的変数・特徴量・重要度手法を切り替えても、通常のGET APIはキャッシュを読むだけで再計算しません。
 
 計算時間を避けたい場合は学習リクエストで無効化できます。
 
@@ -66,7 +68,7 @@ model.get_xai()
 
 無効化後や明示的に更新したい場合だけ、Explain画面の「XAIを再計算」または`POST /xai/recompute`を使います。状態確認用の`GET /xai`は未計算時も利用できますが、重要度・SHAP・PDPの取得はHTTP `409`になります。
 
-モデル比較・チューニングで`activate_best=true`を指定した場合、登録モデルの置換後に新しいベストモデルのXAIキャッシュを自動更新します。
+モデル比較・チューニングで`activate_best=true`を指定した場合、登録モデルの置換後に、計算要求済みのXAIキャッシュを新しいベストモデルへ更新します。
 
 ## XAI API
 
@@ -74,8 +76,9 @@ model.get_xai()
 |---|---|---|
 | `GET` | `/api/models/{model_id}/xai` | キャッシュ状態、利用可能な目的変数・特徴量・手法 |
 | `GET` | `/api/models/{model_id}/xai/{target}/importance` | モデル/PFI/SHAP重要度 |
-| `GET` | `/api/models/{model_id}/xai/{target}/shap?feature=x1` | SHAP散布用レコード |
-| `GET` | `/api/models/{model_id}/xai/{target}/pdp?feature=x1` | PDPと任意のICE曲線 |
+| `GET` | `/api/models/{model_id}/xai/{target}/shap-values` | Beeswarm用の全特徴量SHAP行列 |
+| `GET` | `/api/models/{model_id}/xai/{target}/shap?feature=x1` | 特徴量単位のSHAP散布用レコード |
+| `GET` | `/api/models/{model_id}/xai/{target}/pdp?feature=x1` | 1D PDPと任意のICE曲線 |
 | `POST` | `/api/models/{model_id}/xai/recompute` | 明示的なXAI再計算 |
 
 重要度の例:
@@ -98,7 +101,7 @@ GET /api/models/<model_id>/xai/y/pdp?feature=temperature&include_ice=true&max_ic
 }
 ```
 
-通常の概要・重要度・SHAP・PDPのGETを繰り返しても、`shap()`と`get_xai()`の呼び出し回数は増えません。
+通常の概要・重要度・SHAP・1D PDPのGETを繰り返しても、`shap()`と`get_xai()`の呼び出し回数は増えません。2D PDは現在のFastAPI仕様に合わせ、選択した2特徴量のグリッドをブラウザで作成し、`POST /predict`の予測結果を背景サンプルごとに平均して表示します。
 
 ## 環境変数
 
@@ -112,5 +115,6 @@ GET /api/models/<model_id>/xai/y/pdp?feature=temperature&include_ice=true&max_ic
 - CSV/XLSXはブラウザで読み込み、学習時にJSONとしてFastAPIへ送信します。大規模データ向けのアップロードAPIは未実装です。
 - XAI事前計算は同期処理です。特徴量数・データ数・モデル種別によって学習APIの応答時間とメモリ使用量が増えます。
 - XAI計算の一部が失敗してもモデル登録は成功し、`xai_status`と目的変数別の`error`に状態を記録します。
+- 2D PDは12×12グリッド、最大20件の背景サンプルを一括予測します。特徴量数やモデルによっては表示に時間がかかります。
 - 元HTMLにある固定値・線形制約などの高度な逆解析UIは、既存FastAPIスキーマに合わせて次段階で拡張できます。
 - モデル、比較結果、XAIキャッシュは現在プロセス内メモリに保存されます。
