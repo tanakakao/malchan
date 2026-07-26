@@ -14,7 +14,7 @@ class MendeleevCompositionFeaturizer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        props: list[str] = [],
+        props: list[str] | tuple[str, ...] = (),
         stats: tuple[str, ...] = ("mean", "std", "min", "max", "range"),
         prefix: str = "md__",
         use_cache: bool = True,
@@ -61,7 +61,7 @@ class MendeleevCompositionFeaturizer(BaseEstimator, TransformerMixin):
                 "Mendeleev特徴量を使用するにはmendeleevを導入してください。"
             ) from exc
 
-        properties = self.props or [
+        properties = self.props or (
             "atomic_number",
             "atomic_weight",
             "atomic_radius",
@@ -69,7 +69,7 @@ class MendeleevCompositionFeaturizer(BaseEstimator, TransformerMixin):
             "electron_affinity",
             "boiling_point",
             "density",
-        ]
+        )
         self.props_ = list(properties)
 
         periodic_table = fetch_table("elements").set_index("symbol", drop=False)
