@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -24,11 +26,20 @@ pipeline = make_preprocess(
 assert pipeline is not None
 print(any(name == 'xenonpy' or name.startswith('xenonpy.') for name in sys.modules))
 """
+    env = os.environ.copy()
+    source_dir = Path(__file__).resolve().parents[1] / "src"
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join(
+        value
+        for value in (str(source_dir), current_pythonpath)
+        if value
+    )
     result = subprocess.run(
         [sys.executable, "-c", script],
         check=False,
         capture_output=True,
         text=True,
+        env=env,
     )
 
     assert result.returncode == 0, result.stderr
