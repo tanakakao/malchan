@@ -5,11 +5,6 @@ from optuna.distributions import IntDistribution, FloatDistribution, Categorical
 
 from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder, LabelEncoder
 
-from matminer.featurizers.composition import (
-    ElementProperty, OxidationStates, ValenceOrbital, AtomicOrbitals, YangSolidSolution,
-    IonProperty, TMetalFraction, Stoichiometry, ElementFraction, Meredig
-)
-
 from sklearn.linear_model import (
     LinearRegression, HuberRegressor, Ridge, Lasso, ElasticNet, TweedieRegressor,
     BayesianRidge, ARDRegression, PassiveAggressiveRegressor, LassoLars, OrthogonalMatchingPursuit
@@ -46,13 +41,10 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.gaussian_process import GaussianProcessClassifier
 
-from rdkit import Chem
-from skfp.fingerprints import ECFPFingerprint, MACCSFingerprint, RDKit2DDescriptorsFingerprint, MordredFingerprint, PubChemFingerprint, AtomPairFingerprint, AvalonFingerprint, PhysiochemicalPropertiesFingerprint
-from skfp.fingerprints import AutocorrFingerprint, E3FPFingerprint, MORSEFingerprint, RDFFingerprint
 from matminer.featurizers.composition import (
     ElementProperty, OxidationStates, ValenceOrbital, AtomicOrbitals, YangSolidSolution,
     IonProperty, TMetalFraction, Stoichiometry, ElementFraction,
-    Meredig, BandCenter, Miedema, CohesiveEnergy, WenAlloys, Stoichiometry, ElectronAffinity
+    Meredig, BandCenter, Miedema, CohesiveEnergy, WenAlloys, ElectronAffinity
 )
 
 from sklearn.svm import OneClassSVM
@@ -384,22 +376,6 @@ cls_default_params = {
     }
 }
 
-FP_dcit = {
-    "ECFP": ECFPFingerprint(count=True),
-    "MACCS": MACCSFingerprint(),
-    "RDKit": RDKit2DDescriptorsFingerprint(),
-    # "Mordred": MordredFingerprint(),
-    "PubChem": PubChemFingerprint(),
-    "AtomPair": AtomPairFingerprint(),
-    "Avalon": AvalonFingerprint(),
-    "PhysChem": PhysiochemicalPropertiesFingerprint(),
-    "Autocorr": AutocorrFingerprint(use_3D=True),
-    "E3FP": E3FPFingerprint(),
-    "MORSE": MORSEFingerprint(),
-    "RDF": RDFFingerprint()
-}
-
-
 INORG_dict = {
     # "OxidationStates": OxidationStates(),
     "ElementProperty":ElementProperty.from_preset("magpie", impute_nan=True),
@@ -463,7 +439,7 @@ ad_default_params = {
     'OneClassSVM':{
         'nu' : 0.2,
         'kernel': "rbf",
-        "gamma": "auto"
+        'gamma': "auto"
     },
     'IsolationForest':{
         'n_estimators': 100,
