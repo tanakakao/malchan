@@ -29,7 +29,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
-  "numpy>=1.26.4,<3",
+  "numpy>=2.0,<2.5",
   "pandas>=2.0",
   "scikit-learn>=1.6,<2",
   "scipy>=1.12,<2",
@@ -52,13 +52,14 @@ materials = [
   "pymatgen-core!=2026.7.24",
   "rdkit>=2023.9",
   "scikit-fingerprints>=2.0,<3",
-  "xenonpy>=0.6",
 ]
 inverse = [
   "optuna>=3.6",
 ]
 visualization = [
+  "llvmlite>=0.48,<0.49",
   "matplotlib>=3.7",
+  "numba>=0.66,<0.67",
   "plotly>=5.18",
   "shap>=0.44",
 ]
@@ -108,11 +109,13 @@ all = [
   "ipykernel>=6.0",
   "jupyterlab>=4.0",
   "lightgbm>=4.0",
+  "llvmlite>=0.48,<0.49",
   "matminer>=0.9",
   "matplotlib>=3.7",
   "mendeleev>=0.17",
   "mordredcommunity>=2.0,<3",
   "mypy>=1.8",
+  "numba>=0.66,<0.67",
   "openpyxl>=3.1",
   "optuna>=3.6",
   "plotly>=5.18",
@@ -129,13 +132,15 @@ all = [
   "statsmodels>=0.14",
   "twine>=5.0",
   "uvicorn[standard]>=0.30",
-  "xenonpy>=0.6",
   "xgboost>=2.0",
 ]
 
 [project.urls]
 Repository = "https://github.com/tanakakao/malchan"
 Issues = "https://github.com/tanakakao/malchan/issues"
+
+[tool.uv]
+resolution = "highest"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
