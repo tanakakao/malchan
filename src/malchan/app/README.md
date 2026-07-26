@@ -1,18 +1,18 @@
 # malchan FastAPI + React application
 
-`malchan.app`は、モデル学習・予測・比較・ベストモデルチューニング・XAI・逆解析を提供するFastAPIと、スタンドアロンHTMLを参考にしたReactワークベンチをまとめたアプリケーション層です。
+`malchan.app`は、モデル学習・予測・比較・交差検証・ベストモデルチューニング・XAI・逆解析を提供するFastAPIと、Reactワークベンチをまとめたアプリケーション層です。
 
 ## Python / JupyterからDataFrameを使ってFastAPIを利用
 
-FastAPIアプリを外部サーバーとして起動せず、PythonコードやJupyter Notebookのプロセス内で直接利用できます。Notebook上では`pandas.DataFrame`を主なデータ形式として扱い、APIへ送信する直前に行指向のJSONレコードへ変換します。
-
-`TestClient`を利用するため、`api` extraにはFastAPI、Uvicorn、Pydantic、HTTPXをまとめています。
+FastAPIを外部サーバーとして起動せず、PythonコードやJupyter Notebookのプロセス内で直接利用できます。Notebook上では`pandas.DataFrame`を主なデータ形式として扱い、APIへ送信する直前に行指向のJSONレコードへ変換します。
 
 ```bash
-pip install -e ".[api,notebook]"
+pip install -e ".[api,notebook,models,visualization]"
 ```
 
-`create_app()`はアプリケーションファクトリです。NotebookではReact配信とCORSを無効にした設定を渡すと、APIだけをプロセス内で利用できます。
+### TestClientを作成
+
+`create_app()`はアプリケーションファクトリです。NotebookではReact配信とCORSを無効にし、APIだけをプロセス内で利用できます。
 
 ```python
 from fastapi.testclient import TestClient
@@ -28,22 +28,19 @@ settings = AppSettings(
 app = create_app(
     settings=settings,
     title="malchan Notebook API",
-    version="0.1.0-notebook",
 )
 client = TestClient(app)
 
-response = client.get("/api/health")
-response.raise_for_status()
-print(response.json())
+health_response = client.get("/api/health")
+health_response.raise_for_status()
+print(health_response.json())
 ```
 
-`TestClient`は実際のポートを使用しないため、Notebookのイベントループや既存サーバーと競合しません。同じ`app`と`client`を使い続ける限り、学習済みモデルは`InMemoryModelService`に保持されます。
+`TestClient`は実際のポートを使用しません。同じ`app`と`client`を使い続ける限り、学習済みモデル、比較結果、XAIキャッシュは同じ`InMemoryModelService`に保持されます。
 
-### DataFrameからモデルを学習して予測
+### DataFrameをAPIレコードへ変換
 
-学習データと予測データはDataFrameで準備します。FastAPIのrequest bodyはJSONであるため、`dataframe_to_records()`で`data`フィールドへ格納できる形式に変換します。
-
-`dataframe_to_records()`は、NumPy・pandasのスカラー値、`NaN`・`pd.NA`・`NaT`、日時列をJSON互換値へ正規化します。APIの列名と対応させるため、DataFrameの列名は重複のない文字列にしてください。
+FastAPIのrequest bodyはJSONです。`dataframe_to_records()`は、NumPy・pandasのスカラー値、`NaN`・`pd.NA`・`NaT`、日時列をJSON互換値へ正規化します。
 
 ```python
 import pandas as pd
@@ -51,34 +48,47 @@ import pandas as pd
 from malchan.app import dataframe_to_records
 
 
-train_df = pd.DataFrame(
-    {
-        "x1": [0.1, 0.2, 0.3, 0.4],
-        "x2": [1.0, 0.9, 0.7, 0.4],
-        "y": [10.0, 12.0, 13.5, 16.0],
-    }
+df = pd.read_csv("resin.csv")
+records = dataframe_to_records(df)
+```
+
+DataFrameの列名は重複のない文字列にしてください。単純なDataFrameでは`df.to_dict(orient="records")`も使えますが、欠損値やpandas固有型を含む実データでは`dataframe_to_records()`を推奨します。
+
+## Notebookでモデルを学習して予測
+
+```python
+input_cols = [
+    "raw material 1",
+    "raw material 2",
+    "raw material 3",
+    "temperature",
+    "time",
+]
+target_col = "property"
+
+train_response = client.post(
+    "/api/models",
+    json={
+        "data": records,
+        "target_col": target_col,
+        "task": "regression",
+        "num_cols": input_cols,
+        "cat_cols": [],
+        "model_names": ["ランダムフォレスト回帰"],
+        "compute_xai": False,
+    },
 )
-
-train_payload = {
-    "data": dataframe_to_records(train_df),
-    "target_col": "y",
-    "task": "regression",
-    "num_cols": ["x1", "x2"],
-    "cat_cols": [],
-    "model_names": ["線形回帰"],
-    "compute_xai": False,
-}
-
-train_response = client.post("/api/models", json=train_payload)
 train_response.raise_for_status()
-model_id = train_response.json()["model_id"]
 
-predict_df = pd.DataFrame(
-    {
-        "x1": [0.25, 0.35],
-        "x2": [0.8, 0.5],
-    }
-)
+model_info = train_response.json()
+model_id = model_info["model_id"]
+print(model_info)
+```
+
+予測データもDataFrameから送信します。
+
+```python
+predict_df = df[input_cols].iloc[:5].copy()
 
 predict_response = client.post(
     f"/api/models/{model_id}/predict",
@@ -90,49 +100,246 @@ prediction_df = pd.DataFrame(predict_response.json()["predictions"])
 display(prediction_df)
 ```
 
-欠損値や日時列を含まない単純なDataFrameでは、`df.to_dict(orient="records")`でも送信できます。ただし、Notebookで扱う実データにはpandas固有型が含まれることが多いため、通常は`dataframe_to_records()`を推奨します。
+## Notebookでモデル比較と交差検証を利用
+
+`POST /api/models/{model_id}/compare`は、登録モデルが保持する学習データと前処理設定を再利用し、候補モデルを同じ交差検証条件で比較します。
+
+### K-fold CVで候補モデルを比較
+
+```python
+compare_response = client.post(
+    f"/api/models/{model_id}/compare",
+    json={
+        "model_names": [
+            "線形回帰",
+            "Ridge",
+            "ランダムフォレスト回帰",
+            "LightGBM",
+        ],
+        "method": "kfold",
+        "n_splits": 5,
+        "metric": "RMSE",
+        "tuning": False,
+        "tune_best": False,
+        "continue_on_error": True,
+        "activate_best": False,
+    },
+)
+compare_response.raise_for_status()
+comparison = compare_response.json()
+```
+
+目的変数ごとのランキングをDataFrameで確認します。
+
+```python
+target_result = comparison["targets"][target_col]
+ranking_df = pd.DataFrame(target_result["ranking"])
+
+display(ranking_df)
+print("metric:", target_result["metric"])
+print("higher_is_better:", target_result["higher_is_better"])
+print("best model:", target_result["best_model_name"])
+print("failures:", target_result["failures"])
+```
+
+`higher_is_better=False`の指標では小さい値が上位、`True`の指標では大きい値が上位です。`continue_on_error=True`では、一部の候補が失敗しても比較を続行し、理由を`failures`へ記録します。
+
+### CV方式
+
+| `method` | 内容 | 主な用途 |
+|---|---|---|
+| `kfold` | データを`n_splits`個に分割して評価 | 通常のモデル選定 |
+| `loo` | 1サンプルずつ検証データにするLeave-One-Out | 小規模データでの詳細評価 |
+
+LOOの例です。
+
+```python
+loo_response = client.post(
+    f"/api/models/{model_id}/compare",
+    json={
+        "model_names": ["Ridge", "ランダムフォレスト回帰"],
+        "method": "loo",
+        "metric": "RMSE",
+        "continue_on_error": True,
+    },
+)
+loo_response.raise_for_status()
+```
+
+LOOはデータ行数と同じ回数だけ学習するため、データ数やモデルによっては計算量が大きくなります。
+
+### 指標を変更
+
+回帰では`RMSE`や`R2`、分類では`F1`など、モデル比較処理が対応する指標を指定できます。
+
+```python
+compare_response = client.post(
+    f"/api/models/{model_id}/compare",
+    json={
+        "model_names": ["Ridge", "ランダムフォレスト回帰"],
+        "method": "kfold",
+        "n_splits": 5,
+        "metric": "R2",
+    },
+)
+compare_response.raise_for_status()
+```
+
+複数目的モデルでは、候補と指標を目的変数ごとの辞書で指定できます。
+
+```python
+multi_compare_response = client.post(
+    f"/api/models/{model_id}/compare",
+    json={
+        "model_names": {
+            "strength": ["Ridge", "ランダムフォレスト回帰"],
+            "cost": ["線形回帰", "LightGBM"],
+        },
+        "metric": {
+            "strength": "R2",
+            "cost": "RMSE",
+        },
+        "method": "kfold",
+        "n_splits": 5,
+    },
+)
+```
+
+### チューニング方法の違い
+
+| 設定 | 動作 | 計算量 |
+|---|---|---|
+| `tuning=False`, `tune_best=False` | チューニングせず公平に比較 | 小 |
+| `tune_best=True` | 比較後、最良候補だけOptunaでチューニング | 中 |
+| `tuning=True` | 全候補をチューニングしてから比較 | 大 |
+
+`tuning=True`と`tune_best=True`は同時に指定できません。
+
+比較と最良候補のチューニングを1回で行う例です。
+
+```python
+compare_response = client.post(
+    f"/api/models/{model_id}/compare",
+    json={
+        "model_names": ["Ridge", "ランダムフォレスト回帰", "LightGBM"],
+        "method": "kfold",
+        "n_splits": 5,
+        "metric": "RMSE",
+        "tune_best": True,
+        "tuning_trials": 50,
+        "tuning_verbose": 0,
+        "activate_best": False,
+    },
+)
+compare_response.raise_for_status()
+```
+
+### 比較後に最良モデルだけチューニング
+
+先にランキングを確認し、その後でチューニングできます。
+
+```python
+tune_response = client.post(
+    f"/api/models/{model_id}/comparison/tune-best",
+    json={
+        "targets": [],
+        "n_trials": 50,
+        "verbose": 0,
+        "evaluate": True,
+        "activate_best": False,
+    },
+)
+tune_response.raise_for_status()
+tuned_comparison = tune_response.json()
+```
+
+`targets=[]`は全目的変数を意味します。複数目的で一部だけチューニングする場合は`["strength"]`のように指定します。`evaluate=True`では、チューニング後の最良モデルを再度CV評価します。
+
+### チューニング後のCVスコア
+
+`best_cv_scores`は、チューニング後に`evaluate=True`で再評価した場合に返されます。分割ごとのレコードをDataFrameへ変換できます。
+
+```python
+target_result = tuned_comparison["targets"][target_col]
+print("best model:", target_result["best_model_name"])
+print("best params:", target_result["best_params"])
+print("best is tuned:", target_result["best_is_tuned"])
+
+best_cv_scores = target_result["best_cv_scores"] or {}
+for split_name, score_records in best_cv_scores.items():
+    print(split_name)
+    display(pd.DataFrame(score_records))
+```
+
+このHTTP APIが返すのはCVの評価スコアです。サンプルごとのCV予測値は現在のレスポンスには含まれません。Pythonでモデルオブジェクトを直接扱う場合は、`yy_plot_ml(model, target=..., cv=True)`でモデル内部のCV予測を可視化できます。
+
+### 最良モデルを後続処理へ反映
+
+`activate_best=True`を指定すると、同じ`model_id`に登録されているモデルが最良モデルへ置き換わります。以後の予測・逆解析は有効化されたモデルを使用します。
+
+```python
+activate_response = client.post(
+    f"/api/models/{model_id}/comparison/tune-best",
+    json={
+        "targets": [],
+        "n_trials": 50,
+        "evaluate": True,
+        "activate_best": True,
+    },
+)
+activate_response.raise_for_status()
+
+predict_response = client.post(
+    f"/api/models/{model_id}/predict",
+    json={"data": dataframe_to_records(predict_df)},
+)
+predict_response.raise_for_status()
+```
+
+学習時にXAIを要求していたモデルでは、最良モデルを有効化した後にXAIキャッシュも更新されます。
+
+### 最新の比較結果を再取得
+
+```python
+comparison_response = client.get(
+    f"/api/models/{model_id}/comparison"
+)
+comparison_response.raise_for_status()
+comparison = comparison_response.json()
+```
+
+比較を一度も実行していない場合はHTTP `409`です。
 
 ## NotebookでXAIを利用
 
-XAIを利用する場合は、SHAPとPlotly可視化の依存関係もインストールします。
-
-```bash
-pip install -e ".[api,notebook,models,visualization]"
-```
-
-FastAPIのXAIエンドポイントはJSONを返します。Notebookでは`malchan.visualization`の次の関数へ、`response`または`response.json()`を直接渡して可視化できます。
+XAIを利用する場合は、学習リクエストで`compute_xai=True`を指定します。SHAP、重要度、PDP/ICEは学習後に一度計算され、以後のGET APIは保存済みキャッシュを返します。
 
 ```python
 from malchan.visualization import (
     show_xai_importance,
     show_xai_pd_and_ice,
+    show_xai_shap_beeswarm,
     show_xai_shap_scatter,
 )
 ```
 
-| 関数 | 対応するエンドポイント | 出力 |
+| 関数 | 対応するエンドポイント | 用途 |
 |---|---|---|
-| `show_xai_importance()` | `GET .../importance` | Plotly特徴量重要度棒グラフ |
-| `show_xai_shap_scatter()` | `GET .../shap` | Plotly SHAP散布図 |
-| `show_xai_pd_and_ice()` | `GET .../pdp` | Plotly PDP/ICE図 |
+| `show_xai_importance()` | `GET .../importance` | 特徴量重要度 |
+| `show_xai_shap_beeswarm()` | `GET .../shap-values` | 全特徴量のSHAP分布 |
+| `show_xai_shap_scatter()` | `GET .../shap?feature=...` | 特徴量別SHAP dependence |
+| `show_xai_pd_and_ice()` | `GET .../pdp?feature=...` | PDP・ICE |
 
-これらはFastAPIレスポンス用のアダプターです。学習済みPythonモデルを直接保持している場合は、従来の`show_importances()`、`show_shap_scatter()`、`show_pd_and_ice()`も利用できます。
-
-### 1. XAIを有効にしてモデルを学習
-
-`compute_xai=True`を指定します。既定値も`True`ですが、Notebookでは計算の有無を明示することを推奨します。
+### XAIを有効にして学習
 
 ```python
-feature_cols = ["x1", "x2"]
-target_col = "y"
-
 xai_train_response = client.post(
     "/api/models",
     json={
-        "data": dataframe_to_records(train_df),
+        "data": records,
         "target_col": target_col,
         "task": "regression",
-        "num_cols": feature_cols,
+        "num_cols": input_cols,
         "cat_cols": [],
         "model_names": ["ランダムフォレスト回帰"],
         "compute_xai": True,
@@ -142,15 +349,10 @@ xai_train_response.raise_for_status()
 
 model_info = xai_train_response.json()
 model_id = model_info["model_id"]
-print("model_id:", model_id)
 print("xai_status:", model_info["xai_status"])
 ```
 
-学習とXAI計算は現在同期処理です。`POST /api/models`の応答が返った時点で、成功した目的変数のキャッシュは利用可能です。XAI計算に失敗してもモデル登録自体は成功し、失敗理由はXAIサマリーに保存されます。
-
-### 2. XAIサマリーを確認
-
-最初にサマリーを取得し、利用可能な目的変数、特徴量、重要度手法を確認します。
+XAI計算で失敗してもモデル登録自体は成功します。目的変数ごとの状態とエラーはXAIサマリーで確認します。
 
 ```python
 summary_response = client.get(f"/api/models/{model_id}/xai")
@@ -172,70 +374,113 @@ summary_df = pd.DataFrame(
     ]
 )
 display(summary_df)
-```
 
-目的変数ごとの情報には次が含まれます。
-
-| Field | 内容 |
-|---|---|
-| `status` | `ready`、`failed`、`not_requested`などの状態 |
-| `computed_at` | XAIキャッシュを計算した日時 |
-| `error` | 計算に失敗した場合の例外情報 |
-| `features` | モデルの入力特徴量 |
-| `importance_methods` | 利用可能な`model`、`pfi`、`shap` |
-| `shap_features` | SHAP散布データを取得できる特徴量 |
-| `pdp_features` | PDP/ICEを取得できる特徴量 |
-
-単一目的の場合も複数目的の場合も、目的変数は`targets`のキーから選択できます。
-
-```python
 target = next(
     name
     for name, info in xai_summary["targets"].items()
     if info["status"] == "ready"
 )
 target_info = xai_summary["targets"][target]
-print("selected target:", target)
 ```
 
-### 3. 特徴量重要度を取得して可視化
+### 特徴量重要度
 
-`method`には`model`、`pfi`、`shap`を指定できます。実際に利用可能な手法は`importance_methods`で確認してください。
+`method`には`model`、`pfi`、`shap`を指定できます。
 
 ```python
-importance_method = "shap"
-
 importance_response = client.get(
     f"/api/models/{model_id}/xai/{target}/importance",
     params={
-        "method": importance_method,
+        "method": "shap",
         "combined": True,
         "top_n": 20,
     },
 )
 importance_response.raise_for_status()
 
-importance_fig = show_xai_importance(
-    importance_response,
-    n_bar=20,
-)
-importance_fig.show()
+show_xai_importance(importance_response, n_bar=20).show()
+importance_df = pd.DataFrame(importance_response.json()["items"])
+display(importance_df)
 ```
 
-`show_xai_importance()`はHTTPレスポンスと辞書の両方を受け取れます。表形式でも確認する場合は同じレスポンスをDataFrameへ変換します。
+`combined=True`では、可能な場合にone-hot encoding後の列などを元の入力列単位へ集約します。集約キャッシュがない場合は前処理後の特徴量へフォールバックし、レスポンスの`combined`が`False`になります。
+
+### 全特徴量のSHAP値をまとめて取得
+
+`GET .../shap-values`は、全サンプルの元特徴量値と、列が揃ったSHAP行列を一度に返します。特徴量別APIを繰り返し呼ぶ必要はありません。
 
 ```python
-importance_payload = importance_response.json()
-importance_df = pd.DataFrame(importance_payload["items"])
-display(importance_df)
-print("combined:", importance_payload["combined"])
+shap_values_response = client.get(
+    f"/api/models/{model_id}/xai/{target}/shap-values"
+)
+shap_values_response.raise_for_status()
+shap_values_payload = shap_values_response.json()
+
+print("features:", shap_values_payload["features"])
+print("outputs:", shap_values_payload["output_names"])
 ```
 
-`combined=True`では、one-hot encodingや材料特徴量生成後の多数の列を、可能な場合は元の入力列単位へ集約します。対応する集約キャッシュがない場合は、自動的に前処理後の特徴量単位へフォールバックし、応答の`combined`が`False`になります。
+レスポンスの主なフィールドです。
 
-### 4. 特徴量別SHAPデータを取得して可視化
+| Field | 内容 |
+|---|---|
+| `features` | SHAP行列の列順 |
+| `cat_cols` | カテゴリ特徴量 |
+| `records` | 全特徴量の元データ行 |
+| `output_names` | `shap`または`shap_<class>` |
+| `shap_values` | output名ごとの`n_samples × n_features`行列 |
 
-SHAPエンドポイントは、1つの元特徴量について散布図を作るためのレコードを返します。利用可能な特徴量は`shap_features`から選択します。
+DataFrameとして取り出せます。
+
+```python
+shap_X_df = pd.DataFrame(shap_values_payload["records"])[
+    shap_values_payload["features"]
+]
+
+shap_matrix_dfs = {
+    output_name: pd.DataFrame(
+        matrix,
+        columns=shap_values_payload["features"],
+    )
+    for output_name, matrix in shap_values_payload["shap_values"].items()
+}
+
+display(shap_X_df.head())
+for output_name, shap_matrix_df in shap_matrix_dfs.items():
+    print(output_name)
+    display(shap_matrix_df.head())
+```
+
+回帰では通常`output_names=["shap"]`です。分類では`shap_OK`、`shap_NG`のようなクラス別行列を返す場合があります。
+
+### SHAP Beeswarm
+
+全特徴量のSHAP分布は`show_xai_shap_beeswarm()`で可視化できます。
+
+```python
+beeswarm_fig = show_xai_shap_beeswarm(
+    shap_values_response,
+    n_shap_top=15,
+)
+beeswarm_fig.show()
+```
+
+分類で表示するクラスを指定する場合:
+
+```python
+beeswarm_fig = show_xai_shap_beeswarm(
+    shap_values_response,
+    n_shap_top=15,
+    target_item="OK",
+)
+beeswarm_fig.show()
+```
+
+`target_item`を省略した複数クラス応答では、最後のSHAP出力を表示します。解釈を明確にするため、分類ではクラス名を明示することを推奨します。
+
+### 特徴量別SHAP散布図
+
+全体傾向はBeeswarm、1特徴量の値とSHAP値の関係は特徴量別`/shap`を使用します。
 
 ```python
 shap_feature = target_info["shap_features"][0]
@@ -246,18 +491,16 @@ shap_response = client.get(
 )
 shap_response.raise_for_status()
 
-shap_fig = show_xai_shap_scatter(shap_response)
-shap_fig.show()
+show_xai_shap_scatter(shap_response).show()
 ```
 
-回帰では通常1つのSHAP系列、分類ではクラスごとに複数系列が表示されます。分類で1クラスだけを表示する場合は、クラス名を`target_item`へ指定します。
+分類で1クラスだけ表示する場合:
 
 ```python
-shap_fig = show_xai_shap_scatter(
+show_xai_shap_scatter(
     shap_response,
     target_item="OK",
-)
-shap_fig.show()
+).show()
 ```
 
 表形式でも確認できます。
@@ -266,23 +509,9 @@ shap_fig.show()
 shap_payload = shap_response.json()
 shap_df = pd.DataFrame(shap_payload["records"])
 display(shap_df.head())
-print("SHAP columns:", shap_payload["value_columns"])
 ```
 
-カテゴリ特徴量の場合は、必要に応じてカテゴリ別平均も確認できます。
-
-```python
-category_shap_df = (
-    shap_df.groupby(shap_feature, dropna=False)[shap_payload["value_columns"]]
-    .mean()
-    .reset_index()
-)
-display(category_shap_df)
-```
-
-### 5. PDPとICEを取得して可視化
-
-PDPだけを取得する場合は`include_ice=False`、個別サンプルのICEも含める場合は`True`を指定します。利用可能な特徴量は`pdp_features`から選択します。
+### PDPとICE
 
 ```python
 pdp_feature = target_info["pdp_features"][0]
@@ -297,60 +526,28 @@ pdp_response = client.get(
 )
 pdp_response.raise_for_status()
 
-pdp_fig = show_xai_pd_and_ice(
+show_xai_pd_and_ice(
     pdp_response,
     ice=True,
     max_ice=30,
-)
-pdp_fig.show()
+).show()
 ```
 
-回帰では通常1系列、分類ではクラスごとに複数系列が表示されます。分類で特定クラスだけを表示する場合は`series_name`を指定します。
+分類で特定クラスだけ表示する場合:
 
 ```python
-pdp_fig = show_xai_pd_and_ice(
+show_xai_pd_and_ice(
     pdp_response,
     series_name="OK",
     ice=True,
-)
-pdp_fig.show()
+).show()
 ```
 
-PDPだけ表示したい場合は、APIでICEを取得しないか、可視化時に`ice=False`を指定します。
+PDPだけ表示する場合は`include_ice=False`で取得するか、可視化時に`ice=False`を指定します。
 
-```python
-pdp_only_fig = show_xai_pd_and_ice(
-    pdp_response,
-    ice=False,
-)
-pdp_only_fig.show()
-```
+### XAIを再計算
 
-レスポンスを表形式で確認する場合は、系列ごとにDataFrameへ変換できます。
-
-```python
-pdp_payload = pdp_response.json()
-pdp_frames = []
-for series in pdp_payload["series"]:
-    frame = pd.DataFrame(
-        {
-            pdp_feature: pdp_payload["x_values"],
-            "target": target,
-            "series": series["name"],
-            "pdp": series["pd_values"],
-        }
-    )
-    pdp_frames.append(frame)
-
-pdp_df = pd.concat(pdp_frames, ignore_index=True)
-display(pdp_df)
-```
-
-### 6. XAIを明示的に再計算
-
-`compute_xai=False`で学習した場合や、キャッシュを明示的に更新したい場合は再計算エンドポイントを利用します。
-
-1つの目的変数だけ再計算する例です。
+`compute_xai=False`で学習した場合や、キャッシュを更新したい場合に使用します。
 
 ```python
 recompute_response = client.post(
@@ -358,81 +555,36 @@ recompute_response = client.post(
     json={"targets": [target]},
 )
 recompute_response.raise_for_status()
-xai_summary = recompute_response.json()
-print(xai_summary["status"])
 ```
 
-全目的変数を再計算する場合は空のリストを指定します。
+全目的変数を再計算する場合は`targets=[]`です。
 
-```python
-recompute_response = client.post(
-    f"/api/models/{model_id}/xai/recompute",
-    json={"targets": []},
-)
-recompute_response.raise_for_status()
-```
+### XAI状態
 
-存在しない目的変数、重複した目的変数、空文字を指定するとHTTP `422`になります。
+- `not_requested`: 学習時に無効化され、まだ計算していない
+- `computing`: 計算中
+- `ready`: キャッシュが利用可能
+- `partial`: 複数目的のうち一部だけ成功
+- `failed`: XAI計算に失敗
+- `unavailable`: モデルが必要なXAI処理を提供していない
 
-### 7. 複数目的モデルのXAIを順番に取得
-
-複数目的でもAPIの構造は同じです。`targets`を走査し、`ready`の目的変数を可視化できます。
-
-```python
-for current_target, info in xai_summary["targets"].items():
-    if info["status"] != "ready":
-        print(current_target, "is not ready:", info["error"])
-        continue
-
-    methods = info["importance_methods"]
-    if not methods:
-        continue
-
-    response = client.get(
-        f"/api/models/{model_id}/xai/{current_target}/importance",
-        params={
-            "method": methods[0],
-            "combined": True,
-            "top_n": 20,
-        },
-    )
-    response.raise_for_status()
-
-    print(current_target)
-    show_xai_importance(response, n_bar=20).show()
-```
-
-### 8. XAI取得時のHTTPステータス
+XAI取得時の主なHTTPステータスです。
 
 | Status | 主な原因 |
 |---|---|
 | `200` | キャッシュを正常に取得 |
 | `404` | `model_id`が存在しない |
-| `409` | XAIを未計算、計算失敗、または要求したキャッシュがない |
+| `409` | XAIを未計算、計算失敗、要求したキャッシュがない |
 | `422` | 目的変数、特徴量、手法、query parameterが不正 |
 
-エラー内容をNotebookで確認する例です。
+## インメモリ状態のライフサイクル
 
-```python
-response = client.get(
-    f"/api/models/{model_id}/xai/{target}/importance",
-    params={"method": "shap", "combined": True, "top_n": 20},
-)
-
-if response.status_code == 409:
-    print("XAI cache is not ready:", response.json()["detail"])
-else:
-    response.raise_for_status()
-```
-
-### XAIキャッシュのライフサイクル
-
-- `compute_xai=True`では、モデル学習直後にXAIを一度計算します。
-- XAIのGET APIは保存済みキャッシュを返すだけで再計算しません。
-- `POST /xai/recompute`を呼ぶと、選択した目的変数のキャッシュを再構築します。
-- モデル比較後に`activate_best=True`で登録モデルを置き換えた場合、元のモデルでXAIが要求されていれば、新しいモデルのXAIも再計算します。
-- `DELETE /api/models/{model_id}`でモデルを削除するとXAIキャッシュも削除されます。
-- Notebookで`create_app()`または`TestClient`を作り直すと、以前のインメモリモデルとXAIキャッシュは引き継がれません。
+- モデル、比較結果、XAIキャッシュは同じ`app`内のメモリに保持されます。
+- `create_app()`または`TestClient`を作り直すと、以前の状態は引き継がれません。
+- XAIのGET APIは再計算せず、保存済みキャッシュを返します。
+- `POST /xai/recompute`は選択した目的変数のXAIを再構築します。
+- `activate_best=True`でモデルを置き換えた場合、XAIが要求済みなら新しいモデルのXAIも更新します。
+- `DELETE /api/models/{model_id}`でモデル、比較状態、XAIキャッシュを削除します。
 
 処理後に明示的に閉じる場合:
 
@@ -440,7 +592,7 @@ else:
 client.close()
 ```
 
-通常のPythonモジュールから外部サーバーとして起動する場合も、同じファクトリを利用できます。
+## 外部サーバーとして起動
 
 ```python
 # main.py
@@ -456,9 +608,14 @@ app = create_app(
 uvicorn main:app --reload
 ```
 
-## React開発
+またはアプリケーションファクトリを直接指定します。
 
-SHAPとPDPの事前計算を利用するため、`visualization` extraもインストールします。
+```bash
+MALCHAN_SERVE_FRONTEND=false \
+  uvicorn "malchan.app:create_app" --factory --reload
+```
+
+## React開発
 
 ターミナル1:
 
@@ -495,15 +652,13 @@ Viteの出力先は`src/malchan/app/web/static`です。ビルド後はWeb UIを
 
 ## 画面構成
 
-添付HTMLのワークフローをReactコンポーネントへ分割しています。
-
 | Step | React画面 | 主な処理 |
 |---|---|---|
 | 1 | Data | CSV/XLSX読込、型推定、プレビュー、欠損・列統計 |
 | 2 | Explore | ヒストグラム、散布図、相関ヒートマップ |
 | 3 | Prepare | 単一・複数目的、回帰/分類、説明変数選択 |
-| 4 | Model | 学習、候補比較、最良モデルチューニング、有効化 |
-| 5 | Explain | Y-Y図、残差図、キャッシュ済み重要度・SHAP・PDP |
+| 4 | Model | 学習、候補比較、CV、最良モデルチューニング、有効化 |
+| 5 | Explain | Y-Y図、残差図、重要度、SHAP Beeswarm、SHAP散布、PDP/ICE |
 | 6 | Optimize | 任意条件予測、数値範囲・カテゴリ候補を使った逆解析 |
 | 7 | Report | 分析レポート用プロンプト生成 |
 
@@ -512,119 +667,27 @@ Viteの出力先は`src/malchan/app/web/static`です。ビルド後はWeb UIを
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/health` | 稼働確認 |
-| `POST` | `/api/models` | 単一・複数目的モデルの学習、XAI事前計算、登録 |
+| `POST` | `/api/models` | モデル学習、XAI事前計算、登録 |
 | `GET` | `/api/models` | 登録モデル一覧 |
 | `GET` | `/api/models/{model_id}` | モデル情報と`xai_status` |
 | `POST` | `/api/models/{model_id}/predict` | 予測・分類確率 |
-| `POST` | `/api/models/{model_id}/compare` | 候補モデル比較と任意のベストモデルチューニング |
+| `POST` | `/api/models/{model_id}/compare` | 候補モデルのCV比較と任意チューニング |
 | `GET` | `/api/models/{model_id}/comparison` | 最新比較結果 |
-| `POST` | `/api/models/{model_id}/comparison/tune-best` | 比較後の追加チューニング |
-| `GET` | `/api/models/{model_id}/xai` | キャッシュ済みXAIの状態と利用可能データ |
+| `POST` | `/api/models/{model_id}/comparison/tune-best` | 最良候補の追加チューニング・有効化 |
+| `GET` | `/api/models/{model_id}/xai` | XAI状態と利用可能データ |
 | `GET` | `/api/models/{model_id}/xai/{target}/importance` | モデル/PFI/SHAP重要度 |
+| `GET` | `/api/models/{model_id}/xai/{target}/shap-values` | 全特徴量の元データとSHAP行列 |
 | `GET` | `/api/models/{model_id}/xai/{target}/shap` | 特徴量別SHAP散布用データ |
 | `GET` | `/api/models/{model_id}/xai/{target}/pdp` | 特徴量別PDPと任意のICE |
-| `POST` | `/api/models/{model_id}/xai/recompute` | 明示的なXAI再計算 |
+| `POST` | `/api/models/{model_id}/xai/recompute` | XAI再計算 |
 | `POST` | `/api/models/{model_id}/inverse-analysis` | Optuna逆解析 |
-| `DELETE` | `/api/models/{model_id}` | 登録モデルとXAIキャッシュ削除 |
-
-ReactのModel画面では`activate_best=true`を指定でき、比較・チューニング後のベストモデルを後続の予測と逆解析へ反映します。XAIが有効なモデルでは、ベストモデルを有効化した直後に新しいモデルのSHAP/PDPキャッシュも更新します。
-
-## XAIの計算とHTTP API
-
-`POST /api/models`の`compute_xai`は既定で`true`です。モデルの学習後に、各目的変数の子モデルで次を実行します。
-
-```python
-model.shap()
-model.get_xai()
-```
-
-`get_xai()`が作成した`model.importances`には、モデル重要度、Permutation Importance、SHAP重要度、特徴量別SHAPデータ、特徴量別PDP/ICEが保存されます。
-
-通常のXAI GETエンドポイントは`shap()`や`get_xai()`を呼ばず、保存済みキャッシュをシリアライズするだけです。Notebookでの詳細な取得・可視化方法は「NotebookでXAIを利用」を参照してください。
-
-### curlでの利用例
-
-状態と利用可能な目的変数・特徴量・手法:
-
-```bash
-curl http://127.0.0.1:8000/api/models/<model_id>/xai
-```
-
-SHAP重要度:
-
-```bash
-curl "http://127.0.0.1:8000/api/models/<model_id>/xai/y/importance?method=shap&combined=true&top_n=20"
-```
-
-SHAP散布用データ:
-
-```bash
-curl "http://127.0.0.1:8000/api/models/<model_id>/xai/y/shap?feature=x1"
-```
-
-PDPのみ:
-
-```bash
-curl "http://127.0.0.1:8000/api/models/<model_id>/xai/y/pdp?feature=x1"
-```
-
-最大30サンプルのICE曲線も含める場合:
-
-```bash
-curl "http://127.0.0.1:8000/api/models/<model_id>/xai/y/pdp?feature=x1&include_ice=true&max_ice=30"
-```
-
-明示的に一部の目的変数を再計算する場合:
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/models/<model_id>/xai/recompute \
-  -H "Content-Type: application/json" \
-  -d '{"targets": ["strength"]}'
-```
-
-## XAI状態
-
-モデル全体と目的変数ごとに次の状態を返します。
-
-- `not_requested`: 学習時に無効化され、まだ計算していない
-- `computing`: 計算中
-- `ready`: キャッシュが利用可能
-- `partial`: 複数目的のうち一部だけ成功
-- `failed`: XAI計算に失敗
-- `unavailable`: モデルが`shap()`または`get_xai()`を提供していない
-
-XAI計算で例外が発生してもモデル登録自体は成功します。詳細は目的変数別の`error`に記録されます。
-
-## Web配信設定
-
-`create_app()`はAPIルートを登録した後、次の順番でReactビルドを探索します。
-
-1. `MALCHAN_FRONTEND_DIST`
-2. `src/malchan/app/web/static`
-3. 開発用の`frontend/dist`
-
-`index.html`が見つかった場合だけ`/`へ静的マウントします。API専用運用では:
-
-```bash
-MALCHAN_SERVE_FRONTEND=false uvicorn "malchan.app:create_app" --factory
-```
-
-Vite開発サーバーのCORS許可は既定で次の2つです。
-
-- `http://127.0.0.1:5173`
-- `http://localhost:5173`
-
-変更する場合:
-
-```bash
-MALCHAN_CORS_ORIGINS="http://localhost:5173,http://example.local" \
-  uvicorn "malchan.app:create_app" --factory
-```
+| `DELETE` | `/api/models/{model_id}` | モデルと関連キャッシュ削除 |
 
 ## 現在の制約
 
-- 学習、XAI事前計算、比較、チューニング、逆解析は同期処理です。
-- XAI事前計算は全特徴量のPDP/ICEを保持するため、特徴量数・データ数に応じて学習時間とメモリ使用量が増えます。
+- 学習、CV比較、チューニング、XAI、逆解析は同期処理です。
+- 全SHAPレスポンスは`n_samples × n_features`の行列を含むため、大規模データではレスポンスサイズが増えます。
+- XAI事前計算は全特徴量のSHAP・PDP/ICEを保持するため、特徴量数・データ数に応じて学習時間とメモリ使用量が増えます。
+- FastAPIの比較レスポンスはCVスコアを返しますが、サンプルごとのCV予測値はまだ返しません。
 - モデル、比較状態、XAIキャッシュはプロセス内メモリに保持され、複数workerでは共有されません。
-- Reactはデータをブラウザで解析してJSON送信します。大規模ファイル向けのストリーミングアップロードは未実装です。
-- 元HTMLにある固定値・線形制約などの高度な逆解析UIは、既存APIスキーマへ段階的に接続する予定です。
+- 大規模ファイル向けのストリーミングアップロードは未実装です。
