@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 
 import pytest
@@ -9,18 +10,29 @@ import pytest
 
 def test_tabular_preprocess_does_not_import_xenonpy() -> None:
     """組成列を使わない前処理ではXenonPyを要求しない。"""
-    from malchan.models.pipelines.preprocess_pipeline import make_preprocess
+    script = """
+import sys
+from malchan.models.pipelines.preprocess_pipeline import make_preprocess
 
-    pipeline = make_preprocess(
-        model_name="線形回帰",
-        num_cols=["x"],
-        cat_cols=[],
-        smiles_cols=[],
-        comp_cols=[],
+pipeline = make_preprocess(
+    model_name='線形回帰',
+    num_cols=['x'],
+    cat_cols=[],
+    smiles_cols=[],
+    comp_cols=[],
+)
+assert pipeline is not None
+print(any(name == 'xenonpy' or name.startswith('xenonpy.') for name in sys.modules))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
     )
 
-    assert pipeline is not None
-    assert not any(name == "xenonpy" or name.startswith("xenonpy.") for name in sys.modules)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False"
 
 
 def test_material_implementations_are_not_exported_from_preprocess_pipeline() -> None:
