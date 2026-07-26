@@ -2,7 +2,10 @@
 
 from typing import Any
 
+from ._step_normalization import install_step_normalization
 from .models import inverse_analysis as _inverse_analysis
+
+install_step_normalization()
 
 
 def _resolve_model_value(model: Any, name: str) -> Any:
