@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 
 def make_comp_preprocess(
     method: str | None = "xenonpy",
-    feats: list[str] = [],
+    feats: list[str] | tuple[str, ...] = (),
 ) -> Pipeline | None:
     """組成式列向けの特徴量生成パイプラインを作成する。
 
