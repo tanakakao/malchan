@@ -93,18 +93,26 @@ class XenoCompositionsTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         series = X.iloc[:, 0]
         if series.empty:
-            return pd.DataFrame(index=series.index, columns=self._cols_out_, dtype=float)
+            return pd.DataFrame(
+                index=series.index,
+                columns=self._cols_out_,
+                dtype=float,
+            )
 
         keys = [
             composition_cache_key(value, ndigits=self.key_round_digits)
             for value in series.values
         ]
         unique: dict[Hashable, Any] = {}
-        for key, value in zip(keys, series.values):
+        for key, value in zip(keys, series.values, strict=False):
             unique.setdefault(key, value)
 
         if self.cache:
-            pending = [(key, value) for key, value in unique.items() if key not in self._cache]
+            pending = [
+                (key, value)
+                for key, value in unique.items()
+                if key not in self._cache
+            ]
         else:
             pending = list(unique.items())
             self._cache = {}
@@ -115,7 +123,7 @@ class XenoCompositionsTransformer(BaseEstimator, TransformerMixin):
                 if column not in frame.columns:
                     frame[column] = np.nan
             values = frame[self._cols_in_].to_numpy(dtype=float, copy=False)
-            for (key, _), row in zip(pending, values):
+            for (key, _), row in zip(pending, values, strict=False):
                 self._cache[key] = row
 
         array = np.vstack([self._cache[key] for key in keys])
