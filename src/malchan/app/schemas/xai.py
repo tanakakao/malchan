@@ -82,6 +82,18 @@ class XaiShapResponse(BaseModel):
     records: list[dict[str, Any]]
 
 
+class XaiShapValuesResponse(BaseModel):
+    """All cached raw feature values and aligned SHAP matrices for one target."""
+
+    model_id: str
+    target: str
+    features: list[str]
+    cat_cols: list[str] = Field(default_factory=list)
+    output_names: list[str]
+    records: list[dict[str, Any]]
+    shap_values: dict[str, list[list[float | None]]]
+
+
 class XaiPdpSeries(BaseModel):
     """One PDP output series and optional cached ICE curves."""
 
