@@ -1,17 +1,15 @@
-"""数値・カテゴリ・分子特徴量を組み合わせる前処理Pipeline。"""
+"""数値・カテゴリ・外部特徴量を組み合わせる前処理Pipeline。"""
 
 from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 from imblearn.pipeline import Pipeline as ImbalancedPipeline
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import FastICA, KernelPCA, NMF, PCA
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
-from sklearn.pipeline import Pipeline, make_union
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
     FunctionTransformer,
     MaxAbsScaler,
@@ -21,35 +19,6 @@ from sklearn.preprocessing import (
     PolynomialFeatures,
     StandardScaler,
 )
-from skfp.fingerprints import (
-    AtomPairFingerprint,
-    AutocorrFingerprint,
-    AvalonFingerprint,
-    E3FPFingerprint,
-    ECFPFingerprint,
-    MACCSFingerprint,
-    MORSEFingerprint,
-    PhysiochemicalPropertiesFingerprint,
-    PubChemFingerprint,
-    RDFFingerprint,
-    RDKit2DDescriptorsFingerprint,
-)
-from skfp.preprocessing import ConformerGenerator, MolFromSmilesTransformer
-
-
-FINGERPRINTS = {
-    "ECFP": ECFPFingerprint(count=True),
-    "MACCS": MACCSFingerprint(),
-    "RDKit": RDKit2DDescriptorsFingerprint(),
-    "PubChem": PubChemFingerprint(),
-    "AtomPair": AtomPairFingerprint(),
-    "Avalon": AvalonFingerprint(),
-    "PhysChem": PhysiochemicalPropertiesFingerprint(),
-    "Autocorr": AutocorrFingerprint(use_3D=True),
-    "E3FP": E3FPFingerprint(),
-    "MORSE": MORSEFingerprint(),
-    "RDF": RDFFingerprint(),
-}
 
 
 def _identity(value: Any) -> Any:
@@ -165,164 +134,6 @@ def make_common_preprocess(
     )
 
 
-class SmilesToMol(BaseEstimator, TransformerMixin):
-    """SMILESをRDKit Molへ変換し、必要に応じて配座を生成する。"""
-
-    def __init__(
-        self,
-        *,
-        generate_conformers: bool = False,
-        error_on_invalid: bool = False,
-        sanitize: bool = True,
-        mol_n_jobs: int | None = 1,
-        conf_num_conformers: int = 1,
-        conf_errors: str = "ignore",
-        conf_n_jobs: int | None = 1,
-        random_state: int | None = 0,
-        use_cache: bool = True,
-        cache_max: int = 50000,
-    ):
-        self.generate_conformers = generate_conformers
-        self.error_on_invalid = error_on_invalid
-        self.sanitize = sanitize
-        self.mol_n_jobs = mol_n_jobs
-        self.conf_num_conformers = conf_num_conformers
-        self.conf_errors = conf_errors
-        self.conf_n_jobs = conf_n_jobs
-        self.random_state = random_state
-        self.use_cache = use_cache
-        self.cache_max = cache_max
-
-    def fit(self, X: Any, y: Any = None) -> "SmilesToMol":
-        self.mol_transformer_ = MolFromSmilesTransformer(
-            sanitize=self.sanitize,
-            valid_only=False,
-            n_jobs=self.mol_n_jobs,
-        )
-        self.conf_transformer_ = ConformerGenerator(
-            num_conformers=self.conf_num_conformers,
-            errors=self.conf_errors,
-            n_jobs=self.conf_n_jobs,
-            random_state=self.random_state,
-        )
-        self._mol_cache = {} if self.use_cache else None
-        self._conf_cache = {} if self.use_cache else None
-        return self
-
-    def transform(self, X: Any) -> list[Any]:
-        smiles = np.asarray(X).ravel().tolist()
-        unique_smiles = list(dict.fromkeys(smiles))
-
-        if self.use_cache:
-            missing = [value for value in unique_smiles if value not in self._mol_cache]
-            if missing:
-                generated = self.mol_transformer_.transform(missing)
-                self._mol_cache.update(dict(zip(missing, generated, strict=False)))
-            mol_by_smiles = self._mol_cache
-        else:
-            generated = self.mol_transformer_.transform(unique_smiles)
-            mol_by_smiles = dict(zip(unique_smiles, generated, strict=False))
-
-        molecules = [mol_by_smiles[value] for value in smiles]
-        if self.error_on_invalid and any(molecule is None for molecule in molecules):
-            invalid_rows = [
-                index
-                for index, molecule in enumerate(molecules)
-                if molecule is None
-            ][:10]
-            raise ValueError(f"Invalid SMILES at rows: {invalid_rows}")
-
-        if not self.generate_conformers:
-            return molecules
-
-        if self.use_cache:
-            missing_conf = [
-                value
-                for value in unique_smiles
-                if value not in self._conf_cache
-            ]
-            valid_pairs = [
-                (value, mol_by_smiles[value])
-                for value in missing_conf
-                if mol_by_smiles[value] is not None
-            ]
-            if valid_pairs:
-                values, valid_molecules = zip(*valid_pairs, strict=False)
-                generated_conf = self.conf_transformer_.transform(list(valid_molecules))
-                self._conf_cache.update(
-                    dict(zip(values, generated_conf, strict=False))
-                )
-            for value in missing_conf:
-                self._conf_cache.setdefault(value, None)
-
-            if self.cache_max and len(self._mol_cache) > self.cache_max:
-                self._mol_cache.clear()
-                self._conf_cache.clear()
-            return [self._conf_cache[value] for value in smiles]
-
-        valid_pairs = [
-            (value, mol_by_smiles[value])
-            for value in unique_smiles
-            if mol_by_smiles[value] is not None
-        ]
-        conformers: dict[Any, Any] = {value: None for value in unique_smiles}
-        if valid_pairs:
-            values, valid_molecules = zip(*valid_pairs, strict=False)
-            generated_conf = self.conf_transformer_.transform(list(valid_molecules))
-            conformers.update(dict(zip(values, generated_conf, strict=False)))
-        return [conformers[value] for value in smiles]
-
-    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
-        return np.array(["mol"], dtype=object)
-
-
-class PassthroughNames(BaseEstimator, TransformerMixin):
-    """匿名配列へ安定した特徴量名を付与する。"""
-
-    def fit(self, X: Any, y: Any = None) -> "PassthroughNames":
-        self.n_features_in_ = X.shape[1]
-        return self
-
-    def transform(self, X: Any) -> Any:
-        return X
-
-    def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
-        if input_features is None:
-            return np.array(
-                [f"feat_{index}" for index in range(self.n_features_in_)],
-                dtype=object,
-            )
-        return np.asarray(input_features, dtype=object)
-
-
-def make_smiles_preprocess(
-    fingerprints: list[str] | tuple[str, ...] = (),
-) -> Pipeline | None:
-    """SMILES列向けのfingerprint生成Pipelineを作成する。"""
-    if not fingerprints:
-        return None
-
-    unknown = [name for name in fingerprints if name not in FINGERPRINTS]
-    if unknown:
-        raise ValueError(
-            f"未対応のfingerprintです: {unknown}. 利用可能: {sorted(FINGERPRINTS)}"
-        )
-
-    selected = [FINGERPRINTS[name] for name in fingerprints]
-    generate_conformers = any(
-        name in {"Autocorr", "E3FP", "MORSE", "RDF"}
-        for name in fingerprints
-    )
-    return Pipeline(
-        [
-            ("to_mol", SmilesToMol(generate_conformers=generate_conformers)),
-            ("fp", make_union(*selected)),
-            ("sc", StandardScaler(with_mean=False)),
-            ("names", PassthroughNames()),
-        ]
-    )
-
-
 def make_preprocess_pipeline(
     num_process: Pipeline,
     cat_process: Pipeline,
@@ -410,11 +221,12 @@ def make_preprocess(
         pca=decomposition,
         ensemble=ensemble,
     )
-    smiles_process = (
-        make_smiles_preprocess(fingerprints=fingerprints)
-        if smiles_cols
-        else None
-    )
+
+    smiles_process = None
+    if smiles_cols:
+        from malchan.features.chemistry.pipeline import make_smiles_preprocess
+
+        smiles_process = make_smiles_preprocess(fingerprints=fingerprints)
 
     comp_process = None
     if comp_cols:
@@ -448,14 +260,10 @@ def make_preprocess(
 
 
 __all__ = [
-    "FINGERPRINTS",
-    "PassthroughNames",
-    "SmilesToMol",
     "make_categorical_preprocess",
     "make_common_preprocess",
     "make_numcat_common_preprocess",
     "make_numeric_preprocess",
     "make_preprocess",
     "make_preprocess_pipeline",
-    "make_smiles_preprocess",
 ]
