@@ -28,6 +28,7 @@ from .xai import (
     XaiPdpResponse,
     XaiPdpSeries,
     XaiShapResponse,
+    XaiShapValuesResponse,
     XaiSummaryResponse,
     XaiTargetSummary,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "XaiPdpResponse",
     "XaiPdpSeries",
     "XaiShapResponse",
+    "XaiShapValuesResponse",
     "XaiSummaryResponse",
     "XaiTargetSummary",
 ]

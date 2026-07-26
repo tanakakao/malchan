@@ -17,6 +17,7 @@ from .xai_api_plots import (
     show_xai_pd_and_ice,
     show_xai_shap_scatter,
 )
+from .xai_beeswarm import show_xai_shap_beeswarm
 
 __all__ = [
     "show_ia_importance",
@@ -30,6 +31,7 @@ __all__ = [
     "show_shap_scatter",
     "show_xai_importance",
     "show_xai_pd_and_ice",
+    "show_xai_shap_beeswarm",
     "show_xai_shap_scatter",
     "yy_plot_ml",
 ]

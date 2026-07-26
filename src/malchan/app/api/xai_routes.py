@@ -9,6 +9,7 @@ from malchan.app.schemas import (
     XaiImportanceResponse,
     XaiPdpResponse,
     XaiShapResponse,
+    XaiShapValuesResponse,
     XaiSummaryResponse,
 )
 from malchan.app.services import ModelNotFoundError, XaiNotReadyError
@@ -78,6 +79,34 @@ def create_xai_router(service: Any) -> APIRouter:
                 combined=combined,
                 top_n=top_n,
             )
+        except ModelNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found.",
+            ) from exc
+        except XaiNotReadyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
+    @router.get(
+        "/models/{model_id}/xai/{target}/shap-values",
+        response_model=XaiShapValuesResponse,
+    )
+    def get_xai_shap_values(
+        model_id: str,
+        target: str,
+    ) -> XaiShapValuesResponse:
+        """Return all raw feature values and aligned cached SHAP matrices."""
+
+        try:
+            return service.get_xai_shap_values(model_id, target)
         except ModelNotFoundError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
