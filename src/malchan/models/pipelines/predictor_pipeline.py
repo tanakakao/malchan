@@ -40,7 +40,7 @@ from typing import List, Optional, Union, Dict, Tuple, Callable, Any, Type
 import warnings
 
 from ..utils import (
-    REG_MODEL_DICT, CLS_MODEL_DICT, FP_dcit, INORG_dict, AD_MODEL_DICT, SAMPLING_DICT,
+    REG_MODEL_DICT, CLS_MODEL_DICT, AD_MODEL_DICT, SAMPLING_DICT,
     reg_default_params, cls_default_params, ad_default_params,
     get_param_grid_reg, get_param_grid_cls
 )
