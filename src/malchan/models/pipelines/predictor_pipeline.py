@@ -105,6 +105,13 @@ def make_model(
     if kwargs is None:
         kwargs = {}
 
+    # malchanではXGBoostへ渡す前にカテゴリ列をOne-Hot Encodingする。
+    # XGBoost 3.3以降のenable_categorical=True既定値を明示的に無効化し、
+    # SHAP TreeExplainerが数値特徴量モデルをカテゴリ分岐モデルと誤判定するのを防ぐ。
+    if model_name == "XGBoost":
+        kwargs = kwargs.copy()
+        kwargs.setdefault("enable_categorical", False)
+
     # 指定されたモデル名のクラスを辞書から取得し、インスタンスを作成して返す
     return model_dict[model_name](**kwargs)
 
