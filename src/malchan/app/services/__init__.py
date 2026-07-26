@@ -7,9 +7,11 @@ from .comparison_service import (
 from .model_service import InMemoryModelService, ModelNotFoundError
 from .xai_comparison_hook import install_xai_comparison_hooks
 from .xai_service import XaiNotReadyError, install_xai_service
+from .xai_shap_service import install_xai_shap_service
 
 install_comparison_service(InMemoryModelService)
 install_xai_service(InMemoryModelService)
+install_xai_shap_service(InMemoryModelService)
 install_xai_comparison_hooks(InMemoryModelService)
 
 __all__ = [
