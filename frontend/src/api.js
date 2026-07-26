@@ -87,6 +87,10 @@ export const api = {
     request(
       `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/importance${query(options)}`,
     ),
+  xaiShapValues: (modelId, target) =>
+    request(
+      `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/shap-values`,
+    ),
   xaiShap: (modelId, target, feature) =>
     request(
       `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/shap${query({ feature })}`,
