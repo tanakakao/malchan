@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from imblearn.pipeline import Pipeline as ImbalancedPipeline
@@ -21,7 +21,6 @@ from sklearn.preprocessing import (
     PolynomialFeatures,
     StandardScaler,
 )
-
 from skfp.fingerprints import (
     AtomPairFingerprint,
     AutocorrFingerprint,
@@ -58,8 +57,8 @@ def _identity(value: Any) -> Any:
 
 
 def make_numeric_preprocess(
-    impute_type: Optional[str] = None,
-    scale_type: Optional[str] = None,
+    impute_type: str | None = None,
+    scale_type: str | None = None,
 ) -> Pipeline:
     """数値列の欠損補完・スケーリングPipelineを作成する。"""
     imputer = {
@@ -218,11 +217,11 @@ class SmilesToMol(BaseEstimator, TransformerMixin):
             missing = [value for value in unique_smiles if value not in self._mol_cache]
             if missing:
                 generated = self.mol_transformer_.transform(missing)
-                self._mol_cache.update(dict(zip(missing, generated)))
+                self._mol_cache.update(dict(zip(missing, generated, strict=False)))
             mol_by_smiles = self._mol_cache
         else:
             generated = self.mol_transformer_.transform(unique_smiles)
-            mol_by_smiles = dict(zip(unique_smiles, generated))
+            mol_by_smiles = dict(zip(unique_smiles, generated, strict=False))
 
         molecules = [mol_by_smiles[value] for value in smiles]
         if self.error_on_invalid and any(molecule is None for molecule in molecules):
@@ -248,9 +247,11 @@ class SmilesToMol(BaseEstimator, TransformerMixin):
                 if mol_by_smiles[value] is not None
             ]
             if valid_pairs:
-                values, valid_molecules = zip(*valid_pairs)
+                values, valid_molecules = zip(*valid_pairs, strict=False)
                 generated_conf = self.conf_transformer_.transform(list(valid_molecules))
-                self._conf_cache.update(dict(zip(values, generated_conf)))
+                self._conf_cache.update(
+                    dict(zip(values, generated_conf, strict=False))
+                )
             for value in missing_conf:
                 self._conf_cache.setdefault(value, None)
 
@@ -266,9 +267,9 @@ class SmilesToMol(BaseEstimator, TransformerMixin):
         ]
         conformers: dict[Any, Any] = {value: None for value in unique_smiles}
         if valid_pairs:
-            values, valid_molecules = zip(*valid_pairs)
+            values, valid_molecules = zip(*valid_pairs, strict=False)
             generated_conf = self.conf_transformer_.transform(list(valid_molecules))
-            conformers.update(dict(zip(values, generated_conf)))
+            conformers.update(dict(zip(values, generated_conf, strict=False)))
         return [conformers[value] for value in smiles]
 
     def get_feature_names_out(self, input_features: Any = None) -> np.ndarray:
@@ -294,7 +295,9 @@ class PassthroughNames(BaseEstimator, TransformerMixin):
         return np.asarray(input_features, dtype=object)
 
 
-def make_smiles_preprocess(fingerprints: list[str] = []) -> Pipeline | None:
+def make_smiles_preprocess(
+    fingerprints: list[str] | tuple[str, ...] = (),
+) -> Pipeline | None:
     """SMILES列向けのfingerprint生成Pipelineを作成する。"""
     if not fingerprints:
         return None
@@ -327,14 +330,14 @@ def make_preprocess_pipeline(
     comp_process: Pipeline | None = None,
     numcat_common_preprocess: Any | None = None,
     common_process: Any | None = None,
-    num_cols: list[str] = [],
-    cat_cols: list[str] = [],
-    smiles_cols: list[str] = [],
-    comp_cols: list[str] = [],
+    num_cols: list[str] | tuple[str, ...] = (),
+    cat_cols: list[str] | tuple[str, ...] = (),
+    smiles_cols: list[str] | tuple[str, ...] = (),
+    comp_cols: list[str] | tuple[str, ...] = (),
 ) -> ImbalancedPipeline:
     """列種別の前処理をColumnTransformerへ統合する。"""
-    transforms: list[tuple[str, Any, list[str]]] = []
-    numcat_transforms: list[tuple[str, Any, list[str]]] = []
+    transforms: list[tuple[str, Any, list[str] | tuple[str, ...]]] = []
+    numcat_transforms: list[tuple[str, Any, list[str] | tuple[str, ...]]] = []
 
     if num_cols:
         numcat_transforms.append(("num", num_process, num_cols))
@@ -377,16 +380,16 @@ def make_preprocess_pipeline(
 
 def make_preprocess(
     model_name: str,
-    num_cols: list[str] = [],
-    cat_cols: list[str] = [],
-    num_impute_type: Optional[str] = None,
-    num_scale_type: Optional[str] = None,
+    num_cols: list[str] | tuple[str, ...] = (),
+    cat_cols: list[str] | tuple[str, ...] = (),
+    num_impute_type: str | None = None,
+    num_scale_type: str | None = None,
     cat_impute: bool = False,
-    smiles_cols: list[str] = [],
-    fingerprints: list[str] = [],
-    comp_cols: list[str] = [],
+    smiles_cols: list[str] | tuple[str, ...] = (),
+    fingerprints: list[str] | tuple[str, ...] = (),
+    comp_cols: list[str] | tuple[str, ...] = (),
     comp_method: str | None = None,
-    comp_feats: list[str] = [],
+    comp_feats: list[str] | tuple[str, ...] = (),
     poly: bool = False,
     poly_degree: int = 1,
     poly_interaction_only: bool = True,
