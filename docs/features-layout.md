@@ -1,20 +1,23 @@
 # Features module layout
 
-`malchan.features` is the intended home for chemistry and materials feature generation.
+`malchan.features` contains chemistry and materials feature generation that is independent from model construction.
 
-The goal is to keep heavy optional dependencies out of generic preprocessing and model code.  Feature generators should be imported only when a workflow explicitly asks for chemistry or materials descriptors.
+Heavy optional dependencies are loaded only when the corresponding descriptor backend is selected.
 
-Target responsibilities:
+## Materials
 
-- `malchan.features.chemistry.smiles`: SMILES parsing and molecule conversion.
-- `malchan.features.chemistry.fingerprints`: molecular fingerprints and descriptor backends such as RDKit and scikit-fingerprints.
-- `malchan.features.materials.composition`: composition parsing and common composition helpers.
-- `malchan.features.materials.xenonpy`: XenonPy-specific composition descriptors.
-- `malchan.features.materials.matminer`: Matminer-specific composition descriptors.
+- `malchan.features.materials.composition`: formula parsing, `pymatgen.Composition` conversion, and composition cache keys.
+- `malchan.features.materials.xenonpy`: XenonPy preset setup and `XenoCompositionsTransformer`.
+- `malchan.features.materials.matminer`: Matminer featurizer resolution and `MatminerCompositionFeaturizer`.
+- `malchan.features.materials.mendeleev`: composition-weighted Mendeleev element properties.
+- `malchan.features.materials.pipeline`: backend selection and composition preprocessing pipelines.
 
-Follow-up migration direction:
+`malchan.models.pipelines.preprocess_pipeline` only combines numeric, categorical, SMILES, and optional composition pipelines. It imports the materials pipeline only when `comp_cols` is specified.
 
-1. move chemistry-specific transformers out of preprocessing modules;
-2. move composition-specific transformers out of preprocessing modules;
-3. keep optional backend imports inside the concrete backend modules;
-4. expose stable feature builders through `malchan.features` only after their APIs are settled.
+## Chemistry
+
+The following migration remains:
+
+- move SMILES parsing into `malchan.features.chemistry.smiles`;
+- move RDKit and scikit-fingerprints descriptors into `malchan.features.chemistry.fingerprints`;
+- keep chemistry backends optional in the same way as materials backends.
