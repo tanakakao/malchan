@@ -25,8 +25,6 @@ def _install_predictor_import_stubs():
     utils.REG_MODEL_DICT = {"線形回帰": LinearRegression, "Ridge": Ridge}
     utils.CLS_MODEL_DICT = {}
     utils.AD_MODEL_DICT = {}
-    utils.FP_dcit = {}
-    utils.INORG_dict = {}
     utils.SAMPLING_DICT = {}
     utils.reg_default_params = {"線形回帰": {}, "Ridge": {"alpha": 0.01}}
     utils.cls_default_params = {}
