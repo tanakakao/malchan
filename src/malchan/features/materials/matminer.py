@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,10 @@ def _featurizer_factories() -> dict[str, Callable[[], Any]]:
         ) from exc
 
     return {
-        "ElementProperty": lambda: ElementProperty.from_preset("magpie", impute_nan=True),
+        "ElementProperty": lambda: ElementProperty.from_preset(
+            "magpie",
+            impute_nan=True,
+        ),
         "ValenceOrbital": lambda: ValenceOrbital(impute_nan=True),
         "IonProperty": lambda: IonProperty(impute_nan=True),
         "YangSolidSolution": YangSolidSolution,
@@ -43,8 +47,11 @@ def _featurizer_factories() -> dict[str, Callable[[], Any]]:
     }
 
 
-def resolve_matminer_featurizers(names: list[str]) -> list[Any]:
+def resolve_matminer_featurizers(names: list[str] | tuple[str, ...]) -> list[Any]:
     """APIで指定された名前をMatminer featurizerへ変換する。"""
+    if not names:
+        raise ValueError("matminerではcomp_featsを1つ以上指定してください。")
+
     factories = _featurizer_factories()
     unknown = [name for name in names if name not in factories]
     if unknown:
@@ -60,7 +67,7 @@ class MatminerCompositionFeaturizer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        featurizers: list[Any] = [],
+        featurizers: list[Any] | tuple[Any, ...] = (),
         input_col: str = "composition",
         prefix: str = "mm__",
         n_jobs: int = 1,
@@ -89,7 +96,7 @@ class MatminerCompositionFeaturizer(BaseEstimator, TransformerMixin):
                 "Matminer特徴量を使用するにはmatminerを導入してください。"
             ) from exc
 
-        self.mm_ = MultipleFeaturizer(self.featurizers)
+        self.mm_ = MultipleFeaturizer(list(self.featurizers))
         try:
             self.mm_.set_n_jobs(self.n_jobs)
         except Exception:
@@ -106,7 +113,11 @@ class MatminerCompositionFeaturizer(BaseEstimator, TransformerMixin):
         nan_row = [np.nan] * feature_count
 
         if not self.use_cache:
-            rows = self.mm_.featurize_many(compositions, ignore_errors=True, pbar=False)
+            rows = self.mm_.featurize_many(
+                compositions,
+                ignore_errors=True,
+                pbar=False,
+            )
             rows = [nan_row if row is None else row for row in rows]
             return pd.DataFrame(rows, index=X.index, columns=self.cols_out_)
 
@@ -139,10 +150,8 @@ class MatminerCompositionFeaturizer(BaseEstimator, TransformerMixin):
                     ignore_errors=True,
                     pbar=False,
                 )
-                for key, value in zip(unique_keys, values):
+                for key, value in zip(unique_keys, values, strict=False):
                     self._cache_[key] = nan_row if value is None else value
-                if self.cache_max and len(self._cache_) > self.cache_max:
-                    self._cache_.clear()
 
             for index, key, composition in uncached:
                 if key is None:
@@ -150,6 +159,9 @@ class MatminerCompositionFeaturizer(BaseEstimator, TransformerMixin):
                     rows[index] = nan_row if value is None else value
                 else:
                     rows[index] = self._cache_.get(key, nan_row)
+
+            if self.cache_max and len(self._cache_) > self.cache_max:
+                self._cache_.clear()
 
         return pd.DataFrame(rows, index=X.index, columns=self.cols_out_)
 
