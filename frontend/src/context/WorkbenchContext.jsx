@@ -234,7 +234,12 @@ export function WorkbenchProvider({ children }) {
   }
 
   async function compareModels() {
-    if (!modelInfo) return notify("先にモデルを学習してください。", "error");
+    if (!ready) return notify("データ、目的変数、説明変数を設定してください。", "error");
+    const emptyTargets = targets.filter((target) => !(candidates[target] || []).length);
+    if (emptyTargets.length) {
+      return notify(`比較候補を1件以上選択してください: ${emptyTargets.join(", ")}`, "error");
+    }
+
     const multiOutput = targets.length > 1;
     const payload = {
       model_names: multiOutput
@@ -253,13 +258,40 @@ export function WorkbenchProvider({ children }) {
         : Number(trials),
       activate_best: activateBest,
     };
-    const response = await run("候補モデルを比較しています...", () =>
-      api.compare(modelInfo.model_id, payload),
-    );
-    if (!response) return;
-    setComparison(response);
-    if (activateBest) setModelInfo(await api.modelInfo(modelInfo.model_id));
-    notify("モデル比較が完了しました。");
+    const hadModel = Boolean(modelInfo);
+    const result = await run("候補モデルを比較しています...", async () => {
+      let activeModel = modelInfo;
+      if (!activeModel) {
+        const basePayload = trainingPayload();
+        const comparisonTrainingPayload = multiOutput
+          ? {
+              ...basePayload,
+              model_names_by_target: Object.fromEntries(
+                targets.map((target) => [target, [candidates[target][0]]]),
+              ),
+              compute_xai: false,
+            }
+          : {
+              ...basePayload,
+              model_names: [candidates[targets[0]][0]],
+              compute_xai: false,
+            };
+        activeModel = await api.train(comparisonTrainingPayload);
+        setModelInfo(activeModel);
+      }
+      const comparisonResponse = await api.compare(activeModel.model_id, payload);
+      const nextModelInfo = activateBest
+        ? await api.modelInfo(activeModel.model_id)
+        : activeModel;
+      return { comparisonResponse, nextModelInfo };
+    });
+    if (!result) return;
+    setComparison(result.comparisonResponse);
+    setModelInfo(result.nextModelInfo);
+    setDiagnostics([]);
+    notify(hadModel
+      ? "モデル比較が完了しました。"
+      : "比較用モデルを登録し、モデル比較が完了しました。");
   }
 
   async function tuneBestLater() {
@@ -277,6 +309,7 @@ export function WorkbenchProvider({ children }) {
     if (!response) return;
     setComparison(response);
     if (activateBest) setModelInfo(await api.modelInfo(modelInfo.model_id));
+    setDiagnostics([]);
     notify("チューニングが完了しました。");
   }
 
