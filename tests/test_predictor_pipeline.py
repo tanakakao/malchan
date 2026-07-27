@@ -2,6 +2,7 @@ import sys
 import types
 
 from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.neural_network import MLPRegressor
 
 
 def _install_predictor_import_stubs():
@@ -22,11 +23,24 @@ def _install_predictor_import_stubs():
         sys.modules.setdefault(module_name, module)
 
     utils = types.ModuleType("malchan.models.utils")
-    utils.REG_MODEL_DICT = {"線形回帰": LinearRegression, "Ridge": Ridge}
+    utils.REG_MODEL_DICT = {
+        "線形回帰": LinearRegression,
+        "Ridge": Ridge,
+        "多層パーセプトロン": MLPRegressor,
+    }
     utils.CLS_MODEL_DICT = {}
     utils.AD_MODEL_DICT = {}
     utils.SAMPLING_DICT = {}
-    utils.reg_default_params = {"線形回帰": {}, "Ridge": {"alpha": 0.01}}
+    utils.reg_default_params = {
+        "線形回帰": {},
+        "Ridge": {"alpha": 0.01},
+        "多層パーセプトロン": {
+            "hidden_layer_sizes": (10,),
+            "early_stopping": True,
+            "max_iter": 10,
+            "random_state": 42,
+        },
+    }
     utils.cls_default_params = {}
     utils.ad_default_params = {}
     utils.get_param_grid_reg = lambda *args, **kwargs: {}
@@ -74,6 +88,46 @@ def test_make_bagging_predictor_defaults_base_model_to_first_model():
 
     assert isinstance(predictor.estimator, Ridge)
     assert predictor.estimator.alpha == 0.01
+
+
+def test_make_mlp_bagging_predictor_disables_internal_early_stopping():
+    """MLPバギングではゼロ重み検証を避けるため内部早期終了を無効化する。"""
+    base_model_params = {
+        "hidden_layer_sizes": (5,),
+        "early_stopping": True,
+        "max_iter": 5,
+        "random_state": 42,
+    }
+
+    predictor = make_predictor(
+        model_names=["多層パーセプトロン"],
+        ensemble=True,
+        ens_type="バギング",
+        base_model=None,
+        base_model_params=base_model_params,
+        task="regression",
+    )
+
+    assert isinstance(predictor.estimator, MLPRegressor)
+    assert predictor.estimator.early_stopping is False
+    assert base_model_params["early_stopping"] is True
+
+
+def test_make_single_mlp_predictor_keeps_early_stopping_enabled():
+    """単体MLPでは従来どおり内部早期終了を利用する。"""
+    predictor = make_predictor(
+        model_names=["多層パーセプトロン"],
+        model_params={
+            "hidden_layer_sizes": (5,),
+            "early_stopping": True,
+            "max_iter": 5,
+            "random_state": 42,
+        },
+        task="regression",
+    )
+
+    assert isinstance(predictor, MLPRegressor)
+    assert predictor.early_stopping is True
 
 
 def test_make_boosting_predictor_defaults_base_model_to_first_model():
