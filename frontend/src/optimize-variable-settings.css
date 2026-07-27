@@ -1,0 +1,95 @@
+.optimize-target-panel,
+.optimize-variable-panel,
+.optimize-run-panel {
+  overflow: hidden;
+}
+
+.optimize-variable-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inverse-objective-table,
+.optimize-variable-table {
+  min-width: 760px;
+}
+
+.inverse-objective-table th,
+.optimize-variable-table th {
+  white-space: nowrap;
+}
+
+.inverse-objective-table td,
+.optimize-variable-table td {
+  vertical-align: middle;
+}
+
+.inverse-objective-table select,
+.inverse-objective-table input,
+.optimize-variable-table select,
+.optimize-variable-table input {
+  width: 100%;
+  min-width: 96px;
+}
+
+.optimize-variable-table .inverse-name-cell,
+.inverse-objective-table .inverse-name-cell {
+  min-width: 150px;
+}
+
+.optimize-variable-table-wrap {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+
+.optimize-variable-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+}
+
+.optimize-variable-table .fixed-checkbox-cell {
+  text-align: center;
+}
+
+.optimize-variable-table .table-checkbox {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+}
+
+.optimize-variable-table .fixed-variable-row {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.optimize-variable-table .fixed-variable-row td:first-child {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.optimize-variable-table input:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.optimize-run-grid {
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.optimize-settings-error {
+  white-space: pre-line;
+  margin: 16px 0;
+}
+
+.muted-cell {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 820px) {
+  .optimize-run-grid {
+    grid-template-columns: 1fr;
+  }
+}
