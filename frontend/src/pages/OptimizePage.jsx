@@ -38,16 +38,6 @@ const MULTI_OBJECTIVE_SAMPLERS = [
     description: "TPESamplerによる多目的探索です。比較的少ない試行回数でも利用できます。",
   },
   {
-    value: "GP",
-    label: "Gaussian Process",
-    description: "多目的の予測モデルを使い、効率的にパレート候補を探索します。",
-  },
-  {
-    value: "QMS",
-    label: "QMC",
-    description: "多目的探索空間を広く均一にサンプリングします。",
-  },
-  {
     value: "NSGAII",
     label: "NSGA-II",
     description: "多目的最適化で広く使われる進化計算です。",
