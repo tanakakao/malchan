@@ -1,6 +1,7 @@
 import React from "react";
 import { STEPS, WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
+import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import DataPage from "./pages/DataPage";
 import ExplorePage from "./pages/ExplorePage";
 import PreparePage from "./pages/PreparePage";
@@ -80,7 +81,7 @@ function WorkbenchLayout() {
                 key={id}
                 className={`tab ${step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
                 onClick={() => setStep(id)}
-                aria-current={id === step ? "page" : undefined}
+                aria-current={step === id ? "page" : undefined}
               >
                 <span className="nav-icon">{ICONS[stepIndex]}</span>
                 <span><strong>{label}</strong><small>{detail}</small></span>
@@ -129,6 +130,7 @@ function WorkbenchLayout() {
         <span className="privacy-status">React + FastAPI</span>
       </footer>
       <ComparisonTuningControl />
+      <YyDiagnosticsControl />
       {toast && <button className={`message ${toast.type}`} onClick={() => setToast(null)}>{toast.text}</button>}
       {busy && (
         <div className="overlay">

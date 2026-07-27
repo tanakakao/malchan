@@ -55,6 +55,33 @@ def _model_for_visualization(model: Any, target: str) -> Any:
     return _SingleOutputVisualizationAdapter(model, target)
 
 
+def visualization_diagnostic_options(model: Any, target: str) -> dict[str, Any]:
+    """Return task and cross-validation availability for one diagnostic target."""
+
+    child_model = _resolve_child_model(model, target)
+    task = str(getattr(child_model, "task", ""))
+    cv_predictions = getattr(child_model, "cv_preds", None)
+    if isinstance(cv_predictions, Mapping):
+        cv_splits = [
+            split
+            for split in ("train", "test")
+            if cv_predictions.get(split) is not None
+        ]
+    else:
+        cv_splits = []
+
+    cv_available = (
+        all(split in cv_splits for split in ("train", "test"))
+        if task == "regression"
+        else bool(cv_splits)
+    )
+    return {
+        "task": task,
+        "cv_available": cv_available,
+        "cv_splits": cv_splits,
+    }
+
+
 def visualization_outputs(model: Any, target: str) -> list[str]:
     """Return selectable prediction outputs for a target visualization."""
 
@@ -74,14 +101,31 @@ def show_model_diagnostics(
     *,
     cv: bool = False,
     residual: bool = False,
+    train_test: str = "test",
 ) -> go.Figure:
-    """Create the standard malchan Y-Y or classification diagnostic figure."""
+    """Create the standard malchan Y-Y, residual, or classification figure."""
+
+    options = visualization_diagnostic_options(model, target)
+    if train_test not in {"train", "test"}:
+        raise ValueError("train_test must be either 'train' or 'test'.")
+    if residual and options["task"] == "classification":
+        raise ValueError("Residual plots are available for regression targets only.")
+    if cv and not options["cv_available"]:
+        raise ValueError(
+            "Cross-validation predictions are unavailable. Run cv_score() before "
+            "requesting a CV diagnostic plot."
+        )
+    if cv and options["task"] == "classification" and train_test not in options["cv_splits"]:
+        raise ValueError(
+            f"Cross-validation predictions for split {train_test!r} are unavailable."
+        )
 
     return yy_plot_ml(
         model=_model_for_visualization(model, target),
         target=target,
         cv=cv,
         residual=residual,
+        train_test=train_test,
     )
 
 
@@ -130,5 +174,6 @@ __all__ = [
     "show_model_diagnostics",
     "show_model_pd_2d",
     "show_model_pd_and_ice",
+    "visualization_diagnostic_options",
     "visualization_outputs",
 ]
