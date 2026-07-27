@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, NoReturn
+from typing import Any, Literal, NoReturn
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -92,18 +92,24 @@ def create_visualization_router(service: Any) -> APIRouter:
         target: str,
         cv: bool = Query(default=False),
         residual: bool = Query(default=False),
+        split: Literal["train", "test"] = Query(default="test"),
     ) -> PlotlyFigureResponse:
-        """Return the standard Y-Y plot or classification confusion matrix."""
+        """Return the standard Y-Y, residual, or classification diagnostic figure."""
 
         try:
-            from malchan.visualization import show_model_diagnostics
+            from malchan.visualization import (
+                show_model_diagnostics,
+                visualization_diagnostic_options,
+            )
 
             registered = service._get_registered(model_id)
+            options = visualization_diagnostic_options(registered.model, target)
             figure = show_model_diagnostics(
                 registered.model,
                 target,
                 cv=cv,
                 residual=residual,
+                train_test=split,
             )
             return PlotlyFigureResponse(
                 figure=_figure_payload(figure),
@@ -111,6 +117,9 @@ def create_visualization_router(service: Any) -> APIRouter:
                     "target": target,
                     "cv": cv,
                     "residual": residual,
+                    "split": split,
+                    **options,
+                    "visualization_function": "yy_plot_ml",
                 },
             )
         except _VISUALIZATION_ERRORS as exc:
