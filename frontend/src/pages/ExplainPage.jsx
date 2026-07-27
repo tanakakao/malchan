@@ -40,11 +40,23 @@ export default function ExplainPage() {
   const [pdpFigure, setPdpFigure] = useState(emptyFigureState);
   const [pdp2dFigure, setPdp2dFigure] = useState(emptyFigureState);
 
+  function resetOutputs() {
+    setBeeswarmOutput("");
+    setPdOutput("");
+    setPd2dOutput("");
+  }
+
+  function changeTarget(nextTarget) {
+    resetOutputs();
+    setXaiTarget(nextTarget);
+  }
+
   useEffect(() => {
     let active = true;
     if (!modelInfo?.model_id) {
       setSummary(null);
       setXaiTarget("");
+      resetOutputs();
       return () => { active = false; };
     }
     setSummaryBusy(true);
@@ -56,6 +68,7 @@ export default function ExplainPage() {
         const nextTarget = response.targets?.[xaiTarget]
           ? xaiTarget
           : Object.keys(response.targets || {})[0] || targets[0] || "";
+        if (nextTarget !== xaiTarget) resetOutputs();
         setXaiTarget(nextTarget);
       })
       .catch((error) => active && setSummaryError(error.message || String(error)))
@@ -99,12 +112,6 @@ export default function ExplainPage() {
     const methods = targetSummary?.importance_methods || [];
     if (methods.length && !methods.includes(method)) setMethod(methods[0]);
   }, [targetSummary, method]);
-
-  useEffect(() => {
-    setBeeswarmOutput("");
-    setPdOutput("");
-    setPd2dOutput("");
-  }, [modelInfo?.model_id, xaiTarget]);
 
   useEffect(() => {
     let active = true;
@@ -270,7 +277,7 @@ export default function ExplainPage() {
         )}
         <div className="form-grid xai-controls">
           <label>目的変数
-            <select value={xaiTarget} onChange={(event) => setXaiTarget(event.target.value)}>
+            <select value={xaiTarget} onChange={(event) => changeTarget(event.target.value)}>
               {Object.keys(summary?.targets || {}).map((target) => <option key={target}>{target}</option>)}
             </select>
           </label>
