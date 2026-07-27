@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import DataTable from "../components/DataTable";
 import { Field, SectionHeader } from "../components/Common";
 import {
   coerceRows,
@@ -9,6 +8,7 @@ import {
   uniqueValues,
 } from "../data";
 import { useWorkbench } from "../context/WorkbenchContext";
+import "../prediction-auto.css";
 
 const FILE_PAGE_SIZE = 30;
 const SHAP_FEATURE_LIMIT = 10;
@@ -19,8 +19,12 @@ function requiredRecords(rows, features) {
   ));
 }
 
-function PredictionSummary({ prediction }) {
-  if (!prediction) return null;
+function PredictionSummary({ prediction, alwaysVisible = false }) {
+  if (!prediction) {
+    return alwaysVisible
+      ? <p className="empty-state prediction-placeholder">予測実行後、ここに予測値を表示します。</p>
+      : null;
+  }
   return (
     <div className="prediction-result-grid">
       {Object.entries(prediction).map(([key, value]) => (
@@ -103,30 +107,41 @@ function ShapTargetCard({ result, rowLabels }) {
   );
 }
 
-function LocalShapResults({ response, rowLabels }) {
-  if (!response) return null;
+function LocalShapResults({
+  response,
+  rowLabels,
+  alwaysVisible = false,
+  title = "選択行のSHAP",
+  emptyText = "SHAP計算後、ここに結果を表示します。",
+}) {
+  if (!response && !alwaysVisible) return null;
   return (
     <article className="panel local-shap-panel">
       <div className="panel-title">
         <div>
           <span className="panel-kicker">LOCAL EXPLANATION</span>
-          <h3>選択行のSHAP</h3>
+          <h3>{title}</h3>
           <p>入力された行だけで再計算したローカルSHAPです。Explain画面のキャッシュは変更しません。</p>
         </div>
-        <span className="status-chip success">{response.row_count} rows</span>
+        {response && <span className="status-chip success">{response.row_count} rows</span>}
       </div>
-      <div className="local-shap-target-list">
-        {Object.values(response.targets || {}).map((result) => (
-          <ShapTargetCard key={result.target} result={result} rowLabels={rowLabels} />
-        ))}
-      </div>
+      {response ? (
+        <div className="local-shap-target-list">
+          {Object.values(response.targets || {}).map((result) => (
+            <ShapTargetCard key={result.target} result={result} rowLabels={rowLabels} />
+          ))}
+        </div>
+      ) : (
+        <p className="empty-state prediction-placeholder">{emptyText}</p>
+      )}
     </article>
   );
 }
 
 function SelectablePredictionRows({
   rows,
-  features,
+  columns,
+  predictionColumns,
   selected,
   setSelected,
   page,
@@ -139,6 +154,7 @@ function SelectablePredictionRows({
   const visibleIndexes = visibleRows.map((_, offset) => start + offset);
   const allVisibleSelected = visibleIndexes.length > 0
     && visibleIndexes.every((index) => selected.has(index));
+  const predictionColumnSet = new Set(predictionColumns);
 
   function toggle(index) {
     setSelected((current) => {
@@ -163,7 +179,7 @@ function SelectablePredictionRows({
   return (
     <div className="prediction-file-table">
       <div className="prediction-file-table-head">
-        <span>{rows.length}行を読み込み済み</span>
+        <span>{rows.length}行を予測済み</span>
         <strong>SHAP対象: {selected.size}行</strong>
       </div>
       <div className="table-wrap">
@@ -179,7 +195,14 @@ function SelectablePredictionRows({
                 />
               </th>
               <th>#</th>
-              {features.map((feature) => <th key={feature}>{feature}</th>)}
+              {columns.map((column) => (
+                <th
+                  key={column}
+                  className={predictionColumnSet.has(column) ? "prediction-column" : ""}
+                >
+                  {column}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -196,8 +219,13 @@ function SelectablePredictionRows({
                     />
                   </td>
                   <td>{index + 1}</td>
-                  {features.map((feature) => (
-                    <td key={feature}>{formatNumber(row[feature])}</td>
+                  {columns.map((column) => (
+                    <td
+                      key={column}
+                      className={predictionColumnSet.has(column) ? "prediction-value-cell" : ""}
+                    >
+                      {formatNumber(row[column])}
+                    </td>
                   ))}
                 </tr>
               );
@@ -226,6 +254,24 @@ function SelectablePredictionRows({
   );
 }
 
+function predictionColumnEntries(predictions, inputColumns) {
+  const predictionKeys = [...new Set(
+    predictions.flatMap((prediction) => Object.keys(prediction || {})),
+  )];
+  const used = new Set(inputColumns);
+  return predictionKeys.map((source) => {
+    const base = `予測_${source}`;
+    let label = base;
+    let suffix = 2;
+    while (used.has(label)) {
+      label = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    used.add(label);
+    return { source, label };
+  });
+}
+
 export default function PredictionPage() {
   const {
     rows,
@@ -242,6 +288,7 @@ export default function PredictionPage() {
   const [customShap, setCustomShap] = useState(null);
   const [fileName, setFileName] = useState("");
   const [fileRows, setFileRows] = useState([]);
+  const [fileColumns, setFileColumns] = useState([]);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [filePage, setFilePage] = useState(0);
   const [filePredictions, setFilePredictions] = useState([]);
@@ -253,24 +300,36 @@ export default function PredictionPage() {
   useEffect(() => {
     setCustomPrediction(null);
     setCustomShap(null);
+    setFileRows([]);
+    setFileColumns([]);
     setFilePredictions([]);
     setFileShap(null);
+    setFileName("");
+    setSelectedRows(new Set());
   }, [modelInfo?.model_id]);
 
-  const predictionRows = useMemo(
-    () => filePredictions.map((prediction, index) => ({
-      row: index + 1,
-      ...prediction,
-    })),
-    [filePredictions],
+  const filePredictionEntries = useMemo(
+    () => predictionColumnEntries(filePredictions, fileColumns),
+    [filePredictions, fileColumns],
   );
-  const predictionColumns = useMemo(() => {
-    const columns = new Set(["row"]);
-    filePredictions.forEach((prediction) => {
-      Object.keys(prediction || {}).forEach((column) => columns.add(column));
-    });
-    return [...columns];
-  }, [filePredictions]);
+  const filePredictionColumns = useMemo(
+    () => filePredictionEntries.map((entry) => entry.label),
+    [filePredictionEntries],
+  );
+  const fileDisplayColumns = useMemo(
+    () => [...fileColumns, ...filePredictionColumns],
+    [fileColumns, filePredictionColumns],
+  );
+  const fileDisplayRows = useMemo(
+    () => fileRows.map((row, index) => {
+      const prediction = filePredictions[index] || {};
+      const predicted = Object.fromEntries(
+        filePredictionEntries.map(({ source, label }) => [label, prediction[source] ?? null]),
+      );
+      return { ...row, ...predicted };
+    }),
+    [fileRows, filePredictions, filePredictionEntries],
+  );
 
   function customInput() {
     return Object.fromEntries(features.map((feature) => [
@@ -285,8 +344,6 @@ export default function PredictionPage() {
     if (!modelInfo?.model_id) return;
     setRunning("custom");
     setError("");
-    setCustomPrediction(null);
-    setCustomShap(null);
     try {
       const data = [customInput()];
       const [predictionResponse, shapResponse] = await Promise.all([
@@ -304,8 +361,16 @@ export default function PredictionPage() {
 
   async function loadPredictionFile(file) {
     if (!file) return;
+    if (!modelInfo?.model_id) {
+      setError("先にModel画面で予測に使用するモデルを学習してください。");
+      return;
+    }
     setRunning("load");
     setError("");
+    setFileRows([]);
+    setFileColumns([]);
+    setFilePredictions([]);
+    setFileShap(null);
     try {
       const parsed = await parseTabularFile(file);
       const data = coerceRows(parsed.rows);
@@ -313,29 +378,17 @@ export default function PredictionPage() {
       if (missing.length) {
         throw new Error(`予測ファイルに必要な列がありません: ${missing.join(", ")}`);
       }
+      const predictionResponse = await api.predict(modelInfo.model_id, {
+        data: requiredRecords(data.rows, features),
+      });
       setFileName(file.name);
       setFileRows(data.rows);
-      setSelectedRows(new Set(data.rows.length ? [0] : []));
+      setFileColumns(data.columns);
+      setFilePredictions(predictionResponse.predictions || []);
+      setSelectedRows(new Set());
       setFilePage(0);
-      setFilePredictions([]);
       setFileShap(null);
       setFileShapLabels([]);
-    } catch (reason) {
-      setError(reason.message || String(reason));
-    } finally {
-      setRunning("");
-    }
-  }
-
-  async function runFilePrediction() {
-    if (!modelInfo?.model_id || !fileRows.length) return;
-    setRunning("file-predict");
-    setError("");
-    try {
-      const response = await api.predict(modelInfo.model_id, {
-        data: requiredRecords(fileRows, features),
-      });
-      setFilePredictions(response.predictions || []);
     } catch (reason) {
       setError(reason.message || String(reason));
     } finally {
@@ -370,7 +423,7 @@ export default function PredictionPage() {
       <SectionHeader
         step="6 · PREDICT"
         title="モデルで予測し、入力ごとのSHAPを確認する"
-        text="カスタム入力は実行ごとにSHAPを再計算し、ファイル入力は選択した行だけSHAPを計算します。"
+        text="カスタム入力では予測値とSHAPを同時表示し、ファイル入力では読込直後に全行を予測します。"
       />
 
       <article className="panel prediction-mode-panel">
@@ -389,7 +442,7 @@ export default function PredictionPage() {
             onClick={() => setMode("file")}
           >
             <strong>ファイル入力</strong>
-            <span>CSV / Excelを一括予測</span>
+            <span>CSV / Excelを自動予測</span>
           </button>
         </div>
         {!modelInfo && (
@@ -398,48 +451,68 @@ export default function PredictionPage() {
       </article>
 
       {mode === "custom" && (
-        <article className="panel custom-prediction-panel">
-          <div className="panel-title">
-            <div>
-              <span className="panel-kicker">CUSTOM PREDICTION</span>
-              <h3>任意条件で予測</h3>
-              <p>予測ボタンを押すたびに、この入力1行についてSHAPも新しく計算します。</p>
+        <>
+          <article className="panel custom-prediction-panel">
+            <div className="panel-title">
+              <div>
+                <span className="panel-kicker">CUSTOM PREDICTION</span>
+                <h3>任意条件で予測</h3>
+                <p>実行するたびに現在の入力1行について、予測とSHAPを更新します。</p>
+              </div>
             </div>
-          </div>
-          <div className="form-grid">
-            {features.map((column) => (
-              <Field key={column} label={column}>
-                {categorical.includes(column) ? (
-                  <select
-                    value={predictValues[column] ?? ""}
-                    onChange={(event) => setPredictValues({
-                      ...predictValues,
-                      [column]: event.target.value,
-                    })}
-                  >
-                    {uniqueValues(rows, column).map((value) => (
-                      <option key={String(value)} value={value}>{String(value)}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="number"
-                    step="any"
-                    value={predictValues[column] ?? ""}
-                    onChange={(event) => setPredictValues({
-                      ...predictValues,
-                      [column]: event.target.value,
-                    })}
-                  />
-                )}
-              </Field>
-            ))}
-          </div>
-          <button disabled={disabled} onClick={runCustomPrediction}>
-            {running === "custom" ? "予測・SHAP計算中..." : "予測とSHAPを計算 →"}
-          </button>
-          <PredictionSummary prediction={customPrediction} />
-        </article>
+            <div className="form-grid">
+              {features.map((column) => (
+                <Field key={column} label={column}>
+                  {categorical.includes(column) ? (
+                    <select
+                      value={predictValues[column] ?? ""}
+                      onChange={(event) => setPredictValues({
+                        ...predictValues,
+                        [column]: event.target.value,
+                      })}
+                    >
+                      {uniqueValues(rows, column).map((value) => (
+                        <option key={String(value)} value={value}>{String(value)}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="number"
+                      step="any"
+                      value={predictValues[column] ?? ""}
+                      onChange={(event) => setPredictValues({
+                        ...predictValues,
+                        [column]: event.target.value,
+                      })}
+                    />
+                  )}
+                </Field>
+              ))}
+            </div>
+            <button disabled={disabled} onClick={runCustomPrediction}>
+              {running === "custom" ? "予測・SHAP計算中..." : "予測とSHAPを更新 →"}
+            </button>
+          </article>
+
+          <article className="panel custom-prediction-result-panel">
+            <div className="panel-title">
+              <div>
+                <span className="panel-kicker">PREDICTION RESULT</span>
+                <h3>予測値</h3>
+                <p>最後に実行したカスタム入力の予測結果を常に表示します。</p>
+              </div>
+            </div>
+            <PredictionSummary prediction={customPrediction} alwaysVisible />
+          </article>
+
+          <LocalShapResults
+            response={customShap}
+            rowLabels={[1]}
+            alwaysVisible
+            title="カスタム入力のSHAP"
+            emptyText="予測を実行すると、この入力1行のSHAPを表示します。"
+          />
+        </>
       )}
 
       {mode === "file" && (
@@ -449,34 +522,36 @@ export default function PredictionPage() {
               <div>
                 <span className="panel-kicker">BATCH PREDICTION</span>
                 <h3>CSV / Excelから予測</h3>
-                <p>全行予測とSHAP計算を分離し、SHAPはチェックした行だけ実行します。</p>
+                <p>読込直後に全行を予測し、予測列を入力データフレームの右端へ追加します。</p>
               </div>
-              {fileName && <span className="status-chip">{fileName}</span>}
+              {fileName && <span className="status-chip success">{fileName}</span>}
             </div>
-            <label className="prediction-file-drop">
+            <label className={`prediction-file-drop ${!modelInfo ? "disabled" : ""}`}>
               <input
                 type="file"
-                accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                disabled={!modelInfo || Boolean(running)}
                 onChange={(event) => loadPredictionFile(event.target.files?.[0])}
               />
-              <strong>{running === "load" ? "読み込み中..." : "予測ファイルを選択"}</strong>
+              <strong>{running === "load" ? "読み込み・予測中..." : "予測ファイルを選択"}</strong>
               <span>必要列: {features.join(", ")}</span>
             </label>
 
-            {fileRows.length > 0 && (
+            {fileDisplayRows.length > 0 && (
               <>
                 <SelectablePredictionRows
-                  rows={fileRows}
-                  features={features}
+                  rows={fileDisplayRows}
+                  columns={fileDisplayColumns}
+                  predictionColumns={filePredictionColumns}
                   selected={selectedRows}
                   setSelected={setSelectedRows}
                   page={filePage}
                   setPage={setFilePage}
                 />
                 <div className="prediction-file-actions">
-                  <button disabled={disabled} onClick={runFilePrediction}>
-                    {running === "file-predict" ? "全行を予測中..." : `全${fileRows.length}行を予測`}
-                  </button>
+                  <span className="settings-note">
+                    SHAPはチェックした行だけ計算します。予測値はすでに右端へ追加されています。
+                  </span>
                   <button
                     className="secondary"
                     disabled={disabled || !selectedRows.size}
@@ -491,24 +566,15 @@ export default function PredictionPage() {
             )}
           </article>
 
-          {filePredictions.length > 0 && (
-            <article className="panel">
-              <div className="panel-title">
-                <div>
-                  <span className="panel-kicker">PREDICTION RESULT</span>
-                  <h3>ファイル予測結果</h3>
-                </div>
-                <span className="status-chip success">{filePredictions.length} rows</span>
-              </div>
-              <DataTable rows={predictionRows} columns={predictionColumns} pageSize={30} />
-            </article>
-          )}
+          <LocalShapResults
+            response={fileShap}
+            rowLabels={fileShapLabels}
+            title="選択行のSHAP"
+          />
         </>
       )}
 
       {error && <p className="xai-error prediction-error">{error}</p>}
-      {mode === "custom" && <LocalShapResults response={customShap} rowLabels={[1]} />}
-      {mode === "file" && <LocalShapResults response={fileShap} rowLabels={fileShapLabels} />}
     </>
   );
 }
