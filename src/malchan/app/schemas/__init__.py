@@ -13,6 +13,13 @@ from .inverse_analysis import (
     NumericSearchRange,
     SumConstraint,
 )
+from .model_configuration import (
+    ModelEvaluationRequest,
+    ModelEvaluationResponse,
+    ModelParameterDefinition,
+    ModelParameterSchemaResponse,
+    TargetModelEvaluation,
+)
 from .models import (
     HealthResponse,
     ModelInfo,
@@ -41,8 +48,12 @@ __all__ = [
     "InverseAnalysisResponse",
     "InverseObjective",
     "ModelComparisonResponse",
+    "ModelEvaluationRequest",
+    "ModelEvaluationResponse",
     "ModelInfo",
     "ModelListResponse",
+    "ModelParameterDefinition",
+    "ModelParameterSchemaResponse",
     "NumericSearchRange",
     "PlotlyFigureResponse",
     "PredictRequest",
@@ -50,6 +61,7 @@ __all__ = [
     "RecomputeXaiRequest",
     "SumConstraint",
     "TargetComparisonResponse",
+    "TargetModelEvaluation",
     "TrainModelRequest",
     "TuneBestModelRequest",
     "XaiImportanceItem",
