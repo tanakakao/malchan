@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import APIRouter, HTTPException, Query, status
 
 from malchan.app.schemas import PlotlyFigureResponse
 from malchan.app.services import ModelNotFoundError, XaiNotReadyError
+
+_VISUALIZATION_ERRORS = (
+    ImportError,
+    KeyError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    XaiNotReadyError,
+)
 
 
 def _figure_payload(figure: Any) -> dict[str, Any]:
@@ -36,7 +45,7 @@ def _model_dump(response: Any) -> dict[str, Any]:
     raise TypeError("Visualization response metadata is not serializable.")
 
 
-def _raise_http_error(exc: Exception) -> None:
+def _raise_http_error(exc: Exception) -> NoReturn:
     """Translate visualization-layer errors to FastAPI responses."""
 
     if isinstance(exc, ModelNotFoundError):
@@ -90,7 +99,7 @@ def create_visualization_router(service: Any) -> APIRouter:
                     "residual": residual,
                 },
             )
-        except (ImportError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+        except _VISUALIZATION_ERRORS as exc:
             _raise_http_error(exc)
 
     @router.get(
@@ -125,7 +134,7 @@ def create_visualization_router(service: Any) -> APIRouter:
                     "combined": combined,
                 },
             )
-        except (ImportError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+        except _VISUALIZATION_ERRORS as exc:
             _raise_http_error(exc)
 
     @router.get(
@@ -162,7 +171,7 @@ def create_visualization_router(service: Any) -> APIRouter:
                     "selected_output": selected_output,
                 },
             )
-        except (ImportError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+        except _VISUALIZATION_ERRORS as exc:
             _raise_http_error(exc)
 
     @router.get(
@@ -214,7 +223,7 @@ def create_visualization_router(service: Any) -> APIRouter:
                     "include_ice": include_ice,
                 },
             )
-        except (ImportError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+        except _VISUALIZATION_ERRORS as exc:
             _raise_http_error(exc)
 
     @router.get(
@@ -235,6 +244,10 @@ def create_visualization_router(service: Any) -> APIRouter:
 
             registered = service._get_registered(model_id)
             outputs = visualization_outputs(registered.model, target)
+            if output is not None and output not in outputs:
+                raise ValueError(
+                    f"Unknown visualization output {output!r}. Available: {outputs}"
+                )
             selected_output = output or (
                 outputs[0] if len(outputs) == 1 else outputs[-1] if outputs else None
             )
@@ -259,7 +272,7 @@ def create_visualization_router(service: Any) -> APIRouter:
                     "selected_output": selected_output,
                 },
             )
-        except (ImportError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+        except _VISUALIZATION_ERRORS as exc:
             _raise_http_error(exc)
 
     return router
