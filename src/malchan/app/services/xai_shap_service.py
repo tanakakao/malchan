@@ -182,7 +182,7 @@ def _transformed_feature_names(
     return [f"feature_{index}" for index in range(width)]
 
 
-def _preprocess_local_rows(child: Any, rows: pd.DataFrame) -> pd.DataFrame:
+def _preprocess_local_rows(child: Any, rows: pd.DataFrame) -> tuple[pd.DataFrame, Any]:
     """Apply the fitted preprocessing pipeline to request-scoped rows."""
 
     raw_features = _shared_columns(child, "all_cols")
@@ -210,9 +210,82 @@ def _preprocess_local_rows(child: Any, rows: pd.DataFrame) -> pd.DataFrame:
     if array.ndim != 2:
         raise ValueError("The fitted preprocessor must return a two-dimensional matrix.")
     names = _transformed_feature_names(child, preprocess, array.shape[1])
-    frame = pd.DataFrame(array, columns=names, index=rows.index)
-    frame.attrs["predictor"] = predictor
+    return pd.DataFrame(array, columns=names, index=rows.index), predictor
+
+
+def _training_background(child: Any, columns: list[str]) -> pd.DataFrame:
+    """Return transformed training data used as the local-SHAP background."""
+
+    background = getattr(child, "df_prerpocessed", None)
+    if not isinstance(background, pd.DataFrame) or background.empty:
+        raise ValueError(
+            "Transformed training data is unavailable for local SHAP calculation."
+        )
+    if len(background.columns) != len(columns):
+        raise ValueError(
+            "Training and prediction preprocessing produced different feature counts."
+        )
+    frame = background.copy()
+    frame.columns = columns
     return frame
+
+
+def _local_explainer_store(service: Any) -> dict[tuple[str, str], dict[str, Any]]:
+    """Return a process-local cache containing explainers but no SHAP values."""
+
+    store = getattr(service, "_local_shap_explainers", None)
+    if store is None:
+        store = {}
+        service._local_shap_explainers = store
+    return store
+
+
+def _resolve_local_explainer(
+    service: Any,
+    model_id: str,
+    target: str,
+    child: Any,
+    predictor: Any,
+    background: pd.DataFrame,
+) -> Any:
+    """Reuse a fitted explainer or build one from the training-data background."""
+
+    store = _local_explainer_store(service)
+    cache_key = (model_id, target)
+    cached = store.get(cache_key)
+    if cached is not None and cached.get("model_identity") == id(child):
+        return cached["explainer"]
+
+    explainer = getattr(child, "explainer", None)
+    if not callable(explainer):
+        from malchan.models.explainability import get_shap_values
+
+        _, _, explainer, _ = get_shap_values(predictor, background)
+    if not callable(explainer):
+        raise ValueError(
+            f"SHAP is unavailable for the fitted predictor of target {target!r}."
+        )
+
+    store[cache_key] = {
+        "model_identity": id(child),
+        "explainer": explainer,
+    }
+    return explainer
+
+
+def _evaluate_local_explainer(explainer: Any, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Evaluate an existing SHAP explainer for the explicitly selected rows."""
+
+    try:
+        explanation = explainer(frame, check_additivity=False)
+    except TypeError:
+        max_evals = max(2 * frame.shape[1] + 1, 1000)
+        explanation = explainer(frame, max_evals=max_evals)
+    values = np.asarray(getattr(explanation, "values", None))
+    base_values = np.asarray(getattr(explanation, "base_values", None))
+    if values.size == 0:
+        raise ValueError("The SHAP explainer returned no values.")
+    return values, base_values
 
 
 def _output_names(child: Any, target: str, count: int) -> list[str]:
@@ -248,32 +321,32 @@ def _base_json(values: np.ndarray, row_count: int) -> list[float | None]:
 
 
 def _local_target_shap(
+    service: Any,
+    model_id: str,
     child: Any,
     target: str,
     rows: pd.DataFrame,
 ) -> LocalShapTargetResponse:
-    """Calculate exact request-scoped SHAP values without replacing XAI caches."""
+    """Calculate selected-row SHAP values against the training-data background."""
 
-    from malchan.models.explainability import get_shap_values
-
-    transformed = _preprocess_local_rows(child, rows)
-    predictor = transformed.attrs.pop("predictor")
+    transformed, predictor = _preprocess_local_rows(child, rows)
+    background = _training_background(child, list(transformed.columns))
+    explainer = _resolve_local_explainer(
+        service,
+        model_id,
+        target,
+        child,
+        predictor,
+        background,
+    )
     shap_batches: dict[str, list[np.ndarray]] = {}
     base_batches: dict[str, list[np.ndarray]] = {}
     output_names: list[str] | None = None
     transformed_batches: list[pd.DataFrame] = []
 
-    # ``get_shap_values`` samples inputs above 300 rows. Chunking preserves every
-    # explicitly selected row while retaining the existing explainer selection.
     for start in range(0, len(transformed), 300):
         batch = transformed.iloc[start : start + 300]
-        shap_values, base_values, _, sample = get_shap_values(predictor, batch)
-        if shap_values is None or sample is None:
-            raise ValueError(
-                f"SHAP is unavailable for the fitted predictor of target {target!r}."
-            )
-
-        values = np.asarray(shap_values)
+        values, base_array = _evaluate_local_explainer(explainer, batch)
         if values.ndim == 1:
             values = values.reshape(-1, 1)
         if values.ndim not in {2, 3}:
@@ -290,13 +363,7 @@ def _local_target_shap(
         elif names != output_names:
             raise ValueError("SHAP output names changed between request batches.")
 
-        sample_frame = sample if isinstance(sample, pd.DataFrame) else pd.DataFrame(
-            sample,
-            columns=transformed.columns,
-        )
-        transformed_batches.append(sample_frame.reset_index(drop=True))
-        base_array = np.asarray(base_values)
-
+        transformed_batches.append(batch.reset_index(drop=True))
         for output_index, output_name in enumerate(names):
             matrix = values if values.ndim == 2 else values[:, :, output_index]
             shap_batches[output_name].append(np.asarray(matrix, dtype=float))
@@ -361,7 +428,13 @@ def compute_local_shap(
     rows = rows[registered.info.feature_columns]
 
     targets = {
-        target: _local_target_shap(target_models[target], target, rows)
+        target: _local_target_shap(
+            service,
+            model_id,
+            target_models[target],
+            target,
+            rows,
+        )
         for target in selected_targets
     }
     return LocalShapResponse(
