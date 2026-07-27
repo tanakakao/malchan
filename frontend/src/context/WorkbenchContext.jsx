@@ -291,10 +291,34 @@ export function WorkbenchProvider({ children }) {
     const resolvedTuning = options.tuning ?? tuneBest;
     const resolvedTrials = Math.max(1, Number(options.trials ?? trials));
     const resolvedActivateBest = options.activateBest ?? activateBest;
+    const comparisonModelParams = resolvedTuning
+      ? null
+      : multiOutput
+        ? Object.fromEntries(
+            targets.map((target) => {
+              const params = options.modelParamsByTarget?.[target];
+              const selectedModel = modelNames[target];
+              return [
+                target,
+                params && selectedCandidates[target]?.includes(selectedModel)
+                  ? { [selectedModel]: params }
+                  : {},
+              ];
+            }),
+          )
+        : (() => {
+            const target = targets[0];
+            const params = options.modelParamsByTarget?.[target];
+            const selectedModel = modelNames[target];
+            return params && selectedCandidates[target]?.includes(selectedModel)
+              ? { [selectedModel]: params }
+              : null;
+          })();
     const payload = {
       model_names: multiOutput
         ? Object.fromEntries(targets.map((target) => [target, selectedCandidates[target] || []]))
         : selectedCandidates[targets[0]] || [],
+      model_params: comparisonModelParams,
       method: resolvedMethod,
       n_splits: resolvedSplits,
       metric: multiOutput
