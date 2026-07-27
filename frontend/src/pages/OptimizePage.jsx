@@ -8,7 +8,59 @@ import { uniqueValues } from "../data";
 import { useWorkbench } from "../context/WorkbenchContext";
 import "../optimize-variable-settings.css";
 
+const SINGLE_OBJECTIVE_SAMPLERS = [
+  {
+    value: "TPE",
+    label: "TPE",
+    description: "標準的な単目的探索。カテゴリ変数を含む探索にも使いやすい手法です。",
+  },
+  {
+    value: "CmaEs",
+    label: "CMA-ES",
+    description: "連続変数中心の単目的探索に向く進化戦略です。",
+  },
+  {
+    value: "GP",
+    label: "Gaussian Process",
+    description: "少ない試行回数で効率的に単目的探索したい場合に適します。",
+  },
+  {
+    value: "QMS",
+    label: "QMC",
+    description: "低偏差列で探索空間を広く均一にサンプリングします。",
+  },
+];
+
+const MULTI_OBJECTIVE_SAMPLERS = [
+  {
+    value: "MOTPE",
+    label: "MOTPE",
+    description: "TPESamplerによる多目的探索です。比較的少ない試行回数でも利用できます。",
+  },
+  {
+    value: "GP",
+    label: "Gaussian Process",
+    description: "多目的の予測モデルを使い、効率的にパレート候補を探索します。",
+  },
+  {
+    value: "QMS",
+    label: "QMC",
+    description: "多目的探索空間を広く均一にサンプリングします。",
+  },
+  {
+    value: "NSGAII",
+    label: "NSGA-II",
+    description: "多目的最適化で広く使われる進化計算です。",
+  },
+  {
+    value: "NSGAIII",
+    label: "NSGA-III",
+    description: "目的数が多い場合の多目的探索に適した進化計算です。",
+  },
+];
+
 const variableSettingsByModel = new Map();
+const constraintSettingsByModel = new Map();
 
 function isIntegerColumn(rows, column) {
   const values = rows.map((row) => row[column]).filter(Number.isFinite);
@@ -21,6 +73,14 @@ function defaultVariableSetting(rows, column, numeric) {
     fixed: false,
     fixedValue: firstValue ?? "",
     step: numeric && isIntegerColumn(rows, column) ? 1 : "",
+  };
+}
+
+function normalizeConstraintSetting(saved, numericColumns) {
+  return {
+    enabled: Boolean(saved?.enabled),
+    columns: (saved?.columns || []).filter((column) => numericColumns.includes(column)),
+    value: saved?.value ?? "",
   };
 }
 
@@ -60,6 +120,7 @@ export default function OptimizePage() {
   } = useWorkbench();
   const modelKey = modelInfo?.model_id || "unregistered";
   const featureKey = features.join("\u0000");
+  const numericFeatureKey = numFeatures.join("\u0000");
   const [variableSettings, setVariableSettings] = useState(() => {
     const saved = variableSettingsByModel.get(modelKey) || {};
     return Object.fromEntries(features.map((column) => [
@@ -67,7 +128,17 @@ export default function OptimizePage() {
       saved[column] || defaultVariableSetting(rows, column, numFeatures.includes(column)),
     ]));
   });
+  const [sumConstraint, setSumConstraint] = useState(() => normalizeConstraintSetting(
+    constraintSettingsByModel.get(modelKey),
+    numFeatures,
+  ));
   const [settingsError, setSettingsError] = useState("");
+  const multiObjective = targets.length > 1;
+  const samplerOptions = multiObjective
+    ? MULTI_OBJECTIVE_SAMPLERS
+    : SINGLE_OBJECTIVE_SAMPLERS;
+  const selectedSampler = samplerOptions.find((option) => option.value === sampler)
+    || samplerOptions[0];
 
   useEffect(() => {
     const saved = variableSettingsByModel.get(modelKey) || {};
@@ -75,11 +146,26 @@ export default function OptimizePage() {
       column,
       saved[column] || defaultVariableSetting(rows, column, numFeatures.includes(column)),
     ])));
-  }, [modelKey, featureKey]);
+  }, [modelKey, featureKey, numericFeatureKey]);
+
+  useEffect(() => {
+    const saved = constraintSettingsByModel.get(modelKey);
+    setSumConstraint(normalizeConstraintSetting(saved, numFeatures));
+  }, [modelKey, numericFeatureKey]);
 
   useEffect(() => {
     variableSettingsByModel.set(modelKey, variableSettings);
   }, [modelKey, variableSettings]);
+
+  useEffect(() => {
+    constraintSettingsByModel.set(modelKey, sumConstraint);
+  }, [modelKey, sumConstraint]);
+
+  useEffect(() => {
+    if (!samplerOptions.some((option) => option.value === sampler)) {
+      setSampler(samplerOptions[0].value);
+    }
+  }, [sampler, samplerOptions, setSampler]);
 
   useEffect(() => () => {
     setInverseAnalysisPayloadOverride(null);
@@ -90,6 +176,27 @@ export default function OptimizePage() {
     [features, variableSettings],
   );
   const searchedCount = features.length - fixedCount;
+  const constraintRange = useMemo(() => {
+    if (!sumConstraint.enabled || !sumConstraint.columns.length) return null;
+    let minimum = 0;
+    let maximum = 0;
+    for (const column of sumConstraint.columns) {
+      const setting = variableSettings[column] || {};
+      if (setting.fixed) {
+        const fixedValue = Number(setting.fixedValue);
+        if (!Number.isFinite(fixedValue)) return null;
+        minimum += fixedValue;
+        maximum += fixedValue;
+      } else {
+        const lower = Number(bounds[column]?.min);
+        const upper = Number(bounds[column]?.max);
+        if (!Number.isFinite(lower) || !Number.isFinite(upper)) return null;
+        minimum += lower;
+        maximum += upper;
+      }
+    }
+    return { minimum, maximum };
+  }, [bounds, sumConstraint, variableSettings]);
 
   function patchVariable(column, patch) {
     setVariableSettings((current) => ({
@@ -103,6 +210,18 @@ export default function OptimizePage() {
         ...patch,
       },
     }));
+  }
+
+  function toggleConstraintColumn(column) {
+    setSumConstraint((current) => {
+      const selected = current.columns.includes(column);
+      return {
+        ...current,
+        columns: selected
+          ? current.columns.filter((name) => name !== column)
+          : [...current.columns, column],
+      };
+    });
   }
 
   function changeObjective(target, nextMode) {
@@ -184,6 +303,30 @@ export default function OptimizePage() {
       }
     });
 
+    if (sumConstraint.enabled) {
+      const constraintValue = Number(sumConstraint.value);
+      if (!sumConstraint.columns.length) {
+        errors.push("合計制約: 対象となる数値説明変数を1つ以上選択してください。");
+      }
+      if (!Number.isFinite(constraintValue)) {
+        errors.push("合計制約: 合計値を数値で入力してください。");
+      } else if (constraintRange) {
+        const tolerance = 1.0e-9;
+        if (
+          constraintValue < constraintRange.minimum - tolerance
+          || constraintValue > constraintRange.maximum + tolerance
+        ) {
+          errors.push(
+            `合計制約: ${constraintValue}は現在の固定値・探索範囲で達成できません。`
+            + ` 達成可能範囲は${constraintRange.minimum}〜${constraintRange.maximum}です。`,
+          );
+        }
+      }
+    }
+
+    if (!samplerOptions.some((option) => option.value === sampler)) {
+      errors.push(`${multiObjective ? "多目的" : "単目的"}探索に対応した探索手法を選択してください。`);
+    }
     if (searchedCount < 1) {
       errors.push("少なくとも1つの説明変数を探索対象にしてください。");
     }
@@ -246,6 +389,12 @@ export default function OptimizePage() {
       bounds: numericBounds,
       categories,
       fixed_values: fixedValues,
+      sum_constraint: sumConstraint.enabled
+        ? {
+            columns: sumConstraint.columns,
+            value: Number(sumConstraint.value),
+          }
+        : null,
     };
   }
 
@@ -265,7 +414,7 @@ export default function OptimizePage() {
       <SectionHeader
         step="7 · OPTIMIZE"
         title="目的条件を満たす入力候補を逆解析する"
-        text="目的変数の条件と、説明変数の探索範囲・刻み・固定値を設定します。"
+        text="目的条件、説明変数の探索範囲・固定値、合計制約、探索手法を設定します。"
       />
 
       {!modelInfo && (
@@ -494,24 +643,126 @@ export default function OptimizePage() {
         </p>
       </article>
 
+      <article className="panel optimize-constraint-panel">
+        <div className="panel-title">
+          <div>
+            <span className="panel-kicker">3 · CONSTRAINT</span>
+            <h3>説明変数の合計制約</h3>
+            <p>選択した数値説明変数の合計を、指定値と等しくする制約を設定します。</p>
+          </div>
+          <span className={`status-chip ${sumConstraint.enabled ? "success" : ""}`}>
+            {sumConstraint.enabled ? "ON" : "OFF"}
+          </span>
+        </div>
+
+        <label className={`constraint-toggle-card ${sumConstraint.enabled ? "active" : ""}`}>
+          <input
+            type="checkbox"
+            checked={sumConstraint.enabled}
+            onChange={(event) => setSumConstraint((current) => ({
+              ...current,
+              enabled: event.target.checked,
+            }))}
+          />
+          <span>
+            <strong>合計制約を使用する</strong>
+            <small>例: 原料1 + 原料2 + 原料3 = 100</small>
+          </span>
+        </label>
+
+        {sumConstraint.enabled && (
+          <div className="constraint-settings-body">
+            <div className="constraint-value-row">
+              <Field label="合計値">
+                <input
+                  type="number"
+                  step="any"
+                  value={sumConstraint.value}
+                  onChange={(event) => setSumConstraint((current) => ({
+                    ...current,
+                    value: event.target.value,
+                  }))}
+                />
+              </Field>
+              <div className="constraint-range-summary">
+                <span>現在の達成可能範囲</span>
+                <strong>
+                  {constraintRange
+                    ? `${constraintRange.minimum} ～ ${constraintRange.maximum}`
+                    : "対象変数を選択してください"}
+                </strong>
+              </div>
+              <div className="constraint-bulk-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setSumConstraint((current) => ({
+                    ...current,
+                    columns: [...numFeatures],
+                  }))}
+                >
+                  数値変数を全選択
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setSumConstraint((current) => ({
+                    ...current,
+                    columns: [],
+                  }))}
+                >
+                  選択解除
+                </button>
+              </div>
+            </div>
+
+            <div className="constraint-variable-grid">
+              {numFeatures.map((column) => {
+                const selected = sumConstraint.columns.includes(column);
+                const setting = variableSettings[column] || {};
+                const rangeText = setting.fixed
+                  ? `固定: ${setting.fixedValue ?? "—"}`
+                  : `${bounds[column]?.min ?? "—"} ～ ${bounds[column]?.max ?? "—"}`;
+                return (
+                  <label
+                    key={column}
+                    className={`constraint-variable-card ${selected ? "selected" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleConstraintColumn(column)}
+                    />
+                    <span>
+                      <strong>{column}</strong>
+                      <small>{rangeText}</small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="settings-note">
+              固定済みの数値変数も合計に含められます。固定値を差し引いた残りを、探索対象変数の範囲内で調整します。
+            </p>
+          </div>
+        )}
+      </article>
+
       <article className="panel optimize-run-panel">
         <div className="panel-title">
           <div>
-            <span className="panel-kicker">3 · SEARCH</span>
+            <span className="panel-kicker">4 · SEARCH</span>
             <h3>探索設定</h3>
-            <p>探索アルゴリズム、試行回数、表示する候補数を設定します。</p>
+            <p>目的数に対応した探索アルゴリズム、試行回数、表示する候補数を設定します。</p>
           </div>
+          <span className="status-chip success">{multiObjective ? "多目的" : "単目的"}</span>
         </div>
         <div className="form-grid optimize-run-grid">
-          <Field label="Sampler">
-            <select value={sampler} onChange={(event) => setSampler(event.target.value)}>
-              <option>TPE</option>
-              <option>MOTPE</option>
-              <option>CmaEs</option>
-              <option>GP</option>
-              <option>QMS</option>
-              <option>NSGAII</option>
-              <option>NSGAIII</option>
+          <Field label={`探索手法（${multiObjective ? "多目的" : "単目的"}）`}>
+            <select value={selectedSampler.value} onChange={(event) => setSampler(event.target.value)}>
+              {samplerOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </Field>
           <Field label="Trials">
@@ -530,6 +781,10 @@ export default function OptimizePage() {
               onChange={(event) => setTopK(event.target.value)}
             />
           </Field>
+        </div>
+        <div className="sampler-description">
+          <strong>{selectedSampler.label}</strong>
+          <span>{selectedSampler.description}</span>
         </div>
         {settingsError && (
           <p className="xai-error optimize-settings-error">{settingsError}</p>
