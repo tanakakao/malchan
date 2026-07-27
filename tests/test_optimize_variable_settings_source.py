@@ -5,6 +5,7 @@ OPTIMIZE_PAGE = Path("frontend/src/pages/OptimizePage.jsx")
 API = Path("frontend/src/api.js")
 INVERSE_SCHEMA = Path("src/malchan/app/schemas/inverse_analysis.py")
 INVERSE_SERVICE = Path("src/malchan/app/services/model_service.py")
+INVERSE_FUNCTION = Path("src/malchan/inverse_analysis/models.py")
 
 
 def test_objective_control_uses_max_min_and_target_value() -> None:
@@ -19,6 +20,29 @@ def test_objective_control_uses_max_min_and_target_value() -> None:
     assert '<span className="muted-cell">入力不要</span>' in source
     assert "target_value" in source
     assert "direction: mode" in source
+
+
+def test_inverse_objective_targets_are_selectable_and_filtered() -> None:
+    """Only checked targets should be sent to the existing target-cols path."""
+
+    source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
+    service_source = INVERSE_SERVICE.read_text(encoding="utf-8")
+    function_source = INVERSE_FUNCTION.read_text(encoding="utf-8")
+
+    assert "objectiveSelectionByModel" in source
+    assert "selectedTargets" in source
+    assert "<th>使用</th>" in source
+    assert "逆解析に使用" in source
+    assert "selectedTargets.map((target) =>" in source
+    assert "selectedTargets.length > 1" in source
+    assert "逆解析に使用する目的変数を1つ以上選択してください" in source
+    assert "busy || selectedTargets.length === 0" in source
+
+    assert "objective_targets = [item.target for item in request.objectives]" in service_source
+    assert "target_cols=objective_targets" in service_source
+    assert "target_cols: list[str] | None = None" in function_source
+    assert "resolved_targets = normalized_model.target_cols if not target_cols else target_cols" in function_source
+    assert "normalized_model.validate_objectives(resolved_targets, obj_directions)" in function_source
 
 
 def test_search_variable_table_matches_bochan_style_settings() -> None:
@@ -57,8 +81,8 @@ def test_sum_constraint_is_configurable_and_sent_to_inverse_api() -> None:
     assert "constraint_value=constraint_value" in service_source
 
 
-def test_sampler_options_change_for_single_and_multi_objective_search() -> None:
-    """Single- and multi-objective searches should present compatible sampler lists."""
+def test_sampler_options_change_for_selected_objective_count() -> None:
+    """Sampler choices should follow the number of checked objective targets."""
 
     source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
     single_section = source.split("const SINGLE_OBJECTIVE_SAMPLERS = [", 1)[1].split(
@@ -78,14 +102,14 @@ def test_sampler_options_change_for_single_and_multi_objective_search() -> None:
     assert 'value: "CmaEs"' not in multi_section
     assert 'value: "GP"' not in multi_section
     assert 'value: "QMS"' not in multi_section
-    assert "const multiObjective = targets.length > 1" in source
+    assert "const multiObjective = selectedTargets.length > 1" in source
     assert "const samplerOptions = multiObjective" in source
     assert "setSampler(samplerOptions[0].value)" in source
     assert 'multiObjective ? "多目的" : "単目的"' in source
 
 
 def test_inverse_api_merges_page_specific_payload_override() -> None:
-    """The context-owned execution should receive fixed values and custom steps."""
+    """The context-owned execution should receive page-specific inverse settings."""
 
     source = API.read_text(encoding="utf-8")
 
