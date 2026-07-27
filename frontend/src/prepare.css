@@ -1,0 +1,215 @@
+.prepare-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.selection-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.selection-actions button {
+  min-height: 38px;
+}
+
+.variable-selection-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  max-height: 580px;
+  padding: 2px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.variable-choice {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  color: var(--text);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  box-shadow: none;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.variable-choice:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+  box-shadow: var(--shadow-xs);
+}
+
+.variable-choice.selected,
+.variable-choice.selected:hover {
+  color: var(--primary);
+  background: var(--primary-soft-strong);
+  border-color: color-mix(in srgb, var(--primary) 56%, var(--line));
+  box-shadow: inset 4px 0 0 var(--primary), var(--shadow-xs);
+}
+
+.variable-choice-main {
+  min-width: 0;
+  min-height: 40px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+}
+
+.variable-choice-main:hover:not(:disabled),
+.variable-choice-main:focus-visible {
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.variable-choice-main span {
+  width: 100%;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 720;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.variable-choice-main small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feature-type-toggle,
+.target-task-select {
+  align-self: center;
+  min-height: 38px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.feature-type-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.feature-type-toggle input {
+  width: 17px;
+  height: 17px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.feature-type-toggle span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feature-type-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.target-task-select {
+  min-width: 128px;
+  display: grid;
+  grid-template-columns: auto minmax(74px, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px 5px 9px;
+}
+
+.target-task-select > span {
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.target-task-select select {
+  min-height: 32px;
+  padding: 5px 26px 5px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.feature-variable-choice.selected-categorical,
+.feature-variable-choice.selected-categorical:hover {
+  color: #7650c7;
+  background: color-mix(in srgb, #8f6bd8 15%, var(--surface));
+  border-color: color-mix(in srgb, #8f6bd8 58%, var(--line));
+  box-shadow: inset 4px 0 0 #8f6bd8, var(--shadow-xs);
+}
+
+.feature-variable-choice.selected-categorical .feature-type-toggle {
+  color: #6944b9;
+  background: color-mix(in srgb, #8f6bd8 16%, var(--surface));
+  border-color: color-mix(in srgb, #8f6bd8 45%, var(--line));
+}
+
+.prepare-empty-state {
+  margin-top: 18px;
+}
+
+@media (max-width: 1100px) {
+  .prepare-selection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .variable-selection-list {
+    max-height: 430px;
+  }
+}
+
+@media (max-width: 720px) {
+  .variable-choice,
+  .target-task-select {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-type-toggle,
+  .target-task-select {
+    width: 100%;
+  }
+
+  .feature-type-toggle {
+    justify-content: center;
+  }
+
+  .target-task-select {
+    align-items: stretch;
+  }
+}

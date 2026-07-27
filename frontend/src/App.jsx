@@ -31,18 +31,19 @@ function WorkbenchLayout() {
     <div className="app-root">
       <header className="app-header">
         <div className="brand-lockup">
-          <div className="brand-mark"><span>m</span></div>
+          <div className="brand-mark" aria-hidden="true"><span>m</span></div>
           <div className="brand-wordmark">
             <h1>キカイガクシュウ</h1>
             <p>MALCHAN MACHINE LEARNING WORKBENCH</p>
           </div>
         </div>
-        <div className="workflow-strip">
+        <div className="workflow-strip" aria-label="ワークフロー">
           {STEPS.map(([id, label], stepIndex) => (
             <React.Fragment key={id}>
               <button
                 className={`workflow-step ${id === step ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
                 onClick={() => setStep(id)}
+                aria-current={id === step ? "step" : undefined}
               >
                 <span>{stepIndex + 1}</span><strong>{label}</strong>
               </button>
@@ -51,20 +52,34 @@ function WorkbenchLayout() {
           ))}
         </div>
         <div className="header-actions">
-          <div className="runtime-pill"><span className={`dot ${health.status}`} /><span>{health.text}</span></div>
-          <button className="icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>◐</button>
+          <div className="runtime-pill" title={health.text}>
+            <span className={`dot ${health.status}`} />
+            <span className="runtime-copy">
+              <small>API status</small>
+              <strong>{health.text}</strong>
+            </span>
+          </div>
+          <button
+            className="icon-button secondary"
+            title={theme === "dark" ? "ライトテーマへ" : "ダークテーマへ"}
+            aria-label={theme === "dark" ? "ライトテーマへ切り替える" : "ダークテーマへ切り替える"}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
         </div>
       </header>
 
       <main className="app-shell">
         <aside className="left-rail">
           <div className="rail-section-label">WORKSPACE</div>
-          <nav className="tabs">
+          <nav className="tabs" aria-label="ページナビゲーション">
             {STEPS.map(([id, label, detail], stepIndex) => (
               <button
                 key={id}
                 className={`tab ${step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
                 onClick={() => setStep(id)}
+                aria-current={step === id ? "page" : undefined}
               >
                 <span className="nav-icon">{ICONS[stepIndex]}</span>
                 <span><strong>{label}</strong><small>{detail}</small></span>
@@ -79,10 +94,13 @@ function WorkbenchLayout() {
           </div>
         </aside>
 
-        <section className="content"><Page /></section>
+        <section className="content">
+          <div className="content-inner"><Page /></div>
+        </section>
 
         <aside className="right-rail">
           <div className={`side-card runtime-card ${health.status}`}>
+            <div className="side-card-title"><span>RUNTIME</span><strong>API接続</strong></div>
             <div className="runtime-large"><span className={`dot ${health.status}`} /><div><strong>FastAPI</strong><small>{health.text}</small></div></div>
           </div>
           <div className="side-card">
