@@ -1,9 +1,16 @@
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 
 let comparisonTuneBestOverride = false;
+let inverseAnalysisPayloadOverride = null;
 
 export function setComparisonTuneBestOverride(enabled) {
   comparisonTuneBestOverride = Boolean(enabled);
+}
+
+export function setInverseAnalysisPayloadOverride(payload) {
+  inverseAnalysisPayloadOverride = payload && typeof payload === "object"
+    ? payload
+    : null;
 }
 
 export class ApiError extends Error {
@@ -64,6 +71,14 @@ function comparisonPayload(payload) {
   return { ...payload, tune_best: true };
 }
 
+function inverseAnalysisPayload(payload) {
+  if (!inverseAnalysisPayloadOverride) return payload;
+  return {
+    ...payload,
+    ...inverseAnalysisPayloadOverride,
+  };
+}
+
 export const api = {
   health: () => request("/health"),
   modelParameters: (task, modelName) =>
@@ -96,7 +111,7 @@ export const api = {
   inverse: (modelId, payload) =>
     request(`/models/${encodeURIComponent(modelId)}/inverse-analysis`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(inverseAnalysisPayload(payload)),
     }),
   xaiSummary: (modelId) =>
     request(`/models/${encodeURIComponent(modelId)}/xai`),

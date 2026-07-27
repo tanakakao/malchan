@@ -1,0 +1,288 @@
+.optimize-target-panel,
+.optimize-variable-panel,
+.optimize-constraint-panel,
+.optimize-run-panel {
+  overflow: hidden;
+}
+
+.optimize-variable-summary,
+.optimize-objective-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.compact-action {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 0.84rem;
+}
+
+.inverse-objective-table,
+.optimize-variable-table {
+  min-width: 760px;
+}
+
+.selectable-objective-table {
+  min-width: 850px;
+}
+
+.inverse-objective-table th,
+.optimize-variable-table th {
+  white-space: nowrap;
+}
+
+.inverse-objective-table td,
+.optimize-variable-table td {
+  vertical-align: middle;
+}
+
+.inverse-objective-table select,
+.inverse-objective-table input,
+.optimize-variable-table select,
+.optimize-variable-table input {
+  width: 100%;
+  min-width: 96px;
+}
+
+.inverse-objective-table .objective-checkbox-cell {
+  width: 64px;
+  text-align: center;
+}
+
+.inverse-objective-table .objective-checkbox-cell .table-checkbox {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+}
+
+.optimize-variable-table .inverse-name-cell,
+.inverse-objective-table .inverse-name-cell {
+  min-width: 150px;
+}
+
+.selectable-objective-table .inverse-name-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.objective-excluded-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.selected-objective-row {
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+.selected-objective-row td:first-child {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary) 72%, transparent);
+}
+
+.excluded-objective-row {
+  background: var(--surface-2);
+}
+
+.excluded-objective-row td:not(.objective-checkbox-cell) {
+  opacity: 0.58;
+}
+
+.excluded-objective-row select:disabled,
+.excluded-objective-row input:disabled {
+  cursor: not-allowed;
+}
+
+.optimize-variable-table-wrap {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+
+.optimize-variable-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.optimize-variable-table .fixed-checkbox-cell {
+  text-align: center;
+}
+
+.optimize-variable-table .table-checkbox {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+}
+
+.optimize-variable-table .fixed-variable-row {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.optimize-variable-table .fixed-variable-row td:first-child {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary) 72%, transparent);
+}
+
+.optimize-variable-table input:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.constraint-toggle-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.constraint-toggle-card.active {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--line));
+  background: var(--primary-soft);
+}
+
+.constraint-toggle-card input,
+.constraint-variable-card input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+}
+
+.constraint-toggle-card span,
+.constraint-variable-card span {
+  display: grid;
+  gap: 3px;
+}
+
+.constraint-toggle-card small,
+.constraint-variable-card small {
+  color: var(--muted);
+}
+
+.constraint-settings-body {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.constraint-value-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(240px, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+}
+
+.constraint-range-summary {
+  display: grid;
+  gap: 5px;
+  min-height: 66px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.constraint-range-summary span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.constraint-bulk-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.constraint-variable-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.constraint-variable-card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.constraint-variable-card:hover {
+  transform: translateY(-1px);
+}
+
+.constraint-variable-card.selected {
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--line));
+  background: var(--primary-soft);
+}
+
+.optimize-run-grid {
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.sampler-description {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 14px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.sampler-description span {
+  color: var(--muted);
+}
+
+.optimize-settings-error {
+  white-space: pre-line;
+  margin: 16px 0;
+}
+
+.muted-cell {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 920px) {
+  .constraint-value-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .constraint-bulk-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 820px) {
+  .optimize-run-grid,
+  .constraint-value-row {
+    grid-template-columns: 1fr;
+  }
+
+  .constraint-bulk-actions {
+    grid-column: auto;
+  }
+
+  .constraint-bulk-actions button {
+    flex: 1 1 180px;
+  }
+
+  .sampler-description {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
