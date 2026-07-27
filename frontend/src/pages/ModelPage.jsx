@@ -181,11 +181,17 @@ export default function ModelPage() {
               </div>
               {preprocessing.impute && (
                 <Field label="数値補完方式">
-                  <input
+                  <select
                     value={preprocessing.numImputeType}
-                    placeholder="未指定ならPipeline既定値"
                     onChange={(event) => patchPreprocessing({ numImputeType: event.target.value })}
-                  />
+                  >
+                    <option value="">補完なし</option>
+                    <option value="mean">平均値</option>
+                    <option value="median">中央値</option>
+                    <option value="most_frequent">最頻値</option>
+                    <option value="knn">KNN補完</option>
+                    <option value="Multiple">多重代入</option>
+                  </select>
                 </Field>
               )}
               <label className="switch-label setting-inline-switch">
@@ -204,11 +210,16 @@ export default function ModelPage() {
                 <div><strong>数値スケーリング</strong><span>未指定の場合はモデルPipelineの既定動作を使用します。</span></div>
               </div>
               <Field label="スケーラー">
-                <input
+                <select
                   value={preprocessing.numScaleType}
-                  placeholder="例: StandardScaler"
                   onChange={(event) => patchPreprocessing({ numScaleType: event.target.value })}
-                />
+                >
+                  <option value="">使用しない</option>
+                  <option value="StandardScaler">標準化</option>
+                  <option value="MinMaxScaler">Min-Max</option>
+                  <option value="centering">中心化のみ</option>
+                  <option value="MaxAbsScaler">最大絶対値</option>
+                </select>
               </Field>
             </section>
 
@@ -270,7 +281,8 @@ export default function ModelPage() {
                     >
                       <option value="PCA">PCA</option>
                       <option value="KernelPCA">KernelPCA</option>
-                      <option value="TruncatedSVD">TruncatedSVD</option>
+                      <option value="NMF">NMF</option>
+                      <option value="ICA">ICA</option>
                     </select>
                   </Field>
                   <Field label="成分数">
@@ -290,11 +302,16 @@ export default function ModelPage() {
                 <div><strong>サンプリング</strong><span>不均衡分類などで使用するサンプリング方式です。</span></div>
               </div>
               <Field label="方式">
-                <input
+                <select
                   value={preprocessing.samplingMethod}
-                  placeholder="未指定なら使用しない"
                   onChange={(event) => patchPreprocessing({ samplingMethod: event.target.value })}
-                />
+                >
+                  <option value="">使用しない</option>
+                  <option value="sample_weight">クラス重み</option>
+                  <option value="ros">Random Over Sampling</option>
+                  <option value="rus">Random Under Sampling</option>
+                  <option value="smote">SMOTE / SMOTENC</option>
+                </select>
               </Field>
             </section>
           </div>
@@ -346,6 +363,9 @@ export default function ModelPage() {
                       })}
                     />
                   </div>
+                )}
+                {!tuneBest && crossValidation && (
+                  <p className="settings-note">このJSONは選択中の使用モデルへ適用し、その他のCV候補は既定パラメータで評価します。</p>
                 )}
 
                 {crossValidation && (
