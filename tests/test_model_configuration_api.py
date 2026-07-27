@@ -32,9 +32,12 @@ class CategoricalDistribution:
 class FakeEvaluationPipeline:
     """Pipeline double recording CV settings without comparing model families."""
 
+    latest_instance = None
+
     def __init__(self) -> None:
         self.cv_scores = None
         self.cv_calls = []
+        type(self).latest_instance = self
 
     def fit(self, **kwargs) -> None:
         """Accept application training arguments."""
@@ -133,8 +136,8 @@ def test_model_parameter_endpoint_converts_tuning_space_to_controls(monkeypatch)
     assert parameters["solver"]["default_value"] == "auto"
 
 
-def test_evaluate_endpoint_scores_registered_model_without_comparison() -> None:
-    """CV evaluation should return metrics for the selected registered model."""
+def test_evaluate_endpoint_uses_registered_model_cv_score() -> None:
+    """CV evaluation should call cv_score on the selected registered model."""
 
     client = _make_client()
     trained = client.post("/api/models", json=_train_payload())
@@ -146,6 +149,9 @@ def test_evaluate_endpoint_scores_registered_model_without_comparison() -> None:
     )
 
     assert response.status_code == 200
+    assert FakeEvaluationPipeline.latest_instance.cv_calls == [
+        {"method": "kfold", "n_splits": 3}
+    ]
     payload = response.json()
     assert payload["model_id"] == "evaluation-model"
     assert payload["method"] == "kfold"
