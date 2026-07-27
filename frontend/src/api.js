@@ -55,11 +55,18 @@ function visualizationPath(modelId, target, chart, options = {}) {
 
 export const api = {
   health: () => request("/health"),
+  modelParameters: (task, modelName) =>
+    request(`/model-parameters${query({ task, model_name: modelName })}`),
   train: (payload) => request("/models", { method: "POST", body: JSON.stringify(payload) }),
   listModels: () => request("/models"),
   modelInfo: (modelId) => request(`/models/${encodeURIComponent(modelId)}`),
   predict: (modelId, payload) =>
     request(`/models/${encodeURIComponent(modelId)}/predict`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  evaluate: (modelId, payload) =>
+    request(`/models/${encodeURIComponent(modelId)}/evaluate`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
