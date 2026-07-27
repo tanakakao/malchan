@@ -855,7 +855,9 @@ def show_shap_beeswarm(
     """
     child_model, _ = _resolve_model_target(model, target, object_col)
     if child_model is not None:
-        X = _get_training_X(child_model)
+        X = getattr(child_model, "X_sample", None)
+        if X is None:
+            X = _get_training_X(child_model)
         shap_values = getattr(child_model, "shap_values", None)
         cat_cols = child_model._shared_attr("cat_cols")
     if shap_values is None:
