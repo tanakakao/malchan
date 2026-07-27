@@ -20,12 +20,6 @@ from malchan.app.schemas import (
     ModelParameterSchemaResponse,
     TargetModelEvaluation,
 )
-from malchan.models.utils import (
-    cls_default_params,
-    get_param_grid_cls,
-    get_param_grid_reg,
-    reg_default_params,
-)
 
 
 def _json_value(value: Any) -> Any:
@@ -164,6 +158,14 @@ def get_model_parameter_schema(
     model_name: str,
 ) -> ModelParameterSchemaResponse:
     """Return controls derived from the model's Optuna search space."""
+
+    del self
+    from malchan.models.utils import (
+        cls_default_params,
+        get_param_grid_cls,
+        get_param_grid_reg,
+        reg_default_params,
+    )
 
     if task == "regression":
         grid = get_param_grid_reg(model_name)
