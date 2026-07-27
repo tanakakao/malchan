@@ -3,6 +3,8 @@ from pathlib import Path
 
 OPTIMIZE_PAGE = Path("frontend/src/pages/OptimizePage.jsx")
 API = Path("frontend/src/api.js")
+INVERSE_SCHEMA = Path("src/malchan/app/schemas/inverse_analysis.py")
+INVERSE_SERVICE = Path("src/malchan/app/services/model_service.py")
 
 
 def test_objective_control_uses_max_min_and_target_value() -> None:
@@ -32,6 +34,44 @@ def test_search_variable_table_matches_bochan_style_settings() -> None:
     assert "fixed_values: fixedValues" in source
     assert "variableSettings[column]?.fixed" in source
     assert "setInverseAnalysisPayloadOverride(inversePayloadOverride())" in source
+
+
+def test_sum_constraint_is_configurable_and_sent_to_inverse_api() -> None:
+    """The UI should expose the inverse function's numeric sum-equality constraint."""
+
+    source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
+    schema_source = INVERSE_SCHEMA.read_text(encoding="utf-8")
+    service_source = INVERSE_SERVICE.read_text(encoding="utf-8")
+
+    assert "説明変数の合計制約" in source
+    assert "合計制約を使用する" in source
+    assert "sumConstraint.columns" in source
+    assert "constraintRange.minimum" in source
+    assert "constraintRange.maximum" in source
+    assert "sum_constraint: sumConstraint.enabled" in source
+    assert "value: Number(sumConstraint.value)" in source
+
+    assert "sum_constraint: SumConstraint | None" in schema_source
+    assert "request.sum_constraint.columns" in service_source
+    assert "constraint_cols=constraint_cols" in service_source
+    assert "constraint_value=constraint_value" in service_source
+
+
+def test_sampler_options_change_for_single_and_multi_objective_search() -> None:
+    """Single- and multi-objective searches should not present the same sampler list."""
+
+    source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
+
+    assert "SINGLE_OBJECTIVE_SAMPLERS" in source
+    assert "MULTI_OBJECTIVE_SAMPLERS" in source
+    assert 'value: "CmaEs"' in source
+    assert 'value: "MOTPE"' in source
+    assert 'value: "NSGAII"' in source
+    assert 'value: "NSGAIII"' in source
+    assert "const multiObjective = targets.length > 1" in source
+    assert "const samplerOptions = multiObjective" in source
+    assert "setSampler(samplerOptions[0].value)" in source
+    assert 'multiObjective ? "多目的" : "単目的"' in source
 
 
 def test_inverse_api_merges_page_specific_payload_override() -> None:
