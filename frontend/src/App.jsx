@@ -1,5 +1,5 @@
 import React from "react";
-import { STEPS, WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
+import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import DataPage from "./pages/DataPage";
@@ -7,8 +7,20 @@ import ExplorePage from "./pages/ExplorePage";
 import PreparePage from "./pages/PreparePage";
 import ModelPage from "./pages/ModelPage";
 import ExplainPage from "./pages/ExplainPage";
+import PredictionPage from "./pages/PredictionPage";
 import OptimizePage from "./pages/OptimizePage";
 import ReportPage from "./pages/ReportPage";
+
+const APP_STEPS = [
+  ["data", "Data", "読込・確認"],
+  ["explore", "Explore", "統計・可視化"],
+  ["prepare", "Prepare", "変数・前処理"],
+  ["model", "Model", "学習・比較"],
+  ["explain", "Explain", "精度・挙動"],
+  ["predict", "Predict", "予測・ローカルSHAP"],
+  ["optimize", "Optimize", "逆解析"],
+  ["report", "Report", "レポート"],
+];
 
 const PAGES = {
   data: DataPage,
@@ -16,18 +28,19 @@ const PAGES = {
   prepare: PreparePage,
   model: ModelPage,
   explain: ExplainPage,
+  predict: PredictionPage,
   optimize: OptimizePage,
   report: ReportPage,
 };
-const ICONS = ["▦", "◫", "◇", "⌁", "◎", "↗", "▧"];
+const ICONS = ["▦", "◫", "◇", "⌁", "◎", "◉", "↗", "▧"];
 
 function WorkbenchLayout() {
   const {
     theme, setTheme, step, setStep, health, busy, toast, setToast,
     fileName, rows, features, targets, modelInfo, comparison,
   } = useWorkbench();
-  const index = STEPS.findIndex(([id]) => id === step);
-  const Page = PAGES[step];
+  const index = APP_STEPS.findIndex(([id]) => id === step);
+  const Page = PAGES[step] || DataPage;
 
   return (
     <div className="app-root">
@@ -40,7 +53,7 @@ function WorkbenchLayout() {
           </div>
         </div>
         <div className="workflow-strip" aria-label="ワークフロー">
-          {STEPS.map(([id, label], stepIndex) => (
+          {APP_STEPS.map(([id, label], stepIndex) => (
             <React.Fragment key={id}>
               <button
                 className={`workflow-step ${id === step ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
@@ -49,7 +62,7 @@ function WorkbenchLayout() {
               >
                 <span>{stepIndex + 1}</span><strong>{label}</strong>
               </button>
-              {stepIndex < STEPS.length - 1 && <i />}
+              {stepIndex < APP_STEPS.length - 1 && <i />}
             </React.Fragment>
           ))}
         </div>
@@ -76,7 +89,7 @@ function WorkbenchLayout() {
         <aside className="left-rail">
           <div className="rail-section-label">WORKSPACE</div>
           <nav className="tabs" aria-label="ページナビゲーション">
-            {STEPS.map(([id, label, detail], stepIndex) => (
+            {APP_STEPS.map(([id, label, detail], stepIndex) => (
               <button
                 key={id}
                 className={`tab ${step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
