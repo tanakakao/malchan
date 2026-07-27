@@ -114,6 +114,7 @@ class TargetComparisonResponse(BaseModel):
     best_params: Any = None
     best_is_tuned: bool = False
     best_cv_scores: dict[str, list[dict[str, Any]]] | None = None
+    best_cv_predictions: dict[str, list[dict[str, Any]]] | None = None
 
 
 class ModelComparisonResponse(BaseModel):

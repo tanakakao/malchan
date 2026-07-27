@@ -1,5 +1,11 @@
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 
+let comparisonTuneBestOverride = false;
+
+export function setComparisonTuneBestOverride(enabled) {
+  comparisonTuneBestOverride = Boolean(enabled);
+}
+
 export class ApiError extends Error {
   constructor(message, status, detail) {
     super(message);
@@ -53,6 +59,11 @@ function visualizationPath(modelId, target, chart, options = {}) {
   return `/models/${encodeURIComponent(modelId)}/visualizations/${encodeURIComponent(target)}/${chart}${query(options)}`;
 }
 
+function comparisonPayload(payload) {
+  if (!payload?.activate_best || !comparisonTuneBestOverride) return payload;
+  return { ...payload, tune_best: true };
+}
+
 export const api = {
   health: () => request("/health"),
   modelParameters: (task, modelName) =>
@@ -73,7 +84,7 @@ export const api = {
   compare: (modelId, payload) =>
     request(`/models/${encodeURIComponent(modelId)}/compare`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(comparisonPayload(payload)),
     }),
   comparison: (modelId) =>
     request(`/models/${encodeURIComponent(modelId)}/comparison`),

@@ -1,0 +1,104 @@
+.comparison-best-evaluation {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary-soft) 34%, var(--surface-raised));
+}
+
+.comparison-evaluation-head,
+.comparison-ranking-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.comparison-evaluation-head > div,
+.comparison-ranking-head {
+  min-width: 0;
+}
+
+.comparison-evaluation-head strong,
+.comparison-evaluation-head span,
+.comparison-ranking-head strong,
+.comparison-ranking-head span {
+  display: block;
+}
+
+.comparison-evaluation-head strong,
+.comparison-ranking-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.comparison-evaluation-head > div > span,
+.comparison-ranking-head > span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.comparison-evaluation-table {
+  max-height: none;
+  background: var(--surface-raised);
+}
+
+.comparison-evaluation-table table {
+  width: 100%;
+}
+
+.comparison-prediction-data {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.comparison-prediction-data > div {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-raised);
+}
+
+.comparison-prediction-data span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.comparison-prediction-data strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.comparison-prediction-data small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.comparison-ranking-head {
+  justify-content: flex-start;
+  margin: 16px 0 8px;
+}
+
+@media (max-width: 760px) {
+  .comparison-evaluation-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .comparison-evaluation-head .status-chip {
+    align-self: flex-start;
+  }
+
+  .comparison-prediction-data {
+    grid-template-columns: 1fr;
+  }
+}

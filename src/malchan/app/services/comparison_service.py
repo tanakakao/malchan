@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from malchan.app.schemas import (
@@ -47,6 +48,137 @@ def _frame_records(value: Any) -> list[dict[str, Any]]:
     return json.loads(frame.to_json(orient="records", date_format="iso"))
 
 
+def _best_model(result: Any) -> Any | None:
+    """Return the selected fitted model from a comparison-compatible result."""
+
+    try:
+        return getattr(result, "best_model", None)
+    except (KeyError, TypeError):
+        return None
+
+
+def _actual_cv_values(model: Any) -> np.ndarray | None:
+    """Return target values aligned to positional CV prediction indices."""
+
+    prepare_y = getattr(model, "_prepare_cv_y", None)
+    get_y = getattr(model, "_get_y", None)
+    try:
+        target = prepare_y(None) if callable(prepare_y) else get_y() if callable(get_y) else None
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if target is None:
+        return None
+
+    values = np.asarray(target).reshape(-1)
+    if getattr(model, "task", None) == "classification":
+        encoder = getattr(model, "le", None)
+        inverse_transform = getattr(encoder, "inverse_transform", None)
+        if callable(inverse_transform):
+            try:
+                values = np.asarray(inverse_transform(values.astype(int))).reshape(-1)
+            except (TypeError, ValueError):
+                pass
+    return values
+
+
+def _prediction_records(model: Any, value: Any) -> list[dict[str, Any]]:
+    """Combine CV predictions with actual values for future Train/Test plots."""
+
+    if value is None:
+        return []
+    frame = value if isinstance(value, pd.DataFrame) else pd.DataFrame(value)
+    actual_values = _actual_cv_values(model)
+    task = getattr(model, "task", None)
+    target = str(getattr(model, "target_col", "target"))
+    records: list[dict[str, Any]] = []
+
+    class_labels: list[Any] = []
+    if task == "classification":
+        encoder = getattr(model, "le", None)
+        inverse_transform = getattr(encoder, "inverse_transform", None)
+        if callable(inverse_transform) and len(frame.columns):
+            try:
+                class_labels = list(inverse_transform(np.arange(len(frame.columns))))
+            except (TypeError, ValueError):
+                class_labels = []
+
+    for row_index, row in frame.iterrows():
+        record: dict[str, Any] = {"index": _json_safe(row_index)}
+        try:
+            position = int(row_index)
+        except (TypeError, ValueError):
+            position = -1
+        if actual_values is not None and 0 <= position < len(actual_values):
+            record["actual"] = _json_safe(actual_values[position])
+
+        if task == "classification":
+            numeric_values = pd.to_numeric(row, errors="coerce")
+            for column, probability in numeric_values.items():
+                label = str(column)
+                prefix = f"{target}_"
+                if label.startswith(prefix):
+                    label = label[len(prefix):]
+                record[f"probability_{label}"] = _json_safe(probability)
+            valid = numeric_values.dropna()
+            if not valid.empty:
+                best_position = int(np.argmax(valid.to_numpy(dtype=float)))
+                if len(class_labels) == len(frame.columns):
+                    column_position = list(frame.columns).index(valid.index[best_position])
+                    record["predicted"] = _json_safe(class_labels[column_position])
+                else:
+                    predicted_label = str(valid.index[best_position])
+                    prefix = f"{target}_"
+                    record["predicted"] = predicted_label.removeprefix(prefix)
+        elif len(row):
+            predicted = row[target] if target in row.index else row.iloc[0]
+            record["predicted"] = _json_safe(predicted)
+
+        records.append(record)
+    return records
+
+
+def _serialize_best_cv_predictions(result: Any) -> dict[str, list[dict[str, Any]]] | None:
+    """Serialize Train/Test CV predictions for the selected best model."""
+
+    model = _best_model(result)
+    predictions = None if model is None else getattr(model, "cv_preds", None)
+    if not isinstance(predictions, Mapping):
+        return None
+    serialized = {
+        str(split): _prediction_records(model, frame)
+        for split, frame in predictions.items()
+    }
+    return serialized if any(serialized.values()) else None
+
+
+def _ensure_target_best_evaluation(result: Any) -> None:
+    """Ensure the selected model retains both CV scores and CV predictions."""
+
+    model = _best_model(result)
+    if model is None:
+        return
+    if getattr(model, "cv_scores", None) is not None and getattr(model, "cv_preds", None) is not None:
+        return
+    cv_score = getattr(model, "cv_score", None)
+    if not callable(cv_score):
+        return
+    cv_score(
+        method=str(getattr(result, "method", "kfold")),
+        n_splits=int(getattr(result, "n_splits", 5)),
+    )
+
+
+def _ensure_best_evaluation(result: Any) -> None:
+    """Ensure best-model CV data for single- or multi-output comparison results."""
+
+    child_results = getattr(result, "results", None)
+    if isinstance(child_results, Mapping):
+        for child_result in child_results.values():
+            _ensure_target_best_evaluation(child_result)
+        return
+    _ensure_target_best_evaluation(result)
+
+
 def _serialize_target_result(target: str, result: Any) -> TargetComparisonResponse:
     """Serialize one ``ModelComparisonResult``-compatible object."""
 
@@ -68,6 +200,7 @@ def _serialize_target_result(target: str, result: Any) -> TargetComparisonRespon
         best_params=_json_safe(getattr(result, "best_params", None)),
         best_is_tuned=bool(getattr(result, "best_is_tuned", False)),
         best_cv_scores=serialized_cv,
+        best_cv_predictions=_serialize_best_cv_predictions(result),
     )
 
 
@@ -201,6 +334,7 @@ def run_comparison(
             continue_on_error=request.continue_on_error,
         )
 
+    _ensure_best_evaluation(result)
     registered.model.comparison_result = result
     if request.activate_best:
         _activate_best_models(registered, result)
@@ -261,6 +395,8 @@ def tune_best_comparison(
             evaluate=request.evaluate,
         )
 
+    if request.evaluate or request.activate_best:
+        _ensure_best_evaluation(result)
     registered.model.comparison_result = result
     if request.activate_best:
         _activate_best_models(registered, result)

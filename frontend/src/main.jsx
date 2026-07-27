@@ -7,6 +7,7 @@ import "./prepare.css";
 import "./model.css";
 import "./model-workflow.css";
 import "./model-target-tabs.css";
+import "./comparison-evaluation.css";
 import "./xai.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
