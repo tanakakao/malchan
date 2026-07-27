@@ -96,6 +96,14 @@
   white-space: nowrap;
 }
 
+.xai-card-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .compact-select {
   display: flex;
   align-items: center;
@@ -193,8 +201,14 @@
     flex-direction: column;
   }
 
+  .xai-card-controls,
   .compact-select {
     width: 100%;
+  }
+
+  .xai-card-controls {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .compact-select select {
