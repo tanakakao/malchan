@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import Chart from "../components/SimpleChart";
-import DataTable from "../components/DataTable";
 import { SectionHeader } from "../components/Common";
-import { formatNumber } from "../data";
+import PlotlyFigure from "../components/PlotlyFigure";
 import { useWorkbench } from "../context/WorkbenchContext";
 
 const METHOD_LABELS = {
@@ -12,264 +10,72 @@ const METHOD_LABELS = {
   model: "モデル固有重要度",
 };
 
-function isNumericSeries(values) {
-  return values.length > 0 && values.every((value) => Number.isFinite(Number(value)));
-}
+const emptyFigureState = () => ({ response: null, loading: false, error: "" });
 
-function mean(values) {
-  const finiteValues = values.map(Number).filter(Number.isFinite);
-  if (!finiteValues.length) return null;
-  return finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length;
-}
-
-function numericGrid(rows, column, count = 12) {
-  const values = rows.map((row) => Number(row[column])).filter(Number.isFinite);
-  if (!values.length) return [];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) return [min];
-  return Array.from({ length: count }, (_, index) => min + ((max - min) * index) / (count - 1));
-}
-
-function backgroundRows(rows, maxRows = 20) {
-  if (rows.length <= maxRows) return rows;
-  const step = Math.max(1, Math.floor(rows.length / maxRows));
-  return rows.filter((_, index) => index % step === 0).slice(0, maxRows);
-}
-
-function numericPredictionKeys(predictions) {
-  const keys = [];
-  predictions.slice(0, 20).forEach((record) => {
-    Object.entries(record || {}).forEach(([key, value]) => {
-      if (Number.isFinite(Number(value)) && !keys.includes(key)) keys.push(key);
-    });
-  });
-  return keys;
-}
-
-async function computePdp2d({ modelId, rows, features, xFeature, yFeature, task }) {
-  const xValues = numericGrid(rows, xFeature);
-  const yValues = numericGrid(rows, yFeature);
-  const background = backgroundRows(rows);
-  if (xValues.length < 2 || yValues.length < 2 || !background.length) {
-    throw new Error("2D PDには値が異なる2つの数値特徴量が必要です。");
-  }
-
-  const data = [];
-  yValues.forEach((yValue) => {
-    xValues.forEach((xValue) => {
-      background.forEach((source) => {
-        data.push(Object.fromEntries(
-          features.map((column) => [
-            column,
-            column === xFeature ? xValue : column === yFeature ? yValue : source[column],
-          ]),
-        ));
-      });
-    });
-  });
-
-  const response = await api.predict(modelId, {
-    data,
-    proba: task === "classification",
-    decode_labels: false,
-  });
-  const predictions = response.predictions || [];
-  const outputKeys = numericPredictionKeys(predictions);
-  if (!outputKeys.length) throw new Error("2D PDに利用できる数値予測がありません。");
-
-  const cellSize = background.length;
-  const series = outputKeys.map((outputName) => {
-    let offset = 0;
-    const z = yValues.map(() => xValues.map(() => {
-      const cell = predictions.slice(offset, offset + cellSize);
-      offset += cellSize;
-      return mean(cell.map((record) => record?.[outputName]));
-    }));
-    return { name: outputName, z };
-  });
-
-  return {
-    x_values: xValues,
-    y_values: yValues,
-    series,
-    background_size: background.length,
-  };
-}
-
-function ImportanceBars({ response }) {
-  const items = response?.items || [];
-  const maxValue = Math.max(1e-12, ...items.map((item) => Math.abs(item.value)));
-  if (!items.length) return <p className="empty-state">利用可能な重要度がありません。</p>;
-  return (
-    <div className="xai-importance-list">
-      {items.map((item) => (
-        <div className="xai-importance-row" key={item.feature}>
-          <span title={item.feature}>{item.feature}</span>
-          <div><i style={{ width: `${(Math.abs(item.value) / maxValue) * 100}%` }} /></div>
-          <strong>{formatNumber(item.value)}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function BeeswarmPlot({ response, outputName }) {
-  const features = response?.features || [];
-  const records = response?.records || [];
-  const matrix = response?.shap_values?.[outputName] || [];
-  if (!features.length || !matrix.length) {
-    return <p className="empty-state">Beeswarm用のSHAP値がありません。</p>;
-  }
-
-  const ranked = features
-    .map((feature, featureIndex) => {
-      const values = matrix
-        .map((row) => Number(row?.[featureIndex]))
-        .filter(Number.isFinite);
-      return {
-        feature,
-        featureIndex,
-        score: values.length
-          ? values.reduce((sum, value) => sum + Math.abs(value), 0) / values.length
-          : 0,
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 15);
-  const maxAbs = Math.max(
-    1e-12,
-    ...ranked.flatMap(({ featureIndex }) =>
-      matrix.map((row) => Math.abs(Number(row?.[featureIndex]))).filter(Number.isFinite)),
-  );
-  const width = 920;
-  const left = 190;
-  const right = 34;
-  const top = 28;
-  const rowHeight = 31;
-  const bottom = 48;
-  const height = top + ranked.length * rowHeight + bottom;
-  const plotWidth = width - left - right;
-  const xPosition = (value) => left + ((Number(value) + maxAbs) / (2 * maxAbs)) * plotWidth;
-  const categorical = new Set(response.cat_cols || []);
-
-  function pointColor(feature, featureIndex, rowIndex) {
-    if (categorical.has(feature)) return "hsl(265 55% 62%)";
-    const rawValues = records.map((record) => Number(record?.[feature])).filter(Number.isFinite);
-    const value = Number(records[rowIndex]?.[feature]);
-    if (!rawValues.length || !Number.isFinite(value)) return "hsl(218 12% 58%)";
-    const min = Math.min(...rawValues);
-    const max = Math.max(...rawValues);
-    const ratio = max === min ? 0.5 : (value - min) / (max - min);
-    const hue = 220 - 210 * Math.max(0, Math.min(1, ratio));
-    return `hsl(${hue} 78% 56%)`;
-  }
-
-  return (
-    <div className="beeswarm-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`SHAP beeswarm ${outputName}`}>
-        <line x1={xPosition(0)} x2={xPosition(0)} y1={top - 10} y2={height - bottom + 8} className="beeswarm-zero" />
-        {ranked.map(({ feature, featureIndex }, rankIndex) => {
-          const yCenter = top + rankIndex * rowHeight + rowHeight / 2;
-          return (
-            <g key={feature}>
-              <text x={left - 12} y={yCenter + 4} textAnchor="end" className="beeswarm-label">{feature}</text>
-              <line x1={left} x2={width - right} y1={yCenter} y2={yCenter} className="beeswarm-row-line" />
-              {matrix.map((row, rowIndex) => {
-                const value = Number(row?.[featureIndex]);
-                if (!Number.isFinite(value)) return null;
-                const jitter = (((rowIndex * 17 + featureIndex * 7) % 13) - 6) * 0.72;
-                return (
-                  <circle
-                    key={`${feature}-${rowIndex}`}
-                    cx={xPosition(value)}
-                    cy={yCenter + jitter}
-                    r="3.1"
-                    fill={pointColor(feature, featureIndex, rowIndex)}
-                    opacity="0.72"
-                  >
-                    <title>{`${feature}: SHAP=${formatNumber(value)}, value=${records[rowIndex]?.[feature] ?? "—"}`}</title>
-                  </circle>
-                );
-              })}
-            </g>
-          );
-        })}
-        <text x={left} y={height - 20} textAnchor="middle" className="beeswarm-tick">{formatNumber(-maxAbs)}</text>
-        <text x={xPosition(0)} y={height - 20} textAnchor="middle" className="beeswarm-tick">0</text>
-        <text x={width - right} y={height - 20} textAnchor="middle" className="beeswarm-tick">{formatNumber(maxAbs)}</text>
-        <text x={(left + width - right) / 2} y={height - 3} textAnchor="middle" className="beeswarm-axis-title">SHAP value</text>
-      </svg>
-      <div className="beeswarm-legend"><span>低い特徴量値</span><i /><span>高い特徴量値</span></div>
-    </div>
-  );
+function FigurePanel({ state, emptyText }) {
+  if (state.loading) return <p className="empty-state">visualizationでPlotly図を生成しています...</p>;
+  if (state.error) return <p className="xai-error">{state.error}</p>;
+  if (!state.response?.figure) return <p className="empty-state">{emptyText}</p>;
+  return <PlotlyFigure figure={state.response.figure} />;
 }
 
 export default function ExplainPage() {
-  const {
-    targets, tasks, rows, features, numeric, diagnostics,
-    modelInfo, busy, updateDiagnostics,
-  } = useWorkbench();
+  const { targets, numeric, modelInfo, busy } = useWorkbench();
   const [summary, setSummary] = useState(null);
   const [xaiTarget, setXaiTarget] = useState("");
-  const [feature, setFeature] = useState("");
-  const [secondFeature, setSecondFeature] = useState("");
   const [method, setMethod] = useState("shap");
   const [pdMode, setPdMode] = useState("1d");
-  const [importance, setImportance] = useState(null);
-  const [shapValues, setShapValues] = useState(null);
-  const [shapOutput, setShapOutput] = useState("");
-  const [pdpData, setPdpData] = useState(null);
-  const [pdp2dData, setPdp2dData] = useState(null);
+  const [feature, setFeature] = useState("");
+  const [secondFeature, setSecondFeature] = useState("");
+  const [includeIce, setIncludeIce] = useState(false);
+  const [beeswarmOutput, setBeeswarmOutput] = useState("");
   const [pdOutput, setPdOutput] = useState("");
-  const [xaiBusy, setXaiBusy] = useState(false);
-  const [pd2dBusy, setPd2dBusy] = useState(false);
-  const [xaiError, setXaiError] = useState("");
-
-  const diagnosticTarget = xaiTarget || targets[0];
-  const actual = diagnostics.map((item) => item.actual[diagnosticTarget]);
-  const predicted = diagnostics.map(
-    (item) => item.predicted[diagnosticTarget] ?? item.predicted[`pred_${diagnosticTarget}`],
-  );
+  const [pd2dOutput, setPd2dOutput] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [summaryBusy, setSummaryBusy] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
+  const [yyFigure, setYyFigure] = useState(emptyFigureState);
+  const [importanceFigure, setImportanceFigure] = useState(emptyFigureState);
+  const [beeswarmFigure, setBeeswarmFigure] = useState(emptyFigureState);
+  const [pdpFigure, setPdpFigure] = useState(emptyFigureState);
+  const [pdp2dFigure, setPdp2dFigure] = useState(emptyFigureState);
 
   useEffect(() => {
     let active = true;
     if (!modelInfo?.model_id) {
       setSummary(null);
-      setImportance(null);
-      setShapValues(null);
-      setPdpData(null);
-      setPdp2dData(null);
+      setXaiTarget("");
       return () => { active = false; };
     }
-    setXaiBusy(true);
+    setSummaryBusy(true);
+    setSummaryError("");
     api.xaiSummary(modelInfo.model_id)
       .then((response) => {
         if (!active) return;
         setSummary(response);
-        const firstTarget = response.targets?.[xaiTarget]
+        const nextTarget = response.targets?.[xaiTarget]
           ? xaiTarget
-          : Object.keys(response.targets || {})[0] || "";
-        setXaiTarget(firstTarget);
-        setXaiError("");
+          : Object.keys(response.targets || {})[0] || targets[0] || "";
+        setXaiTarget(nextTarget);
       })
-      .catch((error) => active && setXaiError(error.message))
-      .finally(() => active && setXaiBusy(false));
+      .catch((error) => active && setSummaryError(error.message || String(error)))
+      .finally(() => active && setSummaryBusy(false));
     return () => { active = false; };
-  }, [modelInfo?.model_id, modelInfo?.xai_status]);
+  }, [modelInfo?.model_id, modelInfo?.xai_status, refreshKey]);
 
   const targetSummary = summary?.targets?.[xaiTarget] || null;
-  const availableFeatures = useMemo(() => {
+  const pdpFeatures = useMemo(() => {
     const values = [
       ...(targetSummary?.pdp_features || []),
       ...(targetSummary?.features || []),
     ];
     return [...new Set(values)];
   }, [targetSummary]);
-  const pdpFeatures = targetSummary?.pdp_features?.length
-    ? targetSummary.pdp_features
-    : availableFeatures;
-  const numericPdpFeatures = pdpFeatures.filter((column) => numeric.includes(column));
+  const numericPdpFeatures = useMemo(
+    () => pdpFeatures.filter((column) => numeric.includes(column)),
+    [pdpFeatures, numeric],
+  );
+  const xaiReady = targetSummary?.status === "ready";
 
   useEffect(() => {
     if (!pdpFeatures.length) {
@@ -284,7 +90,9 @@ export default function ExplainPage() {
     const first = numericPdpFeatures.includes(feature) ? feature : numericPdpFeatures[0] || "";
     const second = numericPdpFeatures.find((column) => column !== first) || "";
     if (feature !== first) setFeature(first);
-    if (!numericPdpFeatures.includes(secondFeature) || secondFeature === first) setSecondFeature(second);
+    if (!numericPdpFeatures.includes(secondFeature) || secondFeature === first) {
+      setSecondFeature(second);
+    }
   }, [pdMode, numericPdpFeatures, feature, secondFeature]);
 
   useEffect(() => {
@@ -293,42 +101,86 @@ export default function ExplainPage() {
   }, [targetSummary, method]);
 
   useEffect(() => {
-    let active = true;
-    if (!modelInfo?.model_id || !xaiTarget || !targetSummary) return undefined;
-    setXaiBusy(true);
-    setXaiError("");
-    const importanceRequest = targetSummary.importance_methods.includes(method)
-      ? api.xaiImportance(modelInfo.model_id, xaiTarget, {
-          method,
-          combined: true,
-          top_n: 20,
-        })
-      : Promise.resolve(null);
-    const shapValuesRequest = targetSummary.shap_features.length
-      ? api.xaiShapValues(modelInfo.model_id, xaiTarget)
-      : Promise.resolve(null);
-    const pdpRequest = pdMode === "1d" && feature && targetSummary.pdp_features.includes(feature)
-      ? api.xaiPdp(modelInfo.model_id, xaiTarget, feature, { include_ice: false })
-      : Promise.resolve(null);
-
-    Promise.allSettled([importanceRequest, shapValuesRequest, pdpRequest])
-      .then(([importanceResult, shapResult, pdpResult]) => {
-        if (!active) return;
-        setImportance(importanceResult.status === "fulfilled" ? importanceResult.value : null);
-        setShapValues(shapResult.status === "fulfilled" ? shapResult.value : null);
-        setPdpData(pdpResult.status === "fulfilled" ? pdpResult.value : null);
-        const failed = [importanceResult, shapResult, pdpResult]
-          .find((result) => result.status === "rejected");
-        if (failed) setXaiError(failed.reason?.message || String(failed.reason));
-      })
-      .finally(() => active && setXaiBusy(false));
-    return () => { active = false; };
-  }, [modelInfo?.model_id, xaiTarget, feature, method, pdMode, targetSummary]);
+    setBeeswarmOutput("");
+    setPdOutput("");
+    setPd2dOutput("");
+  }, [modelInfo?.model_id, xaiTarget]);
 
   useEffect(() => {
-    const outputs = shapValues?.output_names || [];
-    if (outputs.length && !outputs.includes(shapOutput)) setShapOutput(outputs[0]);
-  }, [shapValues, shapOutput]);
+    let active = true;
+    if (!modelInfo?.model_id || !xaiTarget) {
+      setYyFigure(emptyFigureState());
+      return () => { active = false; };
+    }
+    setYyFigure((state) => ({ ...state, loading: true, error: "" }));
+    api.visualizationYy(modelInfo.model_id, xaiTarget)
+      .then((response) => active && setYyFigure({ response, loading: false, error: "" }))
+      .catch((error) => active && setYyFigure({ response: null, loading: false, error: error.message || String(error) }));
+    return () => { active = false; };
+  }, [modelInfo?.model_id, xaiTarget, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (!modelInfo?.model_id || !xaiTarget || !xaiReady) {
+      setImportanceFigure(emptyFigureState());
+      return () => { active = false; };
+    }
+    setImportanceFigure((state) => ({ ...state, loading: true, error: "" }));
+    api.visualizationImportance(modelInfo.model_id, xaiTarget, {
+      method,
+      combined: true,
+      top_n: 20,
+    })
+      .then((response) => active && setImportanceFigure({ response, loading: false, error: "" }))
+      .catch((error) => active && setImportanceFigure({ response: null, loading: false, error: error.message || String(error) }));
+    return () => { active = false; };
+  }, [modelInfo?.model_id, xaiTarget, xaiReady, method, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (!modelInfo?.model_id || !xaiTarget || !xaiReady) {
+      setBeeswarmFigure(emptyFigureState());
+      return () => { active = false; };
+    }
+    setBeeswarmFigure((state) => ({ ...state, loading: true, error: "" }));
+    api.visualizationBeeswarm(modelInfo.model_id, xaiTarget, {
+      output: beeswarmOutput,
+      top_n: 15,
+    })
+      .then((response) => {
+        if (!active) return;
+        setBeeswarmFigure({ response, loading: false, error: "" });
+        if (!beeswarmOutput && response.metadata?.selected_output) {
+          setBeeswarmOutput(response.metadata.selected_output);
+        }
+      })
+      .catch((error) => active && setBeeswarmFigure({ response: null, loading: false, error: error.message || String(error) }));
+    return () => { active = false; };
+  }, [modelInfo?.model_id, xaiTarget, xaiReady, beeswarmOutput, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (pdMode !== "1d" || !modelInfo?.model_id || !xaiTarget || !feature || !xaiReady) {
+      setPdpFigure(emptyFigureState());
+      return () => { active = false; };
+    }
+    setPdpFigure((state) => ({ ...state, loading: true, error: "" }));
+    api.visualizationPdp(modelInfo.model_id, xaiTarget, {
+      feature,
+      output: pdOutput,
+      include_ice: includeIce,
+      max_ice: 30,
+    })
+      .then((response) => {
+        if (!active) return;
+        setPdpFigure({ response, loading: false, error: "" });
+        if (!pdOutput && response.metadata?.selected_output) {
+          setPdOutput(response.metadata.selected_output);
+        }
+      })
+      .catch((error) => active && setPdpFigure({ response: null, loading: false, error: error.message || String(error) }));
+    return () => { active = false; };
+  }, [pdMode, modelInfo?.model_id, xaiTarget, feature, xaiReady, pdOutput, includeIce, refreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -340,68 +192,59 @@ export default function ExplainPage() {
       || !secondFeature
       || feature === secondFeature
     ) {
-      setPdp2dData(null);
+      setPdp2dFigure(emptyFigureState());
       return () => { active = false; };
     }
-    setPd2dBusy(true);
-    setXaiError("");
-    computePdp2d({
-      modelId: modelInfo.model_id,
-      rows,
-      features,
-      xFeature: feature,
-      yFeature: secondFeature,
-      task: tasks[xaiTarget],
+    setPdp2dFigure((state) => ({ ...state, loading: true, error: "" }));
+    api.visualizationPdp2d(modelInfo.model_id, xaiTarget, {
+      feature_x: feature,
+      feature_y: secondFeature,
+      output: pd2dOutput,
     })
-      .then((response) => active && setPdp2dData(response))
-      .catch((error) => active && setXaiError(error.message || String(error)))
-      .finally(() => active && setPd2dBusy(false));
+      .then((response) => {
+        if (!active) return;
+        setPdp2dFigure({ response, loading: false, error: "" });
+        if (!pd2dOutput && response.metadata?.selected_output) {
+          setPd2dOutput(response.metadata.selected_output);
+        }
+      })
+      .catch((error) => active && setPdp2dFigure({ response: null, loading: false, error: error.message || String(error) }));
     return () => { active = false; };
-  }, [pdMode, modelInfo?.model_id, xaiTarget, feature, secondFeature, rows, features, tasks]);
-
-  useEffect(() => {
-    const outputs = pdp2dData?.series?.map((series) => series.name) || [];
-    if (outputs.length && !outputs.includes(pdOutput)) setPdOutput(outputs[0]);
-  }, [pdp2dData, pdOutput]);
+  }, [pdMode, modelInfo?.model_id, xaiTarget, feature, secondFeature, pd2dOutput, refreshKey]);
 
   async function recompute() {
     if (!modelInfo?.model_id) return;
-    setXaiBusy(true);
-    setXaiError("");
+    setSummaryBusy(true);
+    setSummaryError("");
     try {
       const response = await api.recomputeXai(modelInfo.model_id, {
         targets: xaiTarget ? [xaiTarget] : [],
       });
       setSummary(response);
+      setRefreshKey((value) => value + 1);
     } catch (error) {
-      setXaiError(error.message || String(error));
+      setSummaryError(error.message || String(error));
     } finally {
-      setXaiBusy(false);
+      setSummaryBusy(false);
     }
   }
 
-  const pdpIsNumeric = isNumericSeries(pdpData?.x_values || []);
-  const pdpRows = (pdpData?.x_values || []).map((xValue, index) => ({
-    [feature]: xValue,
-    ...Object.fromEntries(
-      (pdpData?.series || []).map((series) => [series.name, series.pd_values[index]]),
-    ),
-  }));
-  const selected2dSeries = pdp2dData?.series?.find((series) => series.name === pdOutput)
-    || pdp2dData?.series?.[0];
+  const beeswarmOutputs = beeswarmFigure.response?.metadata?.outputs || [];
+  const pdOutputs = pdpFigure.response?.metadata?.outputs || [];
+  const pd2dOutputs = pdp2dFigure.response?.metadata?.outputs || [];
 
   return (
     <>
       <SectionHeader
         step="5 · EXPLAIN"
         title="精度とモデル挙動を説明する"
-        text="結果図をY-Yプロット、重要度、部分依存の順に縦並びで確認します。"
+        text="すべての結果図をmalchan.visualizationで生成し、Plotly図として縦並びで表示します。"
         action={
           <div className="inline">
-            <button className="secondary" disabled={!modelInfo || busy} onClick={updateDiagnostics}>
-              Y-Yを更新
+            <button className="secondary" disabled={!modelInfo || busy} onClick={() => setRefreshKey((value) => value + 1)}>
+              図を更新
             </button>
-            <button disabled={!modelInfo || xaiBusy} onClick={recompute}>
+            <button disabled={!modelInfo || summaryBusy} onClick={recompute}>
               XAIを再計算
             </button>
           </div>
@@ -411,18 +254,18 @@ export default function ExplainPage() {
       <article className="panel xai-panel xai-overview">
         <div className="panel-title">
           <div>
-            <span className="panel-kicker">RESULT SETTINGS</span>
+            <span className="panel-kicker">VISUALIZATION SETTINGS</span>
             <h3>表示対象</h3>
-            <p>FastAPIの予測・キャッシュ済みXAIを利用し、表示切替では再学習しません。</p>
+            <p>FastAPIはmalchan.visualizationのFigureをPlotly JSONとして返します。</p>
           </div>
           <span className={`status-chip ${summary?.status === "ready" ? "success" : ""}`}>
-            {xaiBusy ? "読込中" : summary?.status || modelInfo?.xai_status || "未計算"}
+            {summaryBusy ? "読込中" : summary?.status || modelInfo?.xai_status || "未計算"}
           </span>
         </div>
         {!modelInfo && <p className="settings-note">先にModel画面で学習またはモデル比較を実行してください。</p>}
-        {modelInfo && summary && summary.status !== "ready" && summary.status !== "partial" && (
+        {modelInfo && targetSummary && !xaiReady && (
           <p className="settings-note">
-            XAI状態は「{summary.status}」です。「XAIを再計算」で重要度・Beeswarm・1D PDを作成できます。
+            Y-Yと2D PDは表示できます。重要度・Beeswarm・1D PDは「XAIを再計算」後に表示します。
           </p>
         )}
         <div className="form-grid xai-controls">
@@ -439,42 +282,33 @@ export default function ExplainPage() {
             </select>
           </label>
         </div>
-        {targetSummary?.error && <p className="xai-error">{targetSummary.error}</p>}
-        {xaiError && <p className="xai-error">{xaiError}</p>}
+        {summaryError && <p className="xai-error">{summaryError}</p>}
       </article>
 
       <div className="xai-results-stack">
         <article className="panel xai-result-panel">
           <div className="xai-result-head"><span>01</span><div><strong>Y-Y PLOT</strong><h3>実測値と予測値</h3></div></div>
-          {diagnostics.length ? (
-            <Chart
-              data={[
-                { type: "scatter", mode: "markers", x: actual, y: predicted, marker: { color: "#6d8cff", size: 8 } },
-                { type: "scatter", mode: "lines", x: actual, y: actual, line: { color: "#50d09c", dash: "dash" } },
-              ]}
-              layout={{ title: `Y-Yプロット · ${diagnosticTarget}`, xaxis: { title: "Actual" }, yaxis: { title: "Predicted" } }}
-            />
-          ) : (
-            <p className="empty-state">「Y-Yを更新」で現在の登録モデルによる予測診断を表示します。</p>
-          )}
+          <FigurePanel state={yyFigure} emptyText="登録モデルの診断図を表示できません。" />
         </article>
 
         <article className="panel xai-result-panel">
           <div className="xai-result-head"><span>02</span><div><strong>IMPORTANCE</strong><h3>特徴量重要度・SHAP Beeswarm</h3></div></div>
           <section className="xai-card">
             <div className="xai-card-head"><span>FEATURE IMPORTANCE</span><strong>{METHOD_LABELS[method] || method}</strong></div>
-            <ImportanceBars response={importance} />
+            <FigurePanel state={importanceFigure} emptyText="XAI計算後に重要度を表示します。" />
           </section>
           <section className="xai-card beeswarm-card">
             <div className="xai-card-head">
               <span>SHAP BEESWARM</span>
-              <label className="compact-select">出力
-                <select value={shapOutput} onChange={(event) => setShapOutput(event.target.value)}>
-                  {(shapValues?.output_names || []).map((output) => <option key={output}>{output}</option>)}
-                </select>
-              </label>
+              {beeswarmOutputs.length > 1 && (
+                <label className="compact-select">出力
+                  <select value={beeswarmOutput} onChange={(event) => setBeeswarmOutput(event.target.value)}>
+                    {beeswarmOutputs.map((output) => <option key={output}>{output}</option>)}
+                  </select>
+                </label>
+              )}
             </div>
-            <BeeswarmPlot response={shapValues} outputName={shapOutput} />
+            <FigurePanel state={beeswarmFigure} emptyText="XAI計算後にBeeswarmを表示します。" />
           </section>
         </article>
 
@@ -497,56 +331,30 @@ export default function ExplainPage() {
                 </select>
               </label>
             )}
-            {pdMode === "2d" && pdp2dData?.series?.length > 1 && (
+            {pdMode === "1d" && pdOutputs.length > 1 && (
               <label>予測出力
                 <select value={pdOutput} onChange={(event) => setPdOutput(event.target.value)}>
-                  {pdp2dData.series.map((series) => <option key={series.name}>{series.name}</option>)}
+                  {pdOutputs.map((output) => <option key={output}>{output}</option>)}
                 </select>
               </label>
             )}
+            {pdMode === "2d" && pd2dOutputs.length > 1 && (
+              <label>予測出力
+                <select value={pd2dOutput} onChange={(event) => setPd2dOutput(event.target.value)}>
+                  {pd2dOutputs.map((output) => <option key={output}>{output}</option>)}
+                </select>
+              </label>
+            )}
+            {pdMode === "1d" && (
+              <label className="switch-label"><input type="checkbox" checked={includeIce} onChange={(event) => setIncludeIce(event.target.checked)} /><span />ICEを表示</label>
+            )}
           </div>
-
           <section className="xai-card pd-result-card">
-            {pdMode === "1d" && (pdpData?.series?.length ? (
-              pdpIsNumeric ? (
-                <Chart
-                  data={pdpData.series.map((series, index) => ({
-                    type: "scatter",
-                    mode: "lines",
-                    name: series.name,
-                    x: pdpData.x_values,
-                    y: series.pd_values,
-                    line: { color: index ? "#50d09c" : "#6d8cff" },
-                  }))}
-                  layout={{ title: `1D PD · ${feature}`, xaxis: { title: feature }, yaxis: { title: "Prediction" } }}
-                />
-              ) : (
-                <DataTable rows={pdpRows} columns={[feature, ...pdpData.series.map((series) => series.name)]} pageSize={20} />
-              )
-            ) : <p className="empty-state">この特徴量の1D PDは利用できません。</p>)}
-
-            {pdMode === "2d" && (pd2dBusy ? (
-              <p className="empty-state">現在のFastAPI予測APIで2D PDを計算しています...</p>
-            ) : selected2dSeries ? (
-              <>
-                <Chart
-                  data={[{
-                    type: "heatmap",
-                    x: pdp2dData.x_values,
-                    y: pdp2dData.y_values,
-                    z: selected2dSeries.z,
-                  }]}
-                  layout={{
-                    title: `2D PD · ${feature} × ${secondFeature} · ${selected2dSeries.name}`,
-                    xaxis: { title: feature },
-                    yaxis: { title: secondFeature },
-                  }}
-                />
-                <p className="pd-footnote">背景サンプル {pdp2dData.background_size}件の予測平均。表示時のみFastAPIの予測APIを呼び出します。</p>
-              </>
+            {pdMode === "1d" ? (
+              <FigurePanel state={pdpFigure} emptyText="XAI計算後に1D PDを表示します。" />
             ) : (
-              <p className="empty-state">2D PDには2つ以上の数値特徴量が必要です。</p>
-            ))}
+              <FigurePanel state={pdp2dFigure} emptyText="2D PDには異なる2つの数値特徴量が必要です。" />
+            )}
           </section>
         </article>
       </div>
