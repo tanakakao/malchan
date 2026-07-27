@@ -104,45 +104,36 @@ function HistogramChart({ trace, layout }) {
   );
 }
 
-function heatColor(value, domain) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return "transparent";
-  const [min, max] = domain;
-  const ratio = max === min ? 0.5 : (numericValue - min) / (max - min);
-  const clipped = Math.max(0, Math.min(1, ratio));
-  const hue = 220 - clipped * 210;
-  return `hsl(${hue} 78% 55%)`;
+function heatColor(value) {
+  const normalized = Math.max(-1, Math.min(1, Number(value)));
+  if (normalized >= 0) {
+    const light = 92 - normalized * 48;
+    return `hsl(8 78% ${light}%)`;
+  }
+  const light = 92 - Math.abs(normalized) * 48;
+  return `hsl(220 78% ${light}%)`;
 }
 
-function HeatmapChart({ trace, layout }) {
+function HeatmapChart({ trace }) {
   const labelsX = trace.x || [];
   const labelsY = trace.y || [];
   const matrix = trace.z || [];
-  const values = matrix.flatMap((row) => finite(row || []));
-  const colorDomain = values.length
-    ? [Math.min(...values), Math.max(...values)]
-    : [0, 1];
   const left = 150;
   const top = 56;
   const right = 35;
-  const bottom = 126;
+  const bottom = 120;
   const cellWidth = (WIDTH - left - right) / Math.max(1, labelsX.length);
   const cellHeight = (HEIGHT - top - bottom) / Math.max(1, labelsY.length);
   return (
     <g>
-      {labelsX.map((label, index) => <text key={`${label}-${index}`} x={left + index * cellWidth + cellWidth / 2} y={HEIGHT - bottom + 18} textAnchor="end" transform={`rotate(-45 ${left + index * cellWidth + cellWidth / 2} ${HEIGHT - bottom + 18})`} className="heat-label">{Number.isFinite(Number(label)) ? fmt(label) : label}</text>)}
-      {labelsY.map((label, index) => <text key={`${label}-${index}`} x={left - 10} y={top + index * cellHeight + cellHeight / 2 + 4} textAnchor="end" className="heat-label">{Number.isFinite(Number(label)) ? fmt(label) : label}</text>)}
-      {matrix.flatMap((row, rowIndex) => (row || []).map((value, columnIndex) => (
+      {labelsX.map((label, index) => <text key={label} x={left + index * cellWidth + cellWidth / 2} y={HEIGHT - bottom + 18} textAnchor="end" transform={`rotate(-45 ${left + index * cellWidth + cellWidth / 2} ${HEIGHT - bottom + 18})`} className="heat-label">{label}</text>)}
+      {labelsY.map((label, index) => <text key={label} x={left - 10} y={top + index * cellHeight + cellHeight / 2 + 4} textAnchor="end" className="heat-label">{label}</text>)}
+      {matrix.flatMap((row, rowIndex) => row.map((value, columnIndex) => (
         <g key={`${rowIndex}-${columnIndex}`}>
-          <rect x={left + columnIndex * cellWidth} y={top + rowIndex * cellHeight} width={cellWidth} height={cellHeight} fill={heatColor(value, colorDomain)} stroke="rgba(255,255,255,.24)">
-            <title>{`${labelsX[columnIndex]}, ${labelsY[rowIndex]}: ${Number.isFinite(Number(value)) ? fmt(value) : "—"}`}</title>
-          </rect>
-          {cellWidth > 50 && cellHeight > 25 && Number.isFinite(Number(value)) && <text x={left + columnIndex * cellWidth + cellWidth / 2} y={top + rowIndex * cellHeight + cellHeight / 2 + 4} textAnchor="middle" className="heat-value">{fmt(value)}</text>}
+          <rect x={left + columnIndex * cellWidth} y={top + rowIndex * cellHeight} width={cellWidth} height={cellHeight} fill={heatColor(value)} stroke="rgba(255,255,255,.24)" />
+          {cellWidth > 50 && cellHeight > 25 && <text x={left + columnIndex * cellWidth + cellWidth / 2} y={top + rowIndex * cellHeight + cellHeight / 2 + 4} textAnchor="middle" className="heat-value">{Number(value).toFixed(2)}</text>}
         </g>
       )))}
-      <text x={(left + WIDTH - right) / 2} y={HEIGHT - 18} textAnchor="middle" className="axis-title">{layout?.xaxis?.title || "X"}</text>
-      <text x="24" y={(top + HEIGHT - bottom) / 2} textAnchor="middle" className="axis-title" transform={`rotate(-90 24 ${(top + HEIGHT - bottom) / 2})`}>{layout?.yaxis?.title || "Y"}</text>
-      <text x={WIDTH - right} y={top - 15} textAnchor="end" className="heat-range">{`${fmt(colorDomain[0])} – ${fmt(colorDomain[1])}`}</text>
     </g>
   );
 }
@@ -155,7 +146,7 @@ export default function SimpleChart({ data = [], layout = {}, className = "chart
         <text x={WIDTH / 2} y="27" textAnchor="middle" className="chart-title">{layout.title || ""}</text>
         {!trace && <text x={WIDTH / 2} y={HEIGHT / 2} textAnchor="middle" className="empty-chart-label">データを選択してください</text>}
         {trace?.type === "histogram" && <HistogramChart trace={trace} layout={layout} />}
-        {trace?.type === "heatmap" && <HeatmapChart trace={trace} layout={layout} />}
+        {trace?.type === "heatmap" && <HeatmapChart trace={trace} />}
         {trace?.type === "scatter" && <ScatterChart traces={data} layout={layout} />}
       </svg>
     </div>
