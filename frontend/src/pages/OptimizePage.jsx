@@ -450,6 +450,12 @@ export default function OptimizePage() {
     await runInverseAnalysis();
   }
 
+  const objectiveModeLabel = selectedTargets.length === 0
+    ? "未選択"
+    : multiObjective
+      ? "多目的"
+      : "単目的";
+
   return (
     <>
       <SectionHeader
@@ -850,8 +856,12 @@ export default function OptimizePage() {
           </span>
         </div>
         <div className="form-grid optimize-run-grid">
-          <Field label={`探索手法（${multiObjective ? "多目的" : "単目的"}）`}>
-            <select value={selectedSampler.value} onChange={(event) => setSampler(event.target.value)}>
+          <Field label={`探索手法（${objectiveModeLabel}）`}>
+            <select
+              value={selectedSampler.value}
+              disabled={selectedTargets.length === 0}
+              onChange={(event) => setSampler(event.target.value)}
+            >
               {samplerOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
@@ -875,8 +885,12 @@ export default function OptimizePage() {
           </Field>
         </div>
         <div className="sampler-description">
-          <strong>{selectedSampler.label}</strong>
-          <span>{selectedSampler.description}</span>
+          <strong>{selectedTargets.length ? selectedSampler.label : "目的変数を選択してください"}</strong>
+          <span>
+            {selectedTargets.length
+              ? selectedSampler.description
+              : "目的変数の使用チェックに応じて、単目的または多目的の探索手法を表示します。"}
+          </span>
         </div>
         {settingsError && (
           <p className="xai-error optimize-settings-error">{settingsError}</p>
