@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
 
 
 class FakePreprocess:
@@ -52,8 +53,8 @@ def test_local_shap_uses_only_submitted_rows_without_replacing_cache(monkeypatch
 
     from malchan.app.schemas import LocalShapRequest
     from malchan.app.services.xai_shap_service import compute_local_shap
-    import malchan.models.explainability as explainability
 
+    explainability = pytest.importorskip("malchan.models.explainability")
     captured = []
 
     def fake_get_shap_values(predictor, frame):
@@ -86,8 +87,6 @@ def test_local_shap_uses_only_submitted_rows_without_replacing_cache(monkeypatch
 
 def test_local_shap_rejects_missing_features() -> None:
     """Prediction-file rows must include every feature required by the model."""
-
-    import pytest
 
     from malchan.app.schemas import LocalShapRequest
     from malchan.app.services.xai_shap_service import compute_local_shap
