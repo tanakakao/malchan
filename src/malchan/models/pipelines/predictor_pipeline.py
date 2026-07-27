@@ -115,6 +115,33 @@ def make_model(
     # 指定されたモデル名のクラスを辞書から取得し、インスタンスを作成して返す
     return model_dict[model_name](**kwargs)
 
+
+def _make_bagging_base_estimator(
+    base_model: str,
+    task: str,
+    base_model_params: Optional[Dict[str, Any]],
+) -> Any:
+    """バギングで安全に学習できるベース推定器を作成する。
+
+    MLPの早期終了は内部検証データを分割してスコアを計算する。一方、
+    BaggingRegressor/BaggingClassifierはブートストラップ回数をsample_weightとして
+    ベース推定器へ渡すため、内部検証データの重みがすべて0になる場合がある。
+    その組み合わせに限って早期終了を無効化し、ゼロ重みの検証スコア計算を避ける。
+
+    Args:
+        base_model (str): ベースモデル名。
+        task (str): タスク種別。
+        base_model_params (Optional[Dict[str, Any]]): ベースモデルのパラメータ。
+
+    Returns:
+        Any: バギング用のベース推定器。
+    """
+    estimator = make_model(base_model, task, base_model_params)
+    if isinstance(estimator, (MLPRegressor, MLPClassifier)) and estimator.early_stopping:
+        estimator.set_params(early_stopping=False)
+    return estimator
+
+
 def make_ens_predictor(
     ens_type: str,
     model_names: List[str],
@@ -192,9 +219,10 @@ def make_ens_predictor(
         else:
             raise ValueError("task は regression か classification で指定してください。")
     elif ens_type == 'バギング':
+        bagging_estimator = _make_bagging_base_estimator(base_model, task, base_model_params)
         if task=="regression":
             return BaggingRegressor(
-                estimator=make_model(base_model, task, base_model_params),
+                estimator=bagging_estimator,
                 n_estimators=50,
                 max_samples=1.0,
                 max_features=1.0,
@@ -204,7 +232,7 @@ def make_ens_predictor(
             )
         elif task=="classification":
             return BaggingClassifier(
-                estimator=make_model(base_model, task, base_model_params),
+                estimator=bagging_estimator,
                 n_estimators=50,
                 max_samples=1.0,
                 max_features=1.0,
