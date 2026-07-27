@@ -87,8 +87,12 @@ function normalizeNumericValue(parameter, rawValue) {
   let value = Number(rawValue);
   if (!Number.isFinite(value)) value = Number(parameter.default_value ?? parameter.low ?? 0);
   if (parameter.control === "integer") value = Math.round(value);
-  if (parameter.low !== null && parameter.low !== undefined) value = Math.max(Number(parameter.low), value);
-  if (parameter.high !== null && parameter.high !== undefined) value = Math.min(Number(parameter.high), value);
+  if (parameter.low !== null && parameter.low !== undefined) {
+    value = Math.max(Number(parameter.low), value);
+  }
+  if (parameter.high !== null && parameter.high !== undefined) {
+    value = Math.min(Number(parameter.high), value);
+  }
   return value;
 }
 
@@ -207,14 +211,7 @@ function ParameterControl({ parameter, value, onChange }) {
   );
 }
 
-function ParameterEditor({
-  target,
-  schema,
-  values,
-  loading,
-  onChange,
-  onReset,
-}) {
+function ParameterEditor({ target, schema, values, loading, onChange, onReset }) {
   if (loading && !schema) {
     return <p className="settings-note">モデルの調整可能パラメータを取得しています...</p>;
   }
@@ -247,6 +244,31 @@ function ParameterEditor({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+function TargetTabs({ targets, tasks, activeTarget, onChange, getDetail }) {
+  if (targets.length <= 1) return null;
+
+  return (
+    <div className="model-target-tabs" role="tablist" aria-label="目的変数の切り替え">
+      {targets.map((target) => (
+        <button
+          key={target}
+          type="button"
+          role="tab"
+          aria-selected={target === activeTarget}
+          className={target === activeTarget ? "active" : ""}
+          onClick={() => onChange(target)}
+        >
+          <strong>{target}</strong>
+          <span>
+            {tasks[target] === "classification" ? "分類" : "回帰"}
+            {getDetail ? ` · ${getDetail(target)}` : ""}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -502,6 +524,7 @@ export default function ModelPage() {
   } = useWorkbench();
 
   const [mode, setMode] = useState("selection");
+  const [activeTarget, setActiveTarget] = useState("");
   const [preprocessing, setPreprocessing] = useState(DEFAULT_PREPROCESSING);
   const [parameterMode, setParameterMode] = useState("tuning");
   const [parameterSchemas, setParameterSchemas] = useState({});
@@ -517,6 +540,12 @@ export default function ModelPage() {
     () => targets.reduce((sum, target) => sum + (candidates[target]?.length || 0), 0),
     [targets, candidates],
   );
+
+  const currentTarget = targets.includes(activeTarget) ? activeTarget : targets[0] || "";
+
+  useEffect(() => {
+    setActiveTarget((current) => (targets.includes(current) ? current : targets[0] || ""));
+  }, [targets]);
 
   useEffect(() => {
     let cancelled = false;
@@ -605,7 +634,7 @@ export default function ModelPage() {
             .map((parameter) => parameter.name),
         );
         const values = Object.fromEntries(
-          Object.entries(modelParamsByTarget[target] || [])
+          Object.entries(modelParamsByTarget[target] || {})
             .filter(([name]) => editableNames.has(name)),
         );
         return [target, Object.keys(values).length ? values : null];
@@ -744,48 +773,57 @@ export default function ModelPage() {
                 )}
               </section>
 
-              <div className="target-model-cards">
-                {targets.map((target) => (
-                  <section className="target-model-card" key={target}>
-                    <div className="target-model-card-head">
-                      <div>
-                        <strong>{target}</strong>
-                        <span>{tasks[target] === "classification" ? "分類" : "回帰"}</span>
-                      </div>
-                    </div>
-                    <Field label="使用モデル">
-                      <select
-                        value={modelNames[target] || ""}
-                        onChange={(event) => changeSelectedModel(target, event.target.value)}
-                      >
-                        {modelsFor(tasks[target]).map((model) => (
-                          <option key={model}>{model}</option>
-                        ))}
-                      </select>
-                    </Field>
+              <TargetTabs
+                targets={targets}
+                tasks={tasks}
+                activeTarget={currentTarget}
+                onChange={setActiveTarget}
+                getDetail={(target) => modelNames[target] || "未選択"}
+              />
 
-                    {parameterMode === "manual" && (
-                      <ParameterEditor
-                        target={target}
-                        schema={parameterSchemas[target]}
-                        values={modelParamsByTarget[target]}
-                        loading={parameterLoading}
-                        onChange={(name, value) => changeParameter(target, name, value)}
-                        onReset={() => resetParameters(target)}
-                      />
-                    )}
-                  </section>
-                ))}
-                {!targets.length && (
-                  <p className="empty-state">PREPARE画面で目的変数を選択してください。</p>
-                )}
-              </div>
+              {currentTarget ? (
+                <section
+                  className="target-model-card model-target-tab-panel"
+                  role="tabpanel"
+                  aria-label={`${currentTarget}のモデル設定`}
+                >
+                  <div className="target-model-card-head">
+                    <div>
+                      <strong>{currentTarget}</strong>
+                      <span>{tasks[currentTarget] === "classification" ? "分類" : "回帰"}</span>
+                    </div>
+                  </div>
+                  <Field label="使用モデル">
+                    <select
+                      value={modelNames[currentTarget] || ""}
+                      onChange={(event) => changeSelectedModel(currentTarget, event.target.value)}
+                    >
+                      {modelsFor(tasks[currentTarget]).map((model) => (
+                        <option key={model}>{model}</option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  {parameterMode === "manual" && (
+                    <ParameterEditor
+                      target={currentTarget}
+                      schema={parameterSchemas[currentTarget]}
+                      values={modelParamsByTarget[currentTarget]}
+                      loading={parameterLoading}
+                      onChange={(name, value) => changeParameter(currentTarget, name, value)}
+                      onReset={() => resetParameters(currentTarget)}
+                    />
+                  )}
+                </section>
+              ) : (
+                <p className="empty-state">PREPARE画面で目的変数を選択してください。</p>
+              )}
 
               <section className="model-setting-section model-execution-settings">
                 <div className="model-setting-heading">
                   <div>
                     <strong>精度検証</strong>
-                    <span>学習したモデルを評価するだけで、モデル選択や設定変更は行いません。</span>
+                    <span>学習したモデルをcv_scoreで評価するだけで、モデル選択や設定変更は行いません。</span>
                   </div>
                   <label className="switch-label">
                     <input
@@ -844,26 +882,41 @@ export default function ModelPage() {
                 比較候補は使用モデルとは独立しています。候補は共通条件の5-fold評価でランキングします。
               </p>
 
-              <div className="target-model-cards">
-                {targets.map((target) => (
-                  <section className="target-model-card" key={target}>
-                    <div className="target-model-card-head">
-                      <div>
-                        <strong>{target}</strong>
-                        <span>{tasks[target] === "classification" ? "分類" : "回帰"}</span>
-                      </div>
-                      <span className="status-chip">
-                        {candidates[target]?.length || 0} models
-                      </span>
+              <TargetTabs
+                targets={targets}
+                tasks={tasks}
+                activeTarget={currentTarget}
+                onChange={setActiveTarget}
+                getDetail={(target) => `${candidates[target]?.length || 0} models`}
+              />
+
+              {currentTarget ? (
+                <section
+                  className="target-model-card model-target-tab-panel"
+                  role="tabpanel"
+                  aria-label={`${currentTarget}の比較モデル設定`}
+                >
+                  <div className="target-model-card-head">
+                    <div>
+                      <strong>{currentTarget}</strong>
+                      <span>{tasks[currentTarget] === "classification" ? "分類" : "回帰"}</span>
                     </div>
-                    <CheckboxList
-                      values={modelsFor(tasks[target])}
-                      selected={candidates[target] || []}
-                      onChange={(values) => setCandidates({ ...candidates, [target]: values })}
-                    />
-                  </section>
-                ))}
-              </div>
+                    <span className="status-chip">
+                      {candidates[currentTarget]?.length || 0} models
+                    </span>
+                  </div>
+                  <CheckboxList
+                    values={modelsFor(tasks[currentTarget])}
+                    selected={candidates[currentTarget] || []}
+                    onChange={(values) => setCandidates({
+                      ...candidates,
+                      [currentTarget]: values,
+                    })}
+                  />
+                </section>
+              ) : (
+                <p className="empty-state">PREPARE画面で目的変数を選択してください。</p>
+              )}
 
               <section className="model-setting-section model-execution-settings">
                 <div className="model-setting-heading">

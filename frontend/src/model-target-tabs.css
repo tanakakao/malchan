@@ -1,0 +1,96 @@
+.model-target-tabs {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-strong);
+  scrollbar-width: thin;
+}
+
+.model-target-tabs button {
+  min-width: 150px;
+  min-height: 54px;
+  flex: 1 0 150px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 9px 12px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.model-target-tabs button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--line);
+  box-shadow: var(--shadow-xs);
+  transform: none;
+}
+
+.model-target-tabs button.active {
+  color: var(--primary);
+  background: var(--surface-raised);
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+  box-shadow: inset 0 -3px 0 var(--primary), var(--shadow-sm);
+}
+
+.model-target-tabs strong,
+.model-target-tabs span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-target-tabs strong {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.model-target-tabs span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.model-target-tab-panel {
+  min-height: 170px;
+  animation: model-target-panel-in 140ms ease-out;
+}
+
+.model-target-tab-panel .checklist {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+@keyframes model-target-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .model-target-tabs {
+    margin-inline: -2px;
+  }
+
+  .model-target-tabs button {
+    min-width: 132px;
+    flex-basis: 132px;
+  }
+
+  .model-target-tab-panel {
+    min-height: 0;
+  }
+}
