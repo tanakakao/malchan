@@ -48,7 +48,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .optimize-variable-table .fixed-checkbox-cell {
@@ -62,11 +62,11 @@
 }
 
 .optimize-variable-table .fixed-variable-row {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 
 .optimize-variable-table .fixed-variable-row td:first-child {
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 72%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary) 72%, transparent);
 }
 
 .optimize-variable-table input:disabled {
