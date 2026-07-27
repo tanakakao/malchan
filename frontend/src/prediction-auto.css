@@ -1,0 +1,53 @@
+.prediction-placeholder {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+}
+
+.custom-prediction-result-panel .prediction-result-grid {
+  margin-top: 0;
+}
+
+.prediction-file-drop.disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.prediction-file-table th.prediction-column {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  white-space: nowrap;
+}
+
+.prediction-file-table td.prediction-value-cell {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.prediction-file-actions {
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.prediction-file-actions .settings-note {
+  margin: 0;
+  flex: 1 1 420px;
+}
+
+@media (max-width: 760px) {
+  .prediction-file-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .prediction-file-actions button {
+    width: 100%;
+  }
+}
