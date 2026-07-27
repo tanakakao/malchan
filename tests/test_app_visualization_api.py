@@ -1,6 +1,7 @@
 import importlib.util
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 pytestmark = pytest.mark.skipif(
@@ -11,11 +12,24 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+class DiagnosticModel:
+    """Registered regression model exposing CV predictions for route metadata."""
+
+    target_col = "y"
+    task = "regression"
+
+    def __init__(self) -> None:
+        self.cv_preds = {
+            "train": pd.DataFrame({"y": [1.0]}),
+            "test": pd.DataFrame({"y": [1.1]}),
+        }
+
+
 class VisualizationService:
     """Small service double exposing only operations used by visualization routes."""
 
     def __init__(self) -> None:
-        self.registered = SimpleNamespace(model=object())
+        self.registered = SimpleNamespace(model=DiagnosticModel())
 
     def _get_registered(self, model_id: str):
         from malchan.app.services import ModelNotFoundError
@@ -59,27 +73,39 @@ def _client():
 
 
 def test_visualization_yy_endpoint_serializes_plotly_figure(monkeypatch) -> None:
-    """The API should return the figure produced by malchan.visualization."""
+    """The API should pass CV and residual controls to malchan.visualization."""
 
     import plotly.graph_objects as go
     import malchan.visualization as visualization
 
-    monkeypatch.setattr(
-        visualization,
-        "show_model_diagnostics",
-        lambda model, target, **kwargs: go.Figure(
+    captured = {}
+
+    def show(model, target, **kwargs):
+        captured.update({"model": model, "target": target, **kwargs})
+        return go.Figure(
             data=[go.Scatter(x=[1.0], y=[2.0])],
             layout={"title": f"diagnostic:{target}"},
-        ),
-    )
+        )
 
-    response = _client().get("/api/models/model-1/visualizations/y/yy")
+    monkeypatch.setattr(visualization, "show_model_diagnostics", show)
+
+    response = _client().get(
+        "/api/models/model-1/visualizations/y/yy",
+        params={"cv": "true", "residual": "true", "split": "train"},
+    )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["figure"]["data"][0]["type"] == "scatter"
     assert payload["figure"]["layout"]["title"]["text"] == "diagnostic:y"
     assert payload["metadata"]["target"] == "y"
+    assert payload["metadata"]["task"] == "regression"
+    assert payload["metadata"]["cv_available"] is True
+    assert payload["metadata"]["cv_splits"] == ["train", "test"]
+    assert payload["metadata"]["visualization_function"] == "yy_plot_ml"
+    assert captured["cv"] is True
+    assert captured["residual"] is True
+    assert captured["train_test"] == "train"
 
 
 def test_visualization_importance_endpoint_uses_xai_adapter(monkeypatch) -> None:
