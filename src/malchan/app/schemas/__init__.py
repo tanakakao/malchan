@@ -21,6 +21,7 @@ from .models import (
     PredictionResponse,
     TrainModelRequest,
 )
+from .visualization import PlotlyFigureResponse
 from .xai import (
     RecomputeXaiRequest,
     XaiImportanceItem,
@@ -43,6 +44,7 @@ __all__ = [
     "ModelInfo",
     "ModelListResponse",
     "NumericSearchRange",
+    "PlotlyFigureResponse",
     "PredictRequest",
     "PredictionResponse",
     "RecomputeXaiRequest",

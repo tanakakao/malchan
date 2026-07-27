@@ -15,7 +15,7 @@ export default function ModelPage() {
       <SectionHeader
         step="4 · MODEL"
         title="モデルを学習・検証する"
-        text="学習、候補比較、ベストモデルのチューニングと有効化を行います。"
+        text="単独モデルの学習、未学習データからの候補比較、ベストモデルのチューニングと有効化を行います。"
       />
       <article className="panel">
         <div className="target-model-grid">
@@ -38,6 +38,9 @@ export default function ModelPage() {
       </article>
       <article className="panel best-model-panel">
         <h3>最良モデル選定</h3>
+        <p className="settings-note">
+          登録モデルがない場合は、現在のデータと設定から比較用モデルを自動登録してから候補を比較します。
+        </p>
         {targets.map((target) => (
           <details className="advanced" key={target}>
             <summary><strong>{target}</strong><span>{candidates[target]?.length || 0} models</span></summary>
@@ -53,7 +56,7 @@ export default function ModelPage() {
           <Field label="Optuna試行数"><input type="number" min="1" value={trials} onChange={(event) => setTrials(event.target.value)} /></Field>
           <label className="switch-label"><input type="checkbox" checked={tuneBest} onChange={(event) => setTuneBest(event.target.checked)} /><span />ベストだけチューニング</label>
           <label className="switch-label"><input type="checkbox" checked={activateBest} onChange={(event) => setActivateBest(event.target.checked)} /><span />ベストを有効化</label>
-          <button disabled={!modelInfo || busy} onClick={compareModels}>候補を比較</button>
+          <button disabled={!ready || busy} onClick={compareModels}>{modelInfo ? "候補を比較" : "未学習から比較"}</button>
           <button className="secondary" disabled={!comparison || busy} onClick={tuneBestLater}>後からチューニング</button>
         </div>
       </article>

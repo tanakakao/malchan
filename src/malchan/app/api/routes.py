@@ -23,6 +23,7 @@ from malchan.app.services import (
     ModelNotFoundError,
 )
 
+from .visualization_routes import create_visualization_router
 from .xai_routes import create_xai_router
 
 
@@ -191,7 +192,7 @@ def create_api_router(
         model_id: str,
         request: InverseAnalysisRequest,
     ) -> InverseAnalysisResponse:
-        """Search for feature candidates satisfying requested objectives."""
+        """Search feature candidates satisfying requested objectives."""
 
         try:
             return service.run_inverse_analysis(model_id, request)
@@ -224,4 +225,5 @@ def create_api_router(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     router.include_router(create_xai_router(service))
+    router.include_router(create_visualization_router(service))
     return router
