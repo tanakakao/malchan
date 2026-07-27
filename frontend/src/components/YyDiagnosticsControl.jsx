@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../api";
 import PlotlyFigure from "./PlotlyFigure";
@@ -27,6 +27,7 @@ function FigureContent({ state }) {
 
 export default function YyDiagnosticsControl() {
   const { step, modelInfo } = useWorkbench();
+  const targetRef = useRef("");
   const [host, setHost] = useState(null);
   const [target, setTarget] = useState("");
   const [plotType, setPlotType] = useState("prediction");
@@ -34,10 +35,14 @@ export default function YyDiagnosticsControl() {
   const [split, setSplit] = useState("test");
   const [state, setState] = useState({ response: null, loading: false, error: "" });
 
-  useEffect(() => {
+  function resetDiagnosticSelection() {
     setSource("fit");
     setPlotType("prediction");
     setSplit("test");
+  }
+
+  useEffect(() => {
+    resetDiagnosticSelection();
   }, [modelInfo?.model_id]);
 
   useEffect(() => {
@@ -52,13 +57,10 @@ export default function YyDiagnosticsControl() {
 
     const syncTarget = () => {
       const nextTarget = targetSelect?.value || "";
-      setTarget((current) => {
-        if (current === nextTarget) return current;
-        setSource("fit");
-        setPlotType("prediction");
-        setSplit("test");
-        return nextTarget;
-      });
+      if (targetRef.current === nextTarget) return;
+      targetRef.current = nextTarget;
+      resetDiagnosticSelection();
+      setTarget(nextTarget);
     };
 
     const connect = () => {
@@ -101,6 +103,7 @@ export default function YyDiagnosticsControl() {
       panel?.classList.remove("yy-diagnostic-controlled");
       const currentHost = panel?.querySelector(":scope > .yy-diagnostic-control-host");
       currentHost?.remove();
+      targetRef.current = "";
       setHost(null);
     };
   }, [step]);
