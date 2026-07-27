@@ -146,6 +146,37 @@ button.secondary:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.runtime-pill {
+  gap: 10px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+}
+
+.runtime-copy {
+  min-width: 0;
+  display: grid;
+  line-height: 1.1;
+}
+
+.runtime-copy small {
+  margin-bottom: 4px;
+  color: var(--subtle);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.runtime-copy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .left-rail {
   background: color-mix(in srgb, var(--surface-subtle) 72%, transparent);
 }
@@ -219,6 +250,12 @@ button.secondary:hover:not(:disabled) {
   min-height: 28px;
   padding: 5px 10px;
   font-size: 10px;
+}
+
+.status-chip.warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 24%, var(--line));
 }
 
 label,
