@@ -15,6 +15,7 @@ from .machine_learning_plots import (
 from .web_api_plots import (
     show_model_diagnostics,
     show_model_pd_2d,
+    show_model_pd_and_ice,
     visualization_outputs,
 )
 from .xai_api_plots import (
@@ -32,6 +33,7 @@ __all__ = [
     "show_importances",
     "show_model_diagnostics",
     "show_model_pd_2d",
+    "show_model_pd_and_ice",
     "show_pd_2d",
     "show_pd_and_ice",
     "show_shap_beeswarm",
