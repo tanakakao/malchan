@@ -11,8 +11,11 @@ from malchan.app.schemas import (
     InverseAnalysisRequest,
     InverseAnalysisResponse,
     ModelComparisonResponse,
+    ModelEvaluationRequest,
+    ModelEvaluationResponse,
     ModelInfo,
     ModelListResponse,
+    ModelParameterSchemaResponse,
     PredictRequest,
     PredictionResponse,
     TrainModelRequest,
@@ -50,6 +53,25 @@ def create_api_router(
         """Return lightweight process health metadata."""
 
         return HealthResponse(status="ok", service=app_name, version=app_version)
+
+    @router.get(
+        "/model-parameters",
+        response_model=ModelParameterSchemaResponse,
+        tags=["models"],
+    )
+    def get_model_parameters(
+        task: str,
+        model_name: str,
+    ) -> ModelParameterSchemaResponse:
+        """Return Web controls derived from one model's tuning search space."""
+
+        try:
+            return service.get_model_parameter_schema(task, model_name)
+        except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     @router.post(
         "/models",
@@ -107,6 +129,30 @@ def create_api_router(
                 detail=str(exc),
             ) from exc
         return PredictionResponse(model_id=model_id, predictions=predictions)
+
+    @router.post(
+        "/models/{model_id}/evaluate",
+        response_model=ModelEvaluationResponse,
+        tags=["evaluation"],
+    )
+    def evaluate_model(
+        model_id: str,
+        request: ModelEvaluationRequest,
+    ) -> ModelEvaluationResponse:
+        """Cross-validate the registered model without selecting candidates."""
+
+        try:
+            return service.evaluate_model(model_id, request)
+        except ModelNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found.",
+            ) from exc
+        except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     @router.post(
         "/models/{model_id}/compare",
