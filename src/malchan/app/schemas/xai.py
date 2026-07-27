@@ -1,4 +1,4 @@
-"""Schemas for cached SHAP, importance, and partial-dependence endpoints."""
+"""Schemas for cached and request-scoped model explainability endpoints."""
 
 from datetime import datetime
 from typing import Any, Literal
@@ -32,6 +32,44 @@ class RecomputeXaiRequest(BaseModel):
         if any(not target.strip() for target in self.targets):
             raise ValueError("targets must not contain empty names.")
         return self
+
+
+class LocalShapRequest(BaseModel):
+    """Rows for which request-scoped SHAP values should be calculated."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    data: list[dict[str, Any]] = Field(min_length=1)
+    targets: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> "LocalShapRequest":
+        """Reject duplicate or empty target names."""
+
+        if len(self.targets) != len(set(self.targets)):
+            raise ValueError("targets must not contain duplicates.")
+        if any(not target.strip() for target in self.targets):
+            raise ValueError("targets must not contain empty names.")
+        return self
+
+
+class LocalShapTargetResponse(BaseModel):
+    """Local SHAP matrices and aligned transformed feature values for one target."""
+
+    target: str
+    features: list[str]
+    output_names: list[str]
+    records: list[dict[str, Any]]
+    shap_values: dict[str, list[list[float | None]]]
+    base_values: dict[str, list[float | None]] = Field(default_factory=dict)
+
+
+class LocalShapResponse(BaseModel):
+    """Request-scoped SHAP values calculated only for submitted rows."""
+
+    model_id: str
+    row_count: int
+    targets: dict[str, LocalShapTargetResponse]
 
 
 class XaiTargetSummary(BaseModel):

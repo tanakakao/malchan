@@ -1,10 +1,12 @@
-"""FastAPI routes for cached model explainability data."""
+"""FastAPI routes for cached and request-scoped model explainability data."""
 
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 
 from malchan.app.schemas import (
+    LocalShapRequest,
+    LocalShapResponse,
     RecomputeXaiRequest,
     XaiImportanceResponse,
     XaiPdpResponse,
@@ -47,6 +49,29 @@ def create_xai_router(service: Any) -> APIRouter:
 
         try:
             return service.recompute_xai(model_id, request)
+        except ModelNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found.",
+            ) from exc
+        except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
+    @router.post(
+        "/models/{model_id}/xai/local",
+        response_model=LocalShapResponse,
+    )
+    def compute_local_shap(
+        model_id: str,
+        request: LocalShapRequest,
+    ) -> LocalShapResponse:
+        """Calculate SHAP only for the rows submitted in this request."""
+
+        try:
+            return service.compute_local_shap(model_id, request)
         except ModelNotFoundError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

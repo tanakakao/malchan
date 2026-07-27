@@ -9,7 +9,7 @@ export default function ReportPage() {
   return (
     <>
       <SectionHeader
-        step="7 · REPORT"
+        step="8 · REPORT"
         title="分析レポート用プロンプトを作成する"
         text="データ、比較、逆解析結果を生成AI向けに統合します。"
       />

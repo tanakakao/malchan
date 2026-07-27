@@ -30,6 +30,9 @@ from .models import (
 )
 from .visualization import PlotlyFigureResponse
 from .xai import (
+    LocalShapRequest,
+    LocalShapResponse,
+    LocalShapTargetResponse,
     RecomputeXaiRequest,
     XaiImportanceItem,
     XaiImportanceResponse,
@@ -47,6 +50,9 @@ __all__ = [
     "InverseAnalysisRequest",
     "InverseAnalysisResponse",
     "InverseObjective",
+    "LocalShapRequest",
+    "LocalShapResponse",
+    "LocalShapTargetResponse",
     "ModelComparisonResponse",
     "ModelEvaluationRequest",
     "ModelEvaluationResponse",

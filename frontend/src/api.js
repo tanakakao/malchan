@@ -105,6 +105,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  localShap: (modelId, payload) =>
+    request(`/models/${encodeURIComponent(modelId)}/xai/local`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   xaiImportance: (modelId, target, options = {}) =>
     request(
       `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/importance${query(options)}`,
