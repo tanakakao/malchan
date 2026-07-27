@@ -7,11 +7,6 @@ import math
 from typing import Any
 
 import pandas as pd
-from optuna.distributions import (
-    CategoricalDistribution,
-    FloatDistribution,
-    IntDistribution,
-)
 
 from malchan.app.schemas import (
     ModelEvaluationRequest,
@@ -74,8 +69,9 @@ def _parameter_definition(
     name = raw_name.removeprefix("predictor__")
     label = name.replace("_", " ")
     default_value = defaults.get(name)
+    distribution_type = type(distribution).__name__
 
-    if isinstance(distribution, IntDistribution):
+    if distribution_type == "IntDistribution":
         return ModelParameterDefinition(
             name=name,
             label=label,
@@ -93,7 +89,7 @@ def _parameter_definition(
             log=distribution.log,
         )
 
-    if isinstance(distribution, FloatDistribution):
+    if distribution_type == "FloatDistribution":
         return ModelParameterDefinition(
             name=name,
             label=label,
@@ -111,7 +107,7 @@ def _parameter_definition(
             log=distribution.log,
         )
 
-    if isinstance(distribution, CategoricalDistribution):
+    if distribution_type == "CategoricalDistribution":
         try:
             choices = [_json_value(choice) for choice in distribution.choices]
             resolved_default = _json_value(default_value)
