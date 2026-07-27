@@ -49,6 +49,10 @@ function query(params) {
   return encoded ? `?${encoded}` : "";
 }
 
+function visualizationPath(modelId, target, chart, options = {}) {
+  return `/models/${encodeURIComponent(modelId)}/visualizations/${encodeURIComponent(target)}/${chart}${query(options)}`;
+}
+
 export const api = {
   health: () => request("/health"),
   train: (payload) => request("/models", { method: "POST", body: JSON.stringify(payload) }),
@@ -99,6 +103,16 @@ export const api = {
     request(
       `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/pdp${query({ feature, ...options })}`,
     ),
+  visualizationYy: (modelId, target, options = {}) =>
+    request(visualizationPath(modelId, target, "yy", options)),
+  visualizationImportance: (modelId, target, options = {}) =>
+    request(visualizationPath(modelId, target, "importance", options)),
+  visualizationBeeswarm: (modelId, target, options = {}) =>
+    request(visualizationPath(modelId, target, "shap-beeswarm", options)),
+  visualizationPdp: (modelId, target, options = {}) =>
+    request(visualizationPath(modelId, target, "pdp", options)),
+  visualizationPdp2d: (modelId, target, options = {}) =>
+    request(visualizationPath(modelId, target, "pdp-2d", options)),
   deleteModel: (modelId) =>
     request(`/models/${encodeURIComponent(modelId)}`, { method: "DELETE" }),
 };
