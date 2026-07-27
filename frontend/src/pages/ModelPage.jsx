@@ -21,7 +21,7 @@ const MODEL_PARAM_EXAMPLES = {
 
 const DEFAULT_PREPROCESSING = {
   impute: false,
-  numImputeType: "",
+  numImputeType: "mean",
   numScaleType: "",
   catImpute: false,
   poly: false,
@@ -173,10 +173,15 @@ export default function ModelPage() {
                   <input
                     type="checkbox"
                     checked={preprocessing.impute}
-                    onChange={(event) => patchPreprocessing({ impute: event.target.checked })}
+                    onChange={(event) => patchPreprocessing({
+                      impute: event.target.checked,
+                      numImputeType: event.target.checked
+                        ? preprocessing.numImputeType || "mean"
+                        : preprocessing.numImputeType,
+                    })}
                   />
                   <span />
-                  数値列を補完
+                  欠損を補完
                 </label>
               </div>
               {preprocessing.impute && (
@@ -185,7 +190,6 @@ export default function ModelPage() {
                     value={preprocessing.numImputeType}
                     onChange={(event) => patchPreprocessing({ numImputeType: event.target.value })}
                   >
-                    <option value="">補完なし</option>
                     <option value="mean">平均値</option>
                     <option value="median">中央値</option>
                     <option value="most_frequent">最頻値</option>
