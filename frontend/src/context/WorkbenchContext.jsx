@@ -39,6 +39,28 @@ function isIntegerColumn(rows, column) {
   return values.length > 0 && values.every(Number.isInteger);
 }
 
+function normalizeTrainingOptions(options = {}) {
+  const preprocessing = options.preprocessing || {};
+  return {
+    preprocessing: {
+      impute: Boolean(preprocessing.impute),
+      numImputeType: preprocessing.numImputeType || null,
+      numScaleType: preprocessing.numScaleType || null,
+      catImpute: Boolean(preprocessing.catImpute),
+      poly: Boolean(preprocessing.poly),
+      polyDegree: Math.max(1, Number(preprocessing.polyDegree || 2)),
+      polyInteractionOnly: preprocessing.polyInteractionOnly !== false,
+      decomposition: Boolean(preprocessing.decomposition),
+      decompositionMethod: preprocessing.decompositionMethod || "PCA",
+      decNComponents: Math.max(1, Number(preprocessing.decNComponents || 2)),
+      samplingMethod: preprocessing.samplingMethod || null,
+    },
+    tuning: Boolean(options.tuning),
+    modelParamsByTarget: options.modelParamsByTarget || {},
+    computeXai: options.computeXai !== false,
+  };
+}
+
 export function WorkbenchProvider({ children }) {
   const [theme, setTheme] = useState(localStorage.getItem("malchan-theme") || "dark");
   const [step, setStep] = useState("data");
@@ -200,11 +222,26 @@ export function WorkbenchProvider({ children }) {
     });
   }
 
-  function trainingPayload() {
+  function trainingPayload(options = {}) {
+    const resolved = normalizeTrainingOptions(options);
+    const preprocessing = resolved.preprocessing;
     const common = {
       data: rows,
       num_cols: numFeatures.filter((column) => features.includes(column)),
       cat_cols: catFeatures.filter((column) => features.includes(column)),
+      impute: preprocessing.impute,
+      num_impute_type: preprocessing.numImputeType,
+      num_scale_type: preprocessing.numScaleType,
+      cat_impute: preprocessing.catImpute,
+      poly: preprocessing.poly,
+      poly_degree: preprocessing.polyDegree,
+      poly_interaction_only: preprocessing.polyInteractionOnly,
+      decomposition: preprocessing.decomposition,
+      decomposition_method: preprocessing.decompositionMethod,
+      dec_n_components: preprocessing.decNComponents,
+      sampling_method: preprocessing.samplingMethod,
+      tuning: resolved.tuning,
+      compute_xai: resolved.computeXai,
     };
     if (targets.length === 1) {
       const target = targets[0];
@@ -213,6 +250,7 @@ export function WorkbenchProvider({ children }) {
         target_col: target,
         task: tasks[target],
         model_names: [modelNames[target]],
+        model_params: resolved.tuning ? null : resolved.modelParamsByTarget[target] ?? null,
       };
     }
     return {
@@ -222,65 +260,101 @@ export function WorkbenchProvider({ children }) {
       model_names_by_target: Object.fromEntries(
         targets.map((target) => [target, [modelNames[target]]]),
       ),
+      model_params_by_target: resolved.tuning
+        ? {}
+        : Object.fromEntries(
+            targets.map((target) => [target, resolved.modelParamsByTarget[target] ?? null]),
+          ),
     };
   }
 
-  async function trainModel() {
-    const response = await run("モデルを学習しています...", () => api.train(trainingPayload()));
+  async function trainModel(options = {}) {
+    const response = await run("モデルを学習しています...", () => api.train(trainingPayload(options)));
     if (!response) return;
     setModelInfo(response);
     setComparison(null);
+    setDiagnostics([]);
     notify(`モデル ${response.model_id} を登録しました。`);
   }
 
-  async function compareModels() {
+  async function compareModels(options = {}) {
     if (!ready) return notify("データ、目的変数、説明変数を設定してください。", "error");
-    const emptyTargets = targets.filter((target) => !(candidates[target] || []).length);
+    const selectedCandidates = options.candidatesByTarget || candidates;
+    const emptyTargets = targets.filter((target) => !(selectedCandidates[target] || []).length);
     if (emptyTargets.length) {
       return notify(`比較候補を1件以上選択してください: ${emptyTargets.join(", ")}`, "error");
     }
 
     const multiOutput = targets.length > 1;
+    const resolvedMethod = options.cvMethod || "kfold";
+    const resolvedSplits = Math.max(2, Number(options.cvSplits ?? cvSplits));
+    const resolvedTuning = options.tuning ?? tuneBest;
+    const resolvedTrials = Math.max(1, Number(options.trials ?? trials));
+    const resolvedActivateBest = options.activateBest ?? activateBest;
+    const comparisonModelParams = resolvedTuning
+      ? null
+      : multiOutput
+        ? Object.fromEntries(
+            targets.map((target) => {
+              const params = options.modelParamsByTarget?.[target];
+              const selectedModel = modelNames[target];
+              return [
+                target,
+                params && selectedCandidates[target]?.includes(selectedModel)
+                  ? { [selectedModel]: params }
+                  : {},
+              ];
+            }),
+          )
+        : (() => {
+            const target = targets[0];
+            const params = options.modelParamsByTarget?.[target];
+            const selectedModel = modelNames[target];
+            return params && selectedCandidates[target]?.includes(selectedModel)
+              ? { [selectedModel]: params }
+              : null;
+          })();
     const payload = {
       model_names: multiOutput
-        ? Object.fromEntries(targets.map((target) => [target, candidates[target] || []]))
-        : candidates[targets[0]] || [],
-      method: "kfold",
-      n_splits: Number(cvSplits),
+        ? Object.fromEntries(targets.map((target) => [target, selectedCandidates[target] || []]))
+        : selectedCandidates[targets[0]] || [],
+      model_params: comparisonModelParams,
+      method: resolvedMethod,
+      n_splits: resolvedSplits,
       metric: multiOutput
         ? Object.fromEntries(
             targets.map((target) => [target, tasks[target] === "classification" ? "F1" : "RMSE"]),
           )
         : tasks[targets[0]] === "classification" ? "F1" : "RMSE",
-      tune_best: tuneBest,
+      tune_best: resolvedTuning,
       tuning_trials: multiOutput
-        ? Object.fromEntries(targets.map((target) => [target, Number(trials)]))
-        : Number(trials),
-      activate_best: activateBest,
+        ? Object.fromEntries(targets.map((target) => [target, resolvedTrials]))
+        : resolvedTrials,
+      activate_best: resolvedActivateBest,
     };
-    const hadModel = Boolean(modelInfo);
-    const result = await run("候補モデルを比較しています...", async () => {
-      let activeModel = modelInfo;
-      if (!activeModel) {
-        const basePayload = trainingPayload();
-        const comparisonTrainingPayload = multiOutput
-          ? {
-              ...basePayload,
-              model_names_by_target: Object.fromEntries(
-                targets.map((target) => [target, [candidates[target][0]]]),
-              ),
-              compute_xai: false,
-            }
-          : {
-              ...basePayload,
-              model_names: [candidates[targets[0]][0]],
-              compute_xai: false,
-            };
-        activeModel = await api.train(comparisonTrainingPayload);
-        setModelInfo(activeModel);
-      }
+    const result = await run("候補モデルを交差検証しています...", async () => {
+      const basePayload = trainingPayload({
+        ...options,
+        tuning: false,
+        computeXai: false,
+      });
+      const comparisonTrainingPayload = multiOutput
+        ? {
+            ...basePayload,
+            model_names_by_target: Object.fromEntries(
+              targets.map((target) => [target, [selectedCandidates[target][0]]]),
+            ),
+            model_params_by_target: {},
+          }
+        : {
+            ...basePayload,
+            model_names: [selectedCandidates[targets[0]][0]],
+            model_params: null,
+          };
+      const activeModel = await api.train(comparisonTrainingPayload);
+      setModelInfo(activeModel);
       const comparisonResponse = await api.compare(activeModel.model_id, payload);
-      const nextModelInfo = activateBest
+      const nextModelInfo = resolvedActivateBest
         ? await api.modelInfo(activeModel.model_id)
         : activeModel;
       return { comparisonResponse, nextModelInfo };
@@ -289,9 +363,7 @@ export function WorkbenchProvider({ children }) {
     setComparison(result.comparisonResponse);
     setModelInfo(result.nextModelInfo);
     setDiagnostics([]);
-    notify(hadModel
-      ? "モデル比較が完了しました。"
-      : "比較用モデルを登録し、モデル比較が完了しました。");
+    notify("比較用モデルを登録し、交差検証が完了しました。");
   }
 
   async function tuneBestLater() {
