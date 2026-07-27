@@ -58,16 +58,26 @@ def test_sum_constraint_is_configurable_and_sent_to_inverse_api() -> None:
 
 
 def test_sampler_options_change_for_single_and_multi_objective_search() -> None:
-    """Single- and multi-objective searches should not present the same sampler list."""
+    """Single- and multi-objective searches should present compatible sampler lists."""
 
     source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
+    single_section = source.split("const SINGLE_OBJECTIVE_SAMPLERS = [", 1)[1].split(
+        "const MULTI_OBJECTIVE_SAMPLERS = [",
+        1,
+    )[0]
+    multi_section = source.split("const MULTI_OBJECTIVE_SAMPLERS = [", 1)[1].split(
+        "const variableSettingsByModel",
+        1,
+    )[0]
 
-    assert "SINGLE_OBJECTIVE_SAMPLERS" in source
-    assert "MULTI_OBJECTIVE_SAMPLERS" in source
-    assert 'value: "CmaEs"' in source
-    assert 'value: "MOTPE"' in source
-    assert 'value: "NSGAII"' in source
-    assert 'value: "NSGAIII"' in source
+    for sampler in ('value: "TPE"', 'value: "CmaEs"', 'value: "GP"', 'value: "QMS"'):
+        assert sampler in single_section
+    for sampler in ('value: "MOTPE"', 'value: "NSGAII"', 'value: "NSGAIII"'):
+        assert sampler in multi_section
+
+    assert 'value: "CmaEs"' not in multi_section
+    assert 'value: "GP"' not in multi_section
+    assert 'value: "QMS"' not in multi_section
     assert "const multiObjective = targets.length > 1" in source
     assert "const samplerOptions = multiObjective" in source
     assert "setSampler(samplerOptions[0].value)" in source
