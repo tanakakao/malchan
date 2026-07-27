@@ -6,6 +6,7 @@ set "BACKEND_HOST=127.0.0.1"
 set "BACKEND_PORT=8001"
 set "FRONTEND_HOST=127.0.0.1"
 set "FRONTEND_PORT=5174"
+set "HEALTH_URL=http://%BACKEND_HOST%:%BACKEND_PORT%/api/health"
 set "VENV_PYTHON=%~dp0.venv\Scripts\python.exe"
 
 rem The React application uses this absolute API URL instead of the default Vite proxy.
@@ -46,6 +47,19 @@ if exist "%VENV_PYTHON%" (
 echo Starting malchan backend at http://%BACKEND_HOST%:%BACKEND_PORT% ...
 start "malchan backend" /D "%~dp0" cmd.exe /k ""%~f0" backend"
 
+echo Waiting for FastAPI to become ready...
+call :wait_for_backend
+if errorlevel 1 (
+    echo.
+    echo [ERROR] malchan FastAPI did not become ready within 60 seconds.
+    echo Check the malchan backend window for the traceback or port error.
+    echo The React frontend was not started.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo FastAPI is ready.
 echo Starting malchan frontend at http://%FRONTEND_HOST%:%FRONTEND_PORT% ...
 start "malchan frontend" /D "%~dp0frontend" cmd.exe /k ""%~f0" frontend"
 
@@ -53,11 +67,19 @@ echo.
 echo Startup windows were opened.
 echo Frontend: http://%FRONTEND_HOST%:%FRONTEND_PORT%
 echo Backend : http://%BACKEND_HOST%:%BACKEND_PORT%
-echo Health  : http://%BACKEND_HOST%:%BACKEND_PORT%/api/health
+echo Health  : %HEALTH_URL%
 echo.
 echo Press any key to close only this launcher window.
 pause >nul
 exit /b 0
+
+:wait_for_backend
+for /L %%I in (1,1,60) do (
+    powershell.exe -NoProfile -Command "try { $response = Invoke-WebRequest -UseBasicParsing -Uri '%HEALTH_URL%' -TimeoutSec 2; if ($response.StatusCode -eq 200) { exit 0 } } catch {}; exit 1" >nul 2>&1
+    if not errorlevel 1 exit /b 0
+    timeout /t 1 /nobreak >nul
+)
+exit /b 1
 
 :backend
 cd /d "%~dp0"
