@@ -31,20 +31,6 @@ class FakeRegressionModel:
         data = self.X if X is None else X
         return pd.DataFrame({"y": data["x1"] * 2.0 + 1.0}, index=data.index)
 
-    def get_pd_2d(self, target_cols):
-        assert target_cols == ["x1", "x2"]
-        values = np.asarray(
-            [
-                [1.0, 1.2],
-                [2.0, 2.2],
-                [3.0, 3.2],
-                [4.0, 4.2],
-            ]
-        )
-        x_grid = np.asarray([0.0, 1.0, 0.0, 1.0])
-        y_grid = np.asarray([10.0, 10.0, 20.0, 20.0])
-        return values, x_grid, y_grid
-
 
 class FakeClassificationModel(FakeRegressionModel):
     """Classification variant exposing selectable class outputs."""
@@ -66,23 +52,60 @@ def test_show_model_diagnostics_supports_single_output_model() -> None:
     assert figure.layout.xaxis.title.text == "Actual Values"
 
 
-def test_show_model_pd_2d_reshapes_flat_model_grid() -> None:
-    """Flattened model grids should become a two-dimensional Plotly contour."""
+def test_show_model_pd_and_ice_delegates_to_existing_visualization(monkeypatch) -> None:
+    """The web adapter must not rebuild the one-dimensional PD chart."""
 
-    from malchan.visualization import show_model_pd_2d
+    import plotly.graph_objects as go
+    import malchan.visualization.web_api_plots as plots
 
-    figure = show_model_pd_2d(
+    captured = {}
+
+    def show(**kwargs):
+        captured.update(kwargs)
+        return go.Figure(layout={"title": "existing-1d-pd"})
+
+    monkeypatch.setattr(plots, "show_pd_and_ice", show)
+    figure = plots.show_model_pd_and_ice(
+        FakeRegressionModel(),
+        "y",
+        "x1",
+        ice=False,
+        output_index=0,
+    )
+
+    assert figure.layout.title.text == "existing-1d-pd"
+    assert captured["target"] == "y"
+    assert captured["target_col"] == "x1"
+    assert captured["ice"] is False
+    assert captured["col_idx"] == 0
+    assert captured["model"].models["y"].target_col == "y"
+
+
+def test_show_model_pd_2d_delegates_to_existing_visualization(monkeypatch) -> None:
+    """The web adapter must not rebuild the two-dimensional PD chart."""
+
+    import plotly.graph_objects as go
+    import malchan.visualization.web_api_plots as plots
+
+    captured = {}
+
+    def show(**kwargs):
+        captured.update(kwargs)
+        return go.Figure(layout={"title": "existing-2d-pd"})
+
+    monkeypatch.setattr(plots, "show_pd_2d", show)
+    figure = plots.show_model_pd_2d(
         FakeRegressionModel(),
         "y",
         ["x1", "x2"],
+        output_index=0,
     )
 
-    contour = figure.data[0]
-    assert contour.type == "contour"
-    assert np.asarray(contour.z).shape == (2, 2)
-    assert list(contour.x) == [0.0, 1.0]
-    assert list(contour.y) == [10.0, 20.0]
-    assert figure.data[1].name == "Observed data"
+    assert figure.layout.title.text == "existing-2d-pd"
+    assert captured["target"] == "y"
+    assert captured["target_cols"] == ["x1", "x2"]
+    assert captured["col_idx"] == 0
+    assert captured["model"].models["y"].target_col == "y"
 
 
 def test_visualization_outputs_returns_class_labels() -> None:
