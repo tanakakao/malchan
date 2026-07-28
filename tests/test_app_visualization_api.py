@@ -134,6 +134,94 @@ def test_visualization_importance_endpoint_uses_xai_adapter(monkeypatch) -> None
     assert response.json()["figure"]["data"][0]["type"] == "bar"
 
 
+def test_visualization_shap_scatter_endpoint_forwards_feature_and_interaction(
+    monkeypatch,
+) -> None:
+    """The SHAP scatter endpoint should delegate feature and interaction settings."""
+
+    import plotly.graph_objects as go
+    import malchan.visualization as visualization
+
+    captured = {}
+
+    monkeypatch.setattr(
+        visualization,
+        "visualization_diagnostic_options",
+        lambda model, target: {
+            "task": "regression",
+            "cv_available": False,
+            "cv_splits": [],
+        },
+    )
+
+    def show(model, target, feature_name, **kwargs):
+        captured.update(
+            {
+                "model": model,
+                "target": target,
+                "feature_name": feature_name,
+                **kwargs,
+            }
+        )
+        return go.Figure(data=[go.Scatter(x=[1.0], y=[0.5])])
+
+    monkeypatch.setattr(visualization, "show_model_shap_scatter", show)
+    response = _client().get(
+        "/api/models/model-1/visualizations/y/shap-scatter",
+        params={"feature": "x1", "interactive_col": "x2"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["figure"]["data"][0]["type"] == "scatter"
+    assert payload["metadata"]["feature"] == "x1"
+    assert payload["metadata"]["interactive_col"] == "x2"
+    assert payload["metadata"]["outputs"] == []
+    assert payload["metadata"]["visualization_function"] == "show_shap_scatter"
+    assert captured["feature_name"] == "x1"
+    assert captured["interactive_col"] == "x2"
+    assert captured["target_item"] is None
+
+
+def test_visualization_shap_scatter_endpoint_forwards_class_output(monkeypatch) -> None:
+    """Classification SHAP scatter should pass the selected class to the plotter."""
+
+    import plotly.graph_objects as go
+    import malchan.visualization as visualization
+
+    captured = {}
+    monkeypatch.setattr(
+        visualization,
+        "visualization_diagnostic_options",
+        lambda model, target: {
+            "task": "classification",
+            "cv_available": False,
+            "cv_splits": [],
+        },
+    )
+    monkeypatch.setattr(
+        visualization,
+        "visualization_outputs",
+        lambda model, target: ["OK", "NG"],
+    )
+
+    def show(model, target, feature_name, **kwargs):
+        captured.update({"feature_name": feature_name, **kwargs})
+        return go.Figure(data=[go.Scatter(x=[1.0], y=[0.5])])
+
+    monkeypatch.setattr(visualization, "show_model_shap_scatter", show)
+    response = _client().get(
+        "/api/models/model-1/visualizations/y/shap-scatter",
+        params={"feature": "x1", "output": "OK"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metadata"]["outputs"] == ["OK", "NG"]
+    assert payload["metadata"]["selected_output"] == "OK"
+    assert captured["target_item"] == "OK"
+
+
 def test_visualization_pdp_endpoint_uses_existing_plot(monkeypatch) -> None:
     """The one-dimensional PD endpoint should call show_model_pd_and_ice."""
 
