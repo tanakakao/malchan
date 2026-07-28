@@ -10,6 +10,7 @@ import "./model-target-tabs.css";
 import "./comparison-evaluation.css";
 import "./xai.css";
 import "./prediction.css";
+import "./optimize-header-alignment.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
