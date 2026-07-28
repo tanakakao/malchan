@@ -117,10 +117,13 @@ def test_material_descriptor_layout_stays_compact() -> None:
     assert "max-height: 210px" in css
     assert "overflow-y: auto" in css
     assert ".material-feature-kind-host" in kind_css
-    assert "grid-column: 1 / -1" in kind_css
-    assert "grid-row: 2" in kind_css
+    assert "grid-template-columns: minmax(72px, 1fr) minmax(132px, 168px) auto" in kind_css
+    assert "grid-template-rows: auto" in kind_css
+    assert "grid-column: 2" in kind_css
+    assert "grid-row: 1" in kind_css
     assert ".material-feature-kind-options" in kind_css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in kind_css
+    assert "grid-template-columns: minmax(52px, 1fr) 116px auto" in kind_css
     assert ".material-feature-kind-option.composition.active" in kind_css
     assert ".material-feature-kind-option.smiles.active" in kind_css
 
