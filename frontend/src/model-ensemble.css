@@ -38,8 +38,164 @@
 }
 
 .ensemble-target-card .checkbox-list {
-  max-height: 260px;
+  max-height: 220px;
   overflow: auto;
+}
+
+.ensemble-manual-parameters {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.ensemble-parameter-tabs {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 1px 6px;
+  scrollbar-width: thin;
+}
+
+.ensemble-parameter-tabs button {
+  min-height: 32px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface-strong);
+  box-shadow: none;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ensemble-parameter-tabs button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--line));
+  background: var(--surface-subtle);
+  transform: none;
+}
+
+.ensemble-parameter-tabs button.active {
+  color: #ffffff;
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.ensemble-parameter-panel {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+}
+
+.ensemble-parameter-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.ensemble-parameter-panel-head > div {
+  min-width: 0;
+}
+
+.ensemble-parameter-panel-head strong,
+.ensemble-parameter-panel-head span {
+  display: block;
+}
+
+.ensemble-parameter-panel-head strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ensemble-parameter-panel-head span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.ensemble-parameter-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+}
+
+.ensemble-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ensemble-parameter-control {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.ensemble-parameter-control > span {
+  min-width: 0;
+}
+
+.ensemble-parameter-control strong,
+.ensemble-parameter-control small {
+  display: block;
+}
+
+.ensemble-parameter-control strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ensemble-parameter-control small {
+  margin-top: 2px;
+  color: var(--subtle);
+  font-size: 8px;
+}
+
+.ensemble-parameter-control input[type="number"],
+.ensemble-parameter-control select {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+.ensemble-parameter-boolean {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.ensemble-parameter-boolean input[type="checkbox"] {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.ensemble-parameter-error {
+  margin: 0;
 }
 
 .ensemble-override-note {
@@ -71,6 +227,21 @@
 @media (max-width: 1000px) {
   .ensemble-top-fields {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .ensemble-parameter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ensemble-parameter-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ensemble-parameter-panel-head .compact-button {
+    width: 100%;
   }
 }
 

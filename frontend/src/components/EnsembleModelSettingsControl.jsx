@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { setEnsembleTrainingOptions } from "../api";
+import { api, setEnsembleTrainingOptions } from "../api";
 import { CheckboxList, Field } from "./Common";
 import { modelsFor, useWorkbench } from "../context/WorkbenchContext";
 import "../model-ensemble.css";
@@ -12,8 +12,18 @@ const ENSEMBLE_TYPES = [
   ["ブースティング", "Boosting", "1つのベースモデルを逐次的に補正しながら学習します。"],
 ];
 
+const PARAMETER_MODES = [
+  ["tuning", "Optunaでチューニング"],
+  ["default", "各モデルの既定値"],
+  ["manual", "各モデルで設定"],
+];
+
 function requiresMultipleModels(ensembleType) {
   return ensembleType === "アンサンブル" || ensembleType === "スタッキング";
+}
+
+function usesBaseModelParameters(ensembleType) {
+  return ["スタッキング", "バギング", "ブースティング"].includes(ensembleType);
 }
 
 function uniqueValues(values) {
@@ -32,6 +42,156 @@ function findSelectionContent() {
     .find((content) => content.textContent?.includes("パラメータ設定方法")) || null;
 }
 
+function schemaKey(task, model) {
+  return `${task}\u0001${model}`;
+}
+
+function editableParameters(schema) {
+  return (schema?.parameters || []).filter((parameter) => parameter.editable);
+}
+
+function defaultParameters(schema) {
+  return Object.fromEntries(
+    editableParameters(schema).map((parameter) => [parameter.name, parameter.default_value]),
+  );
+}
+
+function valuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function displayValue(value) {
+  if (Array.isArray(value)) return value.join(" × ");
+  if (value === null) return "None";
+  if (value === true) return "有効";
+  if (value === false) return "無効";
+  return String(value);
+}
+
+function normalizeNumericValue(parameter, rawValue) {
+  let value = Number(rawValue);
+  if (!Number.isFinite(value)) value = Number(parameter.default_value ?? parameter.low ?? 0);
+  if (parameter.control === "integer") value = Math.round(value);
+  if (parameter.low !== null && parameter.low !== undefined) {
+    value = Math.max(Number(parameter.low), value);
+  }
+  if (parameter.high !== null && parameter.high !== undefined) {
+    value = Math.min(Number(parameter.high), value);
+  }
+  return value;
+}
+
+function CompactParameterControl({ parameter, value, onChange }) {
+  const label = parameter.label || parameter.name;
+
+  if (parameter.control === "boolean") {
+    return (
+      <label className="ensemble-parameter-control ensemble-parameter-boolean">
+        <span>
+          <strong>{label}</strong>
+          <small>{parameter.name}</small>
+        </span>
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+      </label>
+    );
+  }
+
+  if (parameter.control === "categorical") {
+    const choices = parameter.choices || [];
+    const selectedIndex = Math.max(
+      0,
+      choices.findIndex((choice) => valuesEqual(choice, value)),
+    );
+    return (
+      <label className="ensemble-parameter-control">
+        <span>
+          <strong>{label}</strong>
+          <small>{parameter.name}</small>
+        </span>
+        <select
+          value={selectedIndex}
+          onChange={(event) => onChange(choices[Number(event.target.value)])}
+        >
+          {choices.map((choice, index) => (
+            <option key={`${parameter.name}-${index}`} value={index}>
+              {displayValue(choice)}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  return (
+    <label className="ensemble-parameter-control">
+      <span>
+        <strong>{label}</strong>
+        <small>{parameter.name}</small>
+      </span>
+      <input
+        type="number"
+        min={parameter.low ?? undefined}
+        max={parameter.high ?? undefined}
+        step={parameter.step ?? "any"}
+        value={normalizeNumericValue(parameter, value)}
+        onChange={(event) => onChange(normalizeNumericValue(parameter, event.target.value))}
+      />
+    </label>
+  );
+}
+
+function EnsembleParameterEditor({
+  tab,
+  schema,
+  values,
+  loading,
+  error,
+  onChange,
+  onReset,
+}) {
+  const parameters = editableParameters(schema);
+
+  return (
+    <div className="ensemble-parameter-panel" role="tabpanel">
+      <div className="ensemble-parameter-panel-head">
+        <div>
+          <strong>{tab?.model || "モデルを選択してください"}</strong>
+          <span>{tab?.role === "final" ? "Stackingの最終モデル" : "アンサンブル構成モデル"}</span>
+        </div>
+        {parameters.length > 0 && (
+          <button type="button" className="secondary compact-button" onClick={onReset}>
+            既定値へ戻す
+          </button>
+        )}
+      </div>
+
+      {loading && !schema && <p className="settings-note">パラメータ定義を取得しています...</p>}
+      {error && <p className="xai-error ensemble-parameter-error">{error}</p>}
+      {!loading && !error && schema && parameters.length === 0 && (
+        <p className="settings-note">このモデルにはWeb画面で変更できるパラメータがありません。</p>
+      )}
+      {parameters.length > 0 && (
+        <div className="ensemble-parameter-scroll">
+          <div className="ensemble-parameter-grid">
+            {parameters.map((parameter) => (
+              <CompactParameterControl
+                key={parameter.name}
+                parameter={parameter}
+                value={values?.[parameter.name] ?? parameter.default_value}
+                onChange={(nextValue) => onChange(parameter.name, nextValue)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EnsembleModelSettingsControl() {
   const {
     step,
@@ -46,7 +206,13 @@ export default function EnsembleModelSettingsControl() {
   const [activeTarget, setActiveTarget] = useState("");
   const [membersByTarget, setMembersByTarget] = useState({});
   const [stackingBaseModel, setStackingBaseModel] = useState("");
-  const [tuning, setTuning] = useState(true);
+  const [parameterMode, setParameterMode] = useState("tuning");
+  const [activeParameterTab, setActiveParameterTab] = useState("");
+  const [parameterSchemas, setParameterSchemas] = useState({});
+  const [memberParamsByTarget, setMemberParamsByTarget] = useState({});
+  const [baseParamsByTarget, setBaseParamsByTarget] = useState({});
+  const [parameterLoading, setParameterLoading] = useState(false);
+  const [parameterError, setParameterError] = useState("");
 
   const currentTarget = targets.includes(activeTarget) ? activeTarget : targets[0] || "";
   const taskKinds = useMemo(
@@ -57,6 +223,65 @@ export default function EnsembleModelSettingsControl() {
   const stackingModels = taskKinds.size === 1 && targets.length
     ? modelsFor(tasks[targets[0]])
     : [];
+
+  const parameterEntries = useMemo(() => {
+    if (parameterMode !== "manual") return [];
+    const entries = [];
+    targets.forEach((target) => {
+      (membersByTarget[target] || []).forEach((model) => {
+        entries.push({
+          key: `member:${target}:${model}`,
+          target,
+          task: tasks[target],
+          model,
+          role: "member",
+        });
+      });
+      if (ensembleType === "スタッキング" && stackingBaseModel) {
+        entries.push({
+          key: `final:${target}:${stackingBaseModel}`,
+          target,
+          task: tasks[target],
+          model: stackingBaseModel,
+          role: "final",
+        });
+      }
+    });
+    return entries;
+  }, [parameterMode, targets, tasks, membersByTarget, ensembleType, stackingBaseModel]);
+
+  const parameterTabs = useMemo(() => {
+    if (!currentTarget || parameterMode !== "manual") return [];
+    const memberTabs = (membersByTarget[currentTarget] || []).map((model) => ({
+      key: `member:${currentTarget}:${model}`,
+      target: currentTarget,
+      task: tasks[currentTarget],
+      model,
+      role: "member",
+      label: requiresMultipleModels(ensembleType) ? model : `ベース: ${model}`,
+    }));
+    if (ensembleType === "スタッキング" && stackingBaseModel) {
+      memberTabs.push({
+        key: `final:${currentTarget}:${stackingBaseModel}`,
+        target: currentTarget,
+        task: tasks[currentTarget],
+        model: stackingBaseModel,
+        role: "final",
+        label: `最終: ${stackingBaseModel}`,
+      });
+    }
+    return memberTabs;
+  }, [currentTarget, parameterMode, membersByTarget, tasks, ensembleType, stackingBaseModel]);
+
+  const selectedParameterTab = parameterTabs.find((tab) => tab.key === activeParameterTab)
+    || parameterTabs[0]
+    || null;
+  const selectedSchema = selectedParameterTab
+    ? parameterSchemas[schemaKey(selectedParameterTab.task, selectedParameterTab.model)]
+    : null;
+  const selectedParameterValues = selectedParameterTab?.role === "final"
+    ? baseParamsByTarget[selectedParameterTab.target]
+    : memberParamsByTarget[selectedParameterTab?.target]?.[selectedParameterTab?.model];
 
   useEffect(() => {
     setActiveTarget((current) => (targets.includes(current) ? current : targets[0] || ""));
@@ -103,6 +328,86 @@ export default function EnsembleModelSettingsControl() {
   }, [stackingModels.join("\u0001"), modelNames, targets]);
 
   useEffect(() => {
+    setActiveParameterTab((current) => (
+      parameterTabs.some((tab) => tab.key === current) ? current : parameterTabs[0]?.key || ""
+    ));
+  }, [parameterTabs]);
+
+  useEffect(() => {
+    if (parameterMode !== "manual" || !parameterEntries.length) {
+      setParameterLoading(false);
+      setParameterError("");
+      return undefined;
+    }
+
+    const missing = [...new Map(
+      parameterEntries
+        .filter((entry) => !parameterSchemas[schemaKey(entry.task, entry.model)])
+        .map((entry) => [schemaKey(entry.task, entry.model), entry]),
+    ).values()];
+    if (!missing.length) return undefined;
+
+    let cancelled = false;
+    setParameterLoading(true);
+    setParameterError("");
+    Promise.all(
+      missing.map(async (entry) => [
+        schemaKey(entry.task, entry.model),
+        await api.modelParameters(entry.task, entry.model),
+      ]),
+    )
+      .then((items) => {
+        if (!cancelled) {
+          setParameterSchemas((current) => ({ ...current, ...Object.fromEntries(items) }));
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setParameterError(error.message || String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setParameterLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [parameterMode, parameterEntries, parameterSchemas]);
+
+  useEffect(() => {
+    if (parameterMode !== "manual" || !parameterEntries.length) return;
+
+    setMemberParamsByTarget((current) => {
+      let changed = false;
+      const next = { ...current };
+      parameterEntries.filter((entry) => entry.role === "member").forEach((entry) => {
+        const schema = parameterSchemas[schemaKey(entry.task, entry.model)];
+        if (!schema) return;
+        const targetValues = next[entry.target] || {};
+        if (!Object.prototype.hasOwnProperty.call(targetValues, entry.model)) {
+          next[entry.target] = {
+            ...targetValues,
+            [entry.model]: defaultParameters(schema),
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+
+    setBaseParamsByTarget((current) => {
+      let changed = false;
+      const next = { ...current };
+      parameterEntries.filter((entry) => entry.role === "final").forEach((entry) => {
+        const schema = parameterSchemas[schemaKey(entry.task, entry.model)];
+        if (!schema || Object.prototype.hasOwnProperty.call(next, entry.target)) return;
+        next[entry.target] = defaultParameters(schema);
+        changed = true;
+      });
+      return changed ? next : current;
+    });
+  }, [parameterMode, parameterEntries, parameterSchemas]);
+
+  useEffect(() => {
     if (!enabled || step !== "model" || !host) {
       setEnsembleTrainingOptions(null);
       return undefined;
@@ -111,10 +416,22 @@ export default function EnsembleModelSettingsControl() {
       ensembleType,
       baseModel: ensembleType === "スタッキング" ? stackingBaseModel : null,
       membersByTarget,
-      tuning,
+      parameterMode,
+      memberParamsByTarget,
+      baseParamsByTarget,
     });
     return () => setEnsembleTrainingOptions(null);
-  }, [enabled, step, host, ensembleType, stackingBaseModel, membersByTarget, tuning]);
+  }, [
+    enabled,
+    step,
+    host,
+    ensembleType,
+    stackingBaseModel,
+    membersByTarget,
+    parameterMode,
+    memberParamsByTarget,
+    baseParamsByTarget,
+  ]);
 
   useEffect(() => {
     if (step !== "model") {
@@ -169,13 +486,57 @@ export default function EnsembleModelSettingsControl() {
     panel.classList.toggle("ensemble-active", enabled);
     const summary = panel.querySelector(".model-run-summary small");
     if (summary) {
-      summary.dataset.ensembleSummary = `${ENSEMBLE_TYPES.find(([value]) => value === ensembleType)?.[1] || ensembleType} · ${tuning ? "Optuna tuning" : "Default parameters"}`;
+      const modeLabel = PARAMETER_MODES.find(([value]) => value === parameterMode)?.[1] || parameterMode;
+      summary.dataset.ensembleSummary = `${ENSEMBLE_TYPES.find(([value]) => value === ensembleType)?.[1] || ensembleType} · ${modeLabel}`;
     }
     return () => {
       panel.classList.remove("ensemble-active");
       if (summary) delete summary.dataset.ensembleSummary;
     };
-  }, [host, enabled, ensembleType, tuning]);
+  }, [host, enabled, ensembleType, parameterMode]);
+
+  function updateParameter(tab, name, value) {
+    if (!tab) return;
+    if (tab.role === "final") {
+      setBaseParamsByTarget((current) => ({
+        ...current,
+        [tab.target]: {
+          ...(current[tab.target] || {}),
+          [name]: value,
+        },
+      }));
+      return;
+    }
+    setMemberParamsByTarget((current) => ({
+      ...current,
+      [tab.target]: {
+        ...(current[tab.target] || {}),
+        [tab.model]: {
+          ...(current[tab.target]?.[tab.model] || {}),
+          [name]: value,
+        },
+      },
+    }));
+  }
+
+  function resetSelectedParameters() {
+    if (!selectedParameterTab || !selectedSchema) return;
+    const defaults = defaultParameters(selectedSchema);
+    if (selectedParameterTab.role === "final") {
+      setBaseParamsByTarget((current) => ({
+        ...current,
+        [selectedParameterTab.target]: defaults,
+      }));
+      return;
+    }
+    setMemberParamsByTarget((current) => ({
+      ...current,
+      [selectedParameterTab.target]: {
+        ...(current[selectedParameterTab.target] || {}),
+        [selectedParameterTab.model]: defaults,
+      },
+    }));
+  }
 
   if (!host) return null;
 
@@ -222,9 +583,10 @@ export default function EnsembleModelSettingsControl() {
               </select>
             </Field>
             <Field label="パラメータ設定">
-              <select value={tuning ? "tuning" : "default"} onChange={(event) => setTuning(event.target.value === "tuning")}>
-                <option value="tuning">Optunaでチューニング</option>
-                <option value="default">各モデルの既定値</option>
+              <select value={parameterMode} onChange={(event) => setParameterMode(event.target.value)}>
+                {PARAMETER_MODES.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </Field>
             {ensembleType === "スタッキング" && (
@@ -299,11 +661,41 @@ export default function EnsembleModelSettingsControl() {
                   </select>
                 </Field>
               )}
+
+              {parameterMode === "manual" && parameterTabs.length > 0 && (
+                <div className="ensemble-manual-parameters">
+                  <div className="ensemble-parameter-tabs" role="tablist" aria-label="モデル別パラメータ">
+                    {parameterTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab.key === selectedParameterTab?.key}
+                        className={tab.key === selectedParameterTab?.key ? "active" : ""}
+                        onClick={() => setActiveParameterTab(tab.key)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  <EnsembleParameterEditor
+                    tab={selectedParameterTab}
+                    schema={selectedSchema}
+                    values={selectedParameterValues}
+                    loading={parameterLoading}
+                    error={parameterError}
+                    onChange={(name, value) => updateParameter(selectedParameterTab, name, value)}
+                    onReset={resetSelectedParameters}
+                  />
+                </div>
+              )}
             </section>
           )}
 
           <p className="ensemble-override-note">
-            アンサンブル有効中は、下の単体モデル用設定ではなく、この欄のモデル構成とパラメータ設定を学習APIへ送信します。
+            {parameterMode === "manual"
+              ? "選択中のモデルタブだけを表示しています。設定値はモデル順に学習APIへ送信します。"
+              : "アンサンブル有効中は、下の単体モデル用設定ではなく、この欄のモデル構成とパラメータ設定を学習APIへ送信します。"}
           </p>
         </div>
       )}
