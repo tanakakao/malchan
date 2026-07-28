@@ -6,6 +6,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 TaskType = Literal["regression", "classification"]
+EnsembleType = Literal["アンサンブル", "スタッキング", "バギング", "ブースティング"]
+ModelParameters = dict[str, Any] | list[dict[str, Any]]
 
 
 class TrainModelRequest(BaseModel):
@@ -30,10 +32,12 @@ class TrainModelRequest(BaseModel):
     impute: bool = False
     tuning: bool = False
     ensemble: bool = False
-    ens_type: str | None = None
+    ens_type: EnsembleType | None = None
     base_model: str | None = None
-    model_params: dict[str, Any] | None = None
-    model_params_by_target: dict[str, dict[str, Any] | None] = Field(default_factory=dict)
+    model_params: ModelParameters | None = None
+    model_params_by_target: dict[str, ModelParameters | None] = Field(
+        default_factory=dict
+    )
     base_model_param: dict[str, Any] | None = None
     base_model_params_by_target: dict[str, dict[str, Any] | None] = Field(default_factory=dict)
     num_impute_type: str | None = None
@@ -95,13 +99,21 @@ class TrainModelRequest(BaseModel):
         }
 
     @property
-    def resolved_model_params(self) -> list[dict[str, Any] | None]:
-        """Return predictor parameter dictionaries aligned with target order."""
+    def resolved_model_params(self) -> list[ModelParameters | None]:
+        """Return predictor parameter settings aligned with target order.
 
-        return [
-            self.model_params_by_target.get(target, self.model_params)
-            for target in self.resolved_target_cols
-        ]
+        A single parameter dictionary is normalized to a one-element list for
+        ensemble training because the predictor builder expects one dictionary
+        per member model.
+        """
+
+        resolved: list[ModelParameters | None] = []
+        for target in self.resolved_target_cols:
+            params = self.model_params_by_target.get(target, self.model_params)
+            if self.ensemble and isinstance(params, dict):
+                params = [params]
+            resolved.append(params)
+        return resolved
 
     @property
     def resolved_base_model_params(self) -> list[dict[str, Any] | None]:
@@ -114,7 +126,7 @@ class TrainModelRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_training_columns(self) -> "TrainModelRequest":
-        """Validate output configuration and declared columns against every row."""
+        """Validate output, ensemble, and column settings against every row."""
 
         uses_single_fields = self.target_col is not None or self.task is not None
         uses_multi_fields = bool(self.target_cols) or bool(self.tasks)
@@ -158,11 +170,41 @@ class TrainModelRequest(BaseModel):
             if unknown:
                 raise ValueError(f"{field_name} contains unknown targets: {unknown}")
 
-        for target, names in self.model_names_for_targets.items():
+        names_by_target = self.model_names_for_targets
+        for target, names in names_by_target.items():
             if not names or any(not name.strip() for name in names):
                 raise ValueError(
                     f"At least one model name is required for target {target!r}."
                 )
+
+        if self.ensemble:
+            if self.ens_type is None:
+                raise ValueError("ens_type is required when ensemble is true.")
+            if self.ens_type == "スタッキング" and (
+                self.base_model is None or not self.base_model.strip()
+            ):
+                raise ValueError(
+                    "base_model is required when ens_type is 'スタッキング'."
+                )
+
+            for target, names in names_by_target.items():
+                if self.ens_type in {"アンサンブル", "スタッキング"} and len(names) < 2:
+                    raise ValueError(
+                        f"{self.ens_type} requires at least two model names "
+                        f"for target {target!r}."
+                    )
+
+                params = self.model_params_by_target.get(target, self.model_params)
+                if isinstance(params, dict) and len(names) > 1:
+                    raise ValueError(
+                        "Ensemble model_params must be a list aligned with "
+                        f"model names for target {target!r}."
+                    )
+                if isinstance(params, list) and len(params) != len(names):
+                    raise ValueError(
+                        "Ensemble model_params must have the same length as "
+                        f"model names for target {target!r}."
+                    )
 
         required = set(feature_columns) | target_set
         for row_index, row in enumerate(self.data):
