@@ -7,7 +7,6 @@ import {
   setMaterialFeatureKind,
   useMaterialFeatureSettings,
 } from "../materialFeatures";
-import "../material-features.css";
 
 function featureCard(column) {
   return [...document.querySelectorAll(".feature-variable-choice")].find((card) => (
