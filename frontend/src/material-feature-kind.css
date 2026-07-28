@@ -33,9 +33,18 @@
   align-items: start;
 }
 
+.feature-variable-choice:has(> .material-feature-kind-host) > .variable-choice-main {
+  grid-row: 1 / span 2;
+  align-self: stretch;
+}
+
 @media (max-width: 720px) {
   .material-feature-kind-host {
     grid-column: 1;
+    grid-row: auto;
+  }
+
+  .feature-variable-choice:has(> .material-feature-kind-host) > .variable-choice-main {
     grid-row: auto;
   }
 
