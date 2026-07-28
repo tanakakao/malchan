@@ -27,10 +27,13 @@ def test_optimize_categorical_candidates_use_dropdown_like_multi_select() -> Non
     assert "category-candidate-trigger" in source
     assert "category-candidate-menu" in source
     assert 'type="checkbox"' in source
+    assert 'type="search"' in source
+    assert "候補を検索" in source
     assert "全選択" in source
     assert "探索候補は1つ以上必要です" in source
     assert "if (selected.length <= 1) return" in source
-    assert "uniqueValues(rows, column)" in source
+    assert "categoryValues(rows, column)" in source
+    assert "Math.max(rows.length, 1)" in source
     assert "candidateSelectionsByModel" in source
     assert "fixed-variable-row" in source
 
@@ -40,6 +43,7 @@ def test_optimize_categorical_candidates_use_dropdown_like_multi_select() -> Non
         "category-candidate-card",
         "category-candidate-trigger",
         "category-candidate-menu",
+        "category-candidate-filter",
     ):
         assert f".{class_name}" in style
 
