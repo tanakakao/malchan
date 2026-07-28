@@ -35,7 +35,7 @@ def test_optimize_categorical_candidates_use_inline_dropdown_multi_select() -> N
     assert "Math.max(rows.length, 1)" in source
     assert "candidateSelectionsByModel" in source
 
-    assert 'const panel = document.querySelector(".optimize-variable-panel")' in source
+    assert 'const panel = content.querySelector(".optimize-variable-panel")' in source
     assert "const lowerLimitCell = cells[2]" in source
     assert 'lowerLimitCell.classList.add("category-candidate-cell")' in source
     assert 'host.className = "category-candidate-inline-host"' in source
@@ -58,6 +58,21 @@ def test_optimize_categorical_candidates_use_inline_dropdown_multi_select() -> N
 
     assert ".optimize-category-candidates" not in style
     assert ".category-candidate-card" not in style
+
+
+def test_category_candidates_do_not_observe_their_own_dom_mutations() -> None:
+    """Optimize navigation must not enter a MutationObserver/portal update loop."""
+
+    source = CATEGORY_CONTROL.read_text(encoding="utf-8")
+
+    assert "MutationObserver" not in source
+    assert "observer.observe" not in source
+    assert "requestAnimationFrame" in source
+    assert "cancelAnimationFrame" in source
+    assert 'content.addEventListener("change", handleTableChange)' in source
+    assert 'content.removeEventListener("change", handleTableChange)' in source
+    assert 'event.target?.closest?.(".optimize-variable-table")' in source
+    assert "disposed" in source
 
 
 def test_selected_category_candidates_override_only_searchable_categories() -> None:
