@@ -7,6 +7,10 @@ import "../optimize-category-candidates.css";
 
 const candidateSelectionsByModel = new Map();
 
+function categoryValues(rows, column) {
+  return uniqueValues(rows, column, Math.max(rows.length, 1));
+}
+
 function originalValues(available, selected) {
   const selectedKeys = new Set(selected.map(String));
   return available.filter((value) => selectedKeys.has(String(value)));
@@ -14,7 +18,7 @@ function originalValues(available, selected) {
 
 function normalizedSelections(rows, columns, saved = {}) {
   return Object.fromEntries(columns.map((column) => {
-    const available = uniqueValues(rows, column);
+    const available = categoryValues(rows, column);
     const restored = Array.isArray(saved[column])
       ? originalValues(available, saved[column])
       : [];
@@ -29,7 +33,13 @@ function sameSet(left, right) {
 
 function CategoryMultiSelect({ column, available, selected, disabled, onChange }) {
   const [open, setOpen] = useState(false);
+  const [filterText, setFilterText] = useState("");
   const selectedKeys = useMemo(() => new Set(selected.map(String)), [selected]);
+  const filteredValues = useMemo(() => {
+    const keyword = filterText.trim().toLocaleLowerCase();
+    if (!keyword) return available;
+    return available.filter((value) => String(value).toLocaleLowerCase().includes(keyword));
+  }, [available, filterText]);
 
   function toggle(value) {
     const key = String(value);
@@ -61,8 +71,17 @@ function CategoryMultiSelect({ column, available, selected, disabled, onChange }
             <strong>{column}</strong>
             <button type="button" onClick={() => onChange([...available])}>全選択</button>
           </div>
+          {available.length > 8 && (
+            <input
+              className="category-candidate-filter"
+              type="search"
+              value={filterText}
+              placeholder="候補を検索"
+              onChange={(event) => setFilterText(event.target.value)}
+            />
+          )}
           <div className="category-candidate-options">
-            {available.map((value) => {
+            {filteredValues.map((value) => {
               const checked = selectedKeys.has(String(value));
               return (
                 <label key={String(value)}>
@@ -76,6 +95,9 @@ function CategoryMultiSelect({ column, available, selected, disabled, onChange }
                 </label>
               );
             })}
+            {!filteredValues.length && (
+              <span className="category-candidate-empty">一致する候補がありません。</span>
+            )}
           </div>
           <p>探索候補は1つ以上必要です。</p>
         </div>
@@ -89,7 +111,7 @@ export default function OptimizeCategoryCandidatesControl() {
   const modelKey = modelInfo?.model_id || "unregistered";
   const candidateKey = useMemo(
     () => catFeatures.map((column) => (
-      `${column}:${uniqueValues(rows, column).map(String).join("\u0001")}`
+      `${column}:${categoryValues(rows, column).map(String).join("\u0001")}`
     )).join("\u0002"),
     [rows, catFeatures],
   );
@@ -187,7 +209,7 @@ export default function OptimizeCategoryCandidatesControl() {
       </div>
       <div className="category-candidate-grid">
         {catFeatures.map((column) => {
-          const available = uniqueValues(rows, column);
+          const available = categoryValues(rows, column);
           const selected = selections[column] || available;
           const fixed = fixedColumns.has(column);
           return (
