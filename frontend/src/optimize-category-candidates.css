@@ -1,3 +1,7 @@
+.optimize-page .optimize-variable-panel {
+  overflow: visible;
+}
+
 .optimize-category-candidates-host {
   margin-top: 16px;
 }
@@ -87,6 +91,10 @@
 
 .category-candidate-select {
   position: relative;
+}
+
+.category-candidate-select.open {
+  z-index: 30;
 }
 
 .category-candidate-trigger {
