@@ -3,6 +3,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 let comparisonTuneBestOverride = false;
 let inverseAnalysisPayloadOverride = null;
 let inverseCategoryCandidatesOverride = null;
+let ensembleTrainingOptions = null;
 
 export function setComparisonTuneBestOverride(enabled) {
   comparisonTuneBestOverride = Boolean(enabled);
@@ -17,6 +18,12 @@ export function setInverseAnalysisPayloadOverride(payload) {
 export function setInverseCategoryCandidatesOverride(categories) {
   inverseCategoryCandidatesOverride = categories && typeof categories === "object"
     ? categories
+    : null;
+}
+
+export function setEnsembleTrainingOptions(options) {
+  ensembleTrainingOptions = options && typeof options === "object"
+    ? options
     : null;
 }
 
@@ -78,6 +85,79 @@ function comparisonPayload(payload) {
   return { ...payload, tune_best: true };
 }
 
+function ensembleTrainingPayload(payload) {
+  if (!ensembleTrainingOptions) return payload;
+
+  const {
+    ensembleType,
+    baseModel,
+    membersByTarget = {},
+    tuning = true,
+  } = ensembleTrainingOptions;
+  const targetColumns = payload?.target_cols?.length
+    ? payload.target_cols
+    : [payload?.target_col].filter(Boolean);
+  const requiresMultiple = ensembleType === "アンサンブル" || ensembleType === "スタッキング";
+
+  if (!ensembleType) {
+    throw new Error("アンサンブル方式を選択してください。");
+  }
+  if (ensembleType === "スタッキング") {
+    const taskValues = payload?.tasks?.length ? payload.tasks : [payload?.task].filter(Boolean);
+    if (new Set(taskValues).size > 1) {
+      throw new Error("回帰と分類が混在する多目的モデルではStackingを使用できません。");
+    }
+    if (!baseModel) {
+      throw new Error("Stackingの最終モデルを選択してください。");
+    }
+  }
+
+  const normalizedMembers = Object.fromEntries(
+    targetColumns.map((target) => {
+      const selected = [...new Set((membersByTarget[target] || []).filter(Boolean))];
+      const members = requiresMultiple ? selected : selected.slice(0, 1);
+      if (members.length < (requiresMultiple ? 2 : 1)) {
+        throw new Error(
+          requiresMultiple
+            ? `${target}の構成モデルを2件以上選択してください。`
+            : `${target}のベースモデルを選択してください。`,
+        );
+      }
+      return [target, members];
+    }),
+  );
+
+  const common = {
+    ensemble: true,
+    ens_type: ensembleType,
+    base_model: ensembleType === "スタッキング" ? baseModel : null,
+    tuning: Boolean(tuning),
+  };
+
+  if (payload?.target_cols?.length) {
+    const merged = {
+      ...payload,
+      ...common,
+      model_names_by_target: normalizedMembers,
+      model_params_by_target: {},
+    };
+    delete merged.model_names;
+    delete merged.model_params;
+    return merged;
+  }
+
+  const target = targetColumns[0];
+  const merged = {
+    ...payload,
+    ...common,
+    model_names: normalizedMembers[target] || [],
+    model_params: null,
+  };
+  delete merged.model_names_by_target;
+  delete merged.model_params_by_target;
+  return merged;
+}
+
 function inverseAnalysisPayload(payload) {
   const mergedPayload = inverseAnalysisPayloadOverride
     ? {
@@ -107,7 +187,10 @@ export const api = {
   health: () => request("/health"),
   modelParameters: (task, modelName) =>
     request(`/model-parameters${query({ task, model_name: modelName })}`),
-  train: (payload) => request("/models", { method: "POST", body: JSON.stringify(payload) }),
+  train: (payload) => request("/models", {
+    method: "POST",
+    body: JSON.stringify(ensembleTrainingPayload(payload)),
+  }),
   listModels: () => request("/models"),
   modelInfo: (modelId) => request(`/models/${encodeURIComponent(modelId)}`),
   predict: (modelId, payload) =>
