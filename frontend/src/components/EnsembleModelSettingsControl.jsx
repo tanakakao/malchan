@@ -18,12 +18,53 @@ const PARAMETER_MODES = [
   ["manual", "各モデルで設定"],
 ];
 
+const PARAMETER_LABELS = {
+  alpha: "正則化強度 α",
+  l1_ratio: "L1比率",
+  n_components: "成分数",
+  epsilon: "ε",
+  power: "分布の指数",
+  link: "リンク関数",
+  max_depth: "最大深さ",
+  min_samples_split: "分割に必要な最小サンプル数",
+  min_samples_leaf: "葉に必要な最小サンプル数",
+  ccp_alpha: "剪定強度",
+  n_estimators: "推定器数",
+  max_features: "使用特徴量の割合",
+  learning_rate: "学習率",
+  gamma: "Gamma",
+  reg_alpha: "L1正則化",
+  reg_lambda: "L2正則化",
+  min_child_weight: "子ノード最小重み",
+  colsample_bytree: "木ごとの特徴量割合",
+  colsample_bylevel: "レベルごとの特徴量割合",
+  colsample_bynode: "ノードごとの特徴量割合",
+  num_leaves: "葉数",
+  min_child_samples: "子ノード最小サンプル数",
+  iterations: "反復回数",
+  depth: "深さ",
+  random_strength: "ランダム強度",
+  l2_leaf_reg: "葉のL2正則化",
+  kernel: "カーネル",
+  C: "誤分類ペナルティ C",
+  weights: "近傍の重み",
+  n_neighbors: "近傍数",
+  penalty: "正則化方式",
+  solver: "ソルバー",
+  probability: "確率出力",
+  priors: "事前確率",
+  hidden_layer_sizes: "隠れ層構成",
+  activation: "活性化関数",
+  learning_rate_init: "初期学習率",
+  fit_intercept: "切片を使用",
+  alpha_1: "α1",
+  alpha_2: "α2",
+  lambda_1: "λ1",
+  lambda_2: "λ2",
+};
+
 function requiresMultipleModels(ensembleType) {
   return ensembleType === "アンサンブル" || ensembleType === "スタッキング";
-}
-
-function usesBaseModelParameters(ensembleType) {
-  return ["スタッキング", "バギング", "ブースティング"].includes(ensembleType);
 }
 
 function uniqueValues(values) {
@@ -68,6 +109,14 @@ function displayValue(value) {
   return String(value);
 }
 
+function formatMetric(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return String(value ?? "-");
+  if (Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.001)) {
+    return value.toExponential(4);
+  }
+  return value.toFixed(4);
+}
+
 function normalizeNumericValue(parameter, rawValue) {
   let value = Number(rawValue);
   if (!Number.isFinite(value)) value = Number(parameter.default_value ?? parameter.low ?? 0);
@@ -81,22 +130,38 @@ function normalizeNumericValue(parameter, rawValue) {
   return value;
 }
 
-function CompactParameterControl({ parameter, value, onChange }) {
-  const label = parameter.label || parameter.name;
+function ParameterControl({ parameter, value, onChange }) {
+  const label = PARAMETER_LABELS[parameter.name] || parameter.label || parameter.name;
+
+  if (!parameter.editable || parameter.control === "readonly") {
+    return (
+      <div className="parameter-control readonly-parameter">
+        <div>
+          <strong>{label}</strong>
+          <span>{parameter.note || "既定値を使用します。"}</span>
+        </div>
+        <code>{displayValue(parameter.default_value)}</code>
+      </div>
+    );
+  }
 
   if (parameter.control === "boolean") {
     return (
-      <label className="ensemble-parameter-control ensemble-parameter-boolean">
-        <span>
+      <div className="parameter-control boolean-parameter">
+        <div>
           <strong>{label}</strong>
-          <small>{parameter.name}</small>
-        </span>
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-      </label>
+          <span>{parameter.name}</span>
+        </div>
+        <label className="switch-label">
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(event) => onChange(event.target.checked)}
+          />
+          <span />
+          {Boolean(value) ? "有効" : "無効"}
+        </label>
+      </div>
     );
   }
 
@@ -107,8 +172,8 @@ function CompactParameterControl({ parameter, value, onChange }) {
       choices.findIndex((choice) => valuesEqual(choice, value)),
     );
     return (
-      <label className="ensemble-parameter-control">
-        <span>
+      <label className="parameter-control categorical-parameter">
+        <span className="parameter-label">
           <strong>{label}</strong>
           <small>{parameter.name}</small>
         </span>
@@ -126,21 +191,57 @@ function CompactParameterControl({ parameter, value, onChange }) {
     );
   }
 
+  const low = Number(parameter.low);
+  const high = Number(parameter.high);
+  const numericValue = normalizeNumericValue(parameter, value);
+  const logScale = Boolean(parameter.log && low > 0 && high > low);
+  const rangeValue = logScale ? Math.log10(Math.max(numericValue, low)) : numericValue;
+  const rangeMin = logScale ? Math.log10(low) : low;
+  const rangeMax = logScale ? Math.log10(high) : high;
+  const rangeStep = logScale
+    ? 0.01
+    : Number(parameter.step || Math.max((high - low) / 100, 0.0001));
+
+  function updateFromRange(rawValue) {
+    const transformed = logScale ? 10 ** Number(rawValue) : Number(rawValue);
+    onChange(normalizeNumericValue(parameter, transformed));
+  }
+
   return (
-    <label className="ensemble-parameter-control">
-      <span>
-        <strong>{label}</strong>
-        <small>{parameter.name}</small>
-      </span>
+    <div className="parameter-control numeric-parameter">
+      <div className="parameter-control-head">
+        <span className="parameter-label">
+          <strong>{label}</strong>
+          <small>
+            {parameter.name}
+            {parameter.log ? " · log scale" : ""}
+          </small>
+        </span>
+        <input
+          className="parameter-number-input"
+          type="number"
+          min={parameter.low ?? undefined}
+          max={parameter.high ?? undefined}
+          step={parameter.step ?? "any"}
+          value={numericValue}
+          onChange={(event) => onChange(normalizeNumericValue(parameter, event.target.value))}
+        />
+      </div>
       <input
-        type="number"
-        min={parameter.low ?? undefined}
-        max={parameter.high ?? undefined}
-        step={parameter.step ?? "any"}
-        value={normalizeNumericValue(parameter, value)}
-        onChange={(event) => onChange(normalizeNumericValue(parameter, event.target.value))}
+        className="parameter-slider"
+        type="range"
+        min={rangeMin}
+        max={rangeMax}
+        step={rangeStep}
+        value={rangeValue}
+        onChange={(event) => updateFromRange(event.target.value)}
       />
-    </label>
+      <div className="parameter-range-labels">
+        <span>{displayValue(parameter.low)}</span>
+        <strong>{formatMetric(numericValue)}</strong>
+        <span>{displayValue(parameter.high)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -176,9 +277,9 @@ function EnsembleParameterEditor({
       )}
       {parameters.length > 0 && (
         <div className="ensemble-parameter-scroll">
-          <div className="ensemble-parameter-grid">
+          <div className="ensemble-parameter-grid parameter-control-grid">
             {parameters.map((parameter) => (
-              <CompactParameterControl
+              <ParameterControl
                 key={parameter.name}
                 parameter={parameter}
                 value={values?.[parameter.name] ?? parameter.default_value}
@@ -193,13 +294,7 @@ function EnsembleParameterEditor({
 }
 
 export default function EnsembleModelSettingsControl() {
-  const {
-    step,
-    targets,
-    tasks,
-    modelNames,
-    candidates,
-  } = useWorkbench();
+  const { step, targets, tasks, modelNames, candidates } = useWorkbench();
   const [host, setHost] = useState(null);
   const [enabled, setEnabled] = useState(false);
   const [ensembleType, setEnsembleType] = useState("アンサンブル");
@@ -487,7 +582,8 @@ export default function EnsembleModelSettingsControl() {
     const summary = panel.querySelector(".model-run-summary small");
     if (summary) {
       const modeLabel = PARAMETER_MODES.find(([value]) => value === parameterMode)?.[1] || parameterMode;
-      summary.dataset.ensembleSummary = `${ENSEMBLE_TYPES.find(([value]) => value === ensembleType)?.[1] || ensembleType} · ${modeLabel}`;
+      const ensembleLabel = ENSEMBLE_TYPES.find(([value]) => value === ensembleType)?.[1] || ensembleType;
+      summary.dataset.ensembleSummary = `${ensembleLabel} · ${modeLabel}`;
     }
     return () => {
       panel.classList.remove("ensemble-active");

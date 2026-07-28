@@ -50,6 +50,25 @@ def test_ensemble_control_supports_per_model_manual_parameters() -> None:
     assert "選択中のモデルタブだけを表示しています" in source
 
 
+def test_ensemble_manual_controls_match_single_model_parameter_ui() -> None:
+    """Manual ensemble parameters should use the same controls as a single model."""
+
+    source = CONTROL.read_text(encoding="utf-8")
+
+    assert "function ParameterControl" in source
+    assert 'className="parameter-control numeric-parameter"' in source
+    assert 'className="parameter-number-input"' in source
+    assert 'className="parameter-slider"' in source
+    assert 'className="parameter-range-labels"' in source
+    assert 'type="range"' in source
+    assert "parameter.log" in source
+    assert "Math.log10" in source
+    assert 'className="parameter-control categorical-parameter"' in source
+    assert 'className="parameter-control boolean-parameter"' in source
+    assert 'className="switch-label"' in source
+    assert 'className="ensemble-parameter-grid parameter-control-grid"' in source
+
+
 def test_ensemble_control_uses_event_driven_portal_without_dom_observer() -> None:
     """The control must not recreate the Optimize MutationObserver loop."""
 
