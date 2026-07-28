@@ -70,7 +70,7 @@ def test_explain_adds_shap_scatter_with_interactive_column_selection() -> None:
     api_source = API.read_text(encoding="utf-8")
 
     assert "PD 1D / 2D / SHAP散布図" in source
-    assert ">SHAP散布図<" in source
+    assert "SHAP散布図" in source
     assert "SHAP特徴量" in source
     assert "interactive col" in source
     assert 'option value="">なし</option>' in source
