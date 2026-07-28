@@ -22,7 +22,7 @@ def test_selected_categorical_columns_can_choose_material_representation() -> No
 
     assert 'step !== "prepare"' in source
     assert 'document.querySelectorAll(".feature-variable-choice")' in source
-    assert 'className="material-feature-kind-host"' in source
+    assert 'host.className = "material-feature-kind-host"' in source
     assert 'className="material-feature-kind-select"' in source
     assert "setMaterialFeatureKind(column, event.target.value)" in source
     assert '["categorical", "通常カテゴリ"]' in store
