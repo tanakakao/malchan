@@ -16,6 +16,7 @@ from .web_api_plots import (
     show_model_diagnostics,
     show_model_pd_2d,
     show_model_pd_and_ice,
+    show_model_shap_scatter,
     visualization_diagnostic_options,
     visualization_outputs,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "show_model_diagnostics",
     "show_model_pd_2d",
     "show_model_pd_and_ice",
+    "show_model_shap_scatter",
     "show_pd_2d",
     "show_pd_and_ice",
     "show_shap_beeswarm",
