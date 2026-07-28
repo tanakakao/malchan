@@ -2,6 +2,8 @@ import React from "react";
 import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
+import OptimizeCategoryCandidatesControl from "./components/OptimizeCategoryCandidatesControl";
+import ShapScatterControl from "./components/ShapScatterControl";
 import DataPage from "./pages/DataPage";
 import ExplorePage from "./pages/ExplorePage";
 import PreparePage from "./pages/PreparePage";
@@ -144,6 +146,8 @@ function WorkbenchLayout() {
       </footer>
       <ComparisonTuningControl />
       <YyDiagnosticsControl />
+      <OptimizeCategoryCandidatesControl />
+      <ShapScatterControl />
       {toast && <button className={`message ${toast.type}`} onClick={() => setToast(null)}>{toast.text}</button>}
       {busy && (
         <div className="overlay">

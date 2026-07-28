@@ -118,6 +118,35 @@ def test_show_model_diagnostics_rejects_classification_residual() -> None:
         show_model_diagnostics(FakeClassificationModel(), "label", residual=True)
 
 
+def test_show_model_shap_scatter_delegates_to_existing_visualization(monkeypatch) -> None:
+    """The web adapter should pass feature, interaction, and class to show_shap_scatter."""
+
+    import plotly.graph_objects as go
+    import malchan.visualization.web_api_plots as plots
+
+    captured = {}
+
+    def show(**kwargs):
+        captured.update(kwargs)
+        return go.Figure(layout={"title": "existing-shap-scatter"})
+
+    monkeypatch.setattr(plots, "show_shap_scatter", show)
+    figure = plots.show_model_shap_scatter(
+        FakeClassificationModel(),
+        "label",
+        "x1",
+        interactive_col="x2",
+        target_item="OK",
+    )
+
+    assert figure.layout.title.text == "existing-shap-scatter"
+    assert captured["target"] == "label"
+    assert captured["target_col"] == "x1"
+    assert captured["interactive_col"] == "x2"
+    assert captured["target_item"] == "OK"
+    assert captured["model"].models["label"].target_col == "label"
+
+
 def test_show_model_pd_and_ice_delegates_to_existing_visualization(monkeypatch) -> None:
     """The web adapter must not rebuild the one-dimensional PD chart."""
 

@@ -196,6 +196,56 @@ def create_visualization_router(service: Any) -> APIRouter:
             _raise_http_error(exc)
 
     @router.get(
+        "/models/{model_id}/visualizations/{target}/shap-scatter",
+        response_model=PlotlyFigureResponse,
+    )
+    def get_shap_scatter_figure(
+        model_id: str,
+        target: str,
+        feature: str = Query(min_length=1),
+        interactive_col: str | None = Query(default=None),
+        output: str | None = Query(default=None),
+    ) -> PlotlyFigureResponse:
+        """Return the existing SHAP scatter plot with optional interaction colouring."""
+
+        try:
+            from malchan.visualization import (
+                show_model_shap_scatter,
+                visualization_diagnostic_options,
+                visualization_outputs,
+            )
+
+            registered = service._get_registered(model_id)
+            options = visualization_diagnostic_options(registered.model, target)
+            outputs = (
+                visualization_outputs(registered.model, target)
+                if options["task"] == "classification"
+                else []
+            )
+            selected_output, _ = _select_output(outputs, output)
+            figure = show_model_shap_scatter(
+                registered.model,
+                target,
+                feature,
+                interactive_col=interactive_col,
+                target_item=selected_output,
+            )
+            return PlotlyFigureResponse(
+                figure=_figure_payload(figure),
+                metadata={
+                    "target": target,
+                    "feature": feature,
+                    "interactive_col": interactive_col,
+                    "outputs": outputs,
+                    "selected_output": selected_output,
+                    "task": options["task"],
+                    "visualization_function": "show_shap_scatter",
+                },
+            )
+        except _VISUALIZATION_ERRORS as exc:
+            _raise_http_error(exc)
+
+    @router.get(
         "/models/{model_id}/visualizations/{target}/pdp",
         response_model=PlotlyFigureResponse,
     )

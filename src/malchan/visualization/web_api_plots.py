@@ -13,7 +13,12 @@ from typing import Any
 
 import plotly.graph_objects as go
 
-from .machine_learning_plots import show_pd_2d, show_pd_and_ice, yy_plot_ml
+from .machine_learning_plots import (
+    show_pd_2d,
+    show_pd_and_ice,
+    show_shap_scatter,
+    yy_plot_ml,
+)
 
 
 class _SingleOutputVisualizationAdapter:
@@ -129,6 +134,43 @@ def show_model_diagnostics(
     )
 
 
+def show_model_shap_scatter(
+    model: Any,
+    target: str,
+    feature_name: str,
+    *,
+    interactive_col: str | None = None,
+    target_item: Any = None,
+) -> go.Figure:
+    """Return the existing ``show_shap_scatter`` visualization without restyling.
+
+    Args:
+        model (Any): Registered single-output or multi-output model pipeline.
+        target (str): Purpose-variable name whose cached SHAP values are used.
+        feature_name (str): Feature placed on the horizontal axis.
+        interactive_col (str | None): Optional feature used to colour or group points.
+        target_item (Any): Optional classification output or class label.
+
+    Returns:
+        go.Figure: Plotly SHAP dependence-style scatter plot.
+
+    Raises:
+        ValueError: If the feature or interaction column is empty or invalid.
+    """
+
+    if not feature_name:
+        raise ValueError("feature_name must not be empty.")
+    if interactive_col == "":
+        interactive_col = None
+    return show_shap_scatter(
+        model=_model_for_visualization(model, target),
+        target=target,
+        target_col=feature_name,
+        interactive_col=interactive_col,
+        target_item=target_item,
+    )
+
+
 def show_model_pd_and_ice(
     model: Any,
     target: str,
@@ -174,6 +216,7 @@ __all__ = [
     "show_model_diagnostics",
     "show_model_pd_2d",
     "show_model_pd_and_ice",
+    "show_model_shap_scatter",
     "visualization_diagnostic_options",
     "visualization_outputs",
 ]
