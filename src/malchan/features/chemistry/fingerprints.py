@@ -9,6 +9,19 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
+SUPPORTED_FINGERPRINTS = (
+    "AtomPair",
+    "Autocorr",
+    "Avalon",
+    "E3FP",
+    "ECFP",
+    "MACCS",
+    "MORSE",
+    "PhysChem",
+    "PubChem",
+    "RDF",
+    "RDKit",
+)
 THREE_DIMENSIONAL_FINGERPRINTS = frozenset({"Autocorr", "E3FP", "MORSE", "RDF"})
 
 
@@ -49,18 +62,18 @@ def _fingerprint_factories() -> dict[str, Callable[[], Any]]:
 
 
 def available_fingerprints() -> tuple[str, ...]:
-    """利用可能なfingerprint名を返す。"""
-    return tuple(sorted(_fingerprint_factories()))
+    """依存パッケージを読み込まず、対応fingerprint名を返す。"""
+    return SUPPORTED_FINGERPRINTS
 
 
 def resolve_fingerprints(names: Sequence[str]) -> list[Any]:
     """APIで指定された名前をfingerprint Transformerへ変換する。"""
-    factories = _fingerprint_factories()
-    unknown = [name for name in names if name not in factories]
+    unknown = [name for name in names if name not in SUPPORTED_FINGERPRINTS]
     if unknown:
         raise ValueError(
-            f"未対応のfingerprintです: {unknown}. 利用可能: {sorted(factories)}"
+            f"未対応のfingerprintです: {unknown}. 利用可能: {list(SUPPORTED_FINGERPRINTS)}"
         )
+    factories = _fingerprint_factories()
     return [factories[name]() for name in names]
 
 
@@ -90,6 +103,7 @@ class PassthroughNames(BaseEstimator, TransformerMixin):
 
 __all__ = [
     "PassthroughNames",
+    "SUPPORTED_FINGERPRINTS",
     "THREE_DIMENSIONAL_FINGERPRINTS",
     "available_fingerprints",
     "requires_conformers",
