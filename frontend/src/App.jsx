@@ -1,6 +1,7 @@
 import React from "react";
 import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
+import EnsembleModelSettingsControl from "./components/EnsembleModelSettingsControl";
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import OptimizeCategoryCandidatesControl from "./components/OptimizeCategoryCandidatesControl";
 import ShapScatterControl from "./components/ShapScatterControl";
@@ -145,6 +146,7 @@ function WorkbenchLayout() {
         <span className="privacy-status">React + FastAPI</span>
       </footer>
       <ComparisonTuningControl />
+      <EnsembleModelSettingsControl />
       <YyDiagnosticsControl />
       <OptimizeCategoryCandidatesControl />
       <ShapScatterControl />

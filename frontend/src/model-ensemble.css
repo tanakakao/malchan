@@ -1,0 +1,86 @@
+.ensemble-model-settings-host {
+  min-width: 0;
+}
+
+.ensemble-model-settings {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 28%, var(--surface-subtle));
+}
+
+.ensemble-setting-heading {
+  align-items: center;
+}
+
+.ensemble-settings-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.ensemble-top-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ensemble-description {
+  margin: 0;
+}
+
+.ensemble-target-tabs {
+  margin: 0;
+}
+
+.ensemble-target-card {
+  background: var(--surface-raised);
+}
+
+.ensemble-target-card .checkbox-list {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.ensemble-override-note {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 35%, var(--line));
+  border-radius: 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--primary-soft) 35%, transparent);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.model-selection-panel.ensemble-active .model-workflow-content > .ensemble-model-settings-host + .model-setting-section,
+.model-selection-panel.ensemble-active .model-workflow-content > .model-target-tabs,
+.model-selection-panel.ensemble-active .model-workflow-content > .model-target-tab-panel {
+  display: none;
+}
+
+.model-selection-panel.ensemble-active .model-run-summary small {
+  font-size: 0;
+}
+
+.model-selection-panel.ensemble-active .model-run-summary small::after {
+  content: attr(data-ensemble-summary);
+  font-size: 10px;
+}
+
+@media (max-width: 1000px) {
+  .ensemble-top-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .ensemble-top-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .ensemble-setting-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
