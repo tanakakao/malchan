@@ -137,7 +137,7 @@ def test_fastapi_forwards_pymatgen_basic_statistics_settings() -> None:
     payload = _single_payload()
     payload["comp_method"] = "PYMATGEN"
     payload["comp_feats"] = [
-        "atomic_number",
+        "ATOMIC_NUMBER",
         "atomic_mass",
         "electronegativity",
     ]
@@ -204,6 +204,14 @@ def test_fastapi_forwards_material_features_to_multi_output_pipeline() -> None:
         (
             {"comp_cols": [], "comp_method": "mendeleev", "comp_feats": []},
             "comp_cols is required",
+        ),
+        (
+            {"comp_method": "pymatgen", "comp_feats": []},
+            "comp_feats must contain at least one Pymatgen property",
+        ),
+        (
+            {"comp_method": "pymatgen", "comp_feats": ["unknown"]},
+            "Unsupported Pymatgen comp_feats",
         ),
         (
             {"comp_method": "matminer", "comp_feats": []},
