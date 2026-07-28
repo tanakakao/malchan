@@ -3,6 +3,8 @@ from pathlib import Path
 
 OPTIMIZE_PAGE = Path("frontend/src/pages/OptimizePage.jsx")
 OPTIMIZE_STYLE = Path("frontend/src/optimize-variable-settings.css")
+OPTIMIZE_HEADER_STYLE = Path("frontend/src/optimize-header-alignment.css")
+MAIN = Path("frontend/src/main.jsx")
 API = Path("frontend/src/api.js")
 INVERSE_SCHEMA = Path("src/malchan/app/schemas/inverse_analysis.py")
 INVERSE_SERVICE = Path("src/malchan/app/services/model_service.py")
@@ -73,15 +75,14 @@ def test_search_variable_table_matches_bochan_style_settings() -> None:
     assert "setInverseAnalysisPayloadOverride(inversePayloadOverride())" in source
 
 
-def test_optimize_page_uses_bochan_style_header_cards_and_primary_action() -> None:
-    """The page should expose the requested summary, cards, and prominent action."""
+def test_optimize_page_keeps_bochan_cards_and_primary_actions() -> None:
+    """The settings cards and top/bottom inverse-analysis actions should remain."""
 
     source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
     style = OPTIMIZE_STYLE.read_text(encoding="utf-8")
 
     for class_name in (
         "optimize-hero",
-        "optimize-summary-strip",
         "optimize-section-card",
         "optimize-section-title",
         "optimize-primary-run",
@@ -93,10 +94,31 @@ def test_optimize_page_uses_bochan_style_header_cards_and_primary_action() -> No
     assert "Optimize" in source
     assert "目的変数" in source
     assert "探索変数" in source
-    assert "設定ステータス" in source
-    assert "逆解析を実行" in source
-    assert "詳細設定" in source
-    assert "準備完了" in source
+    assert source.count("逆解析を実行") >= 2
+
+
+def test_optimize_header_matches_other_page_headers_but_keeps_run_button() -> None:
+    """Only the top run button should remain in the standard page-header layout."""
+
+    source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
+    style = OPTIMIZE_HEADER_STYLE.read_text(encoding="utf-8")
+    main_source = MAIN.read_text(encoding="utf-8")
+
+    assert 'import "./optimize-header-alignment.css";' in main_source
+    assert '<header className="optimize-hero">' in source
+    assert 'className="optimize-primary-run"' in source
+
+    assert ".optimize-page .optimize-hero" in style
+    assert "align-items: flex-end" in style
+    assert "justify-content: space-between" in style
+    assert "background: transparent" in style
+    assert "box-shadow: none" in style
+    assert "font-size: 25px" in style
+
+    assert ".optimize-page .optimize-summary-strip" in style
+    assert ".optimize-page .optimize-detail-button" in style
+    assert "display: none" in style
+    assert ".optimize-page .optimize-hero .optimize-primary-run" in style
 
 
 def test_sum_constraint_is_configurable_and_sent_to_inverse_api() -> None:
