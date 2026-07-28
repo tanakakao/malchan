@@ -2,6 +2,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 
 let comparisonTuneBestOverride = false;
 let inverseAnalysisPayloadOverride = null;
+let inverseCategoryCandidatesOverride = null;
 
 export function setComparisonTuneBestOverride(enabled) {
   comparisonTuneBestOverride = Boolean(enabled);
@@ -10,6 +11,12 @@ export function setComparisonTuneBestOverride(enabled) {
 export function setInverseAnalysisPayloadOverride(payload) {
   inverseAnalysisPayloadOverride = payload && typeof payload === "object"
     ? payload
+    : null;
+}
+
+export function setInverseCategoryCandidatesOverride(categories) {
+  inverseCategoryCandidatesOverride = categories && typeof categories === "object"
+    ? categories
     : null;
 }
 
@@ -72,10 +79,27 @@ function comparisonPayload(payload) {
 }
 
 function inverseAnalysisPayload(payload) {
-  if (!inverseAnalysisPayloadOverride) return payload;
+  const mergedPayload = inverseAnalysisPayloadOverride
+    ? {
+        ...payload,
+        ...inverseAnalysisPayloadOverride,
+      }
+    : payload;
+
+  if (!inverseCategoryCandidatesOverride) return mergedPayload;
+
+  const existingCategories = mergedPayload?.categories || {};
+  const selectableOverrides = Object.fromEntries(
+    Object.entries(inverseCategoryCandidatesOverride)
+      .filter(([column]) => Object.prototype.hasOwnProperty.call(existingCategories, column)),
+  );
+
   return {
-    ...payload,
-    ...inverseAnalysisPayloadOverride,
+    ...mergedPayload,
+    categories: {
+      ...existingCategories,
+      ...selectableOverrides,
+    },
   };
 }
 
@@ -147,6 +171,8 @@ export const api = {
     request(visualizationPath(modelId, target, "importance", options)),
   visualizationBeeswarm: (modelId, target, options = {}) =>
     request(visualizationPath(modelId, target, "shap-beeswarm", options)),
+  visualizationShapScatter: (modelId, target, options = {}) =>
+    request(visualizationPath(modelId, target, "shap-scatter", options)),
   visualizationPdp: (modelId, target, options = {}) =>
     request(visualizationPath(modelId, target, "pdp", options)),
   visualizationPdp2d: (modelId, target, options = {}) =>
