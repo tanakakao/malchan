@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { setInverseCategoryCandidatesOverride } from "../api";
 import { uniqueValues } from "../data";
@@ -32,6 +32,7 @@ function sameSet(left, right) {
 }
 
 function CategoryMultiSelect({ column, available, selected, disabled, onChange }) {
+  const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [filterText, setFilterText] = useState("");
   const selectedKeys = useMemo(() => new Set(selected.map(String)), [selected]);
@@ -40,6 +41,28 @@ function CategoryMultiSelect({ column, available, selected, disabled, onChange }
     if (!keyword) return available;
     return available.filter((value) => String(value).toLocaleLowerCase().includes(keyword));
   }, [available, filterText]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const closeFromOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeFromKeyboard = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromKeyboard);
+    };
+  }, [open]);
 
   function toggle(value) {
     const key = String(value);
@@ -54,7 +77,10 @@ function CategoryMultiSelect({ column, available, selected, disabled, onChange }
   }
 
   return (
-    <div className={`category-candidate-select ${open ? "open" : ""}`}>
+    <div
+      ref={rootRef}
+      className={`category-candidate-select ${open ? "open" : ""}`}
+    >
       <button
         type="button"
         className="category-candidate-trigger"
