@@ -8,6 +8,8 @@ _LAZY_EXPORTS = {
     "FormulaToFractionDict": "malchan.features.materials.composition",
     "MatminerCompositionFeaturizer": "malchan.features.materials.matminer",
     "MendeleevCompositionFeaturizer": "malchan.features.materials.mendeleev",
+    "PymatgenBasicCompositionFeaturizer": "malchan.features.materials.pymatgen_basic",
+    "SUPPORTED_PYMATGEN_PROPERTIES": "malchan.features.materials.pymatgen_basic",
     "XenoCompositionsTransformer": "malchan.features.materials.xenonpy",
     "make_comp_preprocess": "malchan.features.materials.pipeline",
     "prepare_xenonpy_preset": "malchan.features.materials.xenonpy",
