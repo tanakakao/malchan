@@ -15,7 +15,7 @@ KIND_CSS = ROOT / "frontend" / "src" / "material-feature-kind.css"
 
 
 def test_selected_categorical_columns_can_choose_material_representation() -> None:
-    """Selected category cards should expose normal, composition, and SMILES modes."""
+    """Selected category cards should expose inline normal, composition, and SMILES buttons."""
 
     source = KIND_CONTROL.read_text(encoding="utf-8")
     store = STORE.read_text(encoding="utf-8")
@@ -23,8 +23,14 @@ def test_selected_categorical_columns_can_choose_material_representation() -> No
     assert 'step !== "prepare"' in source
     assert 'document.querySelectorAll(".feature-variable-choice")' in source
     assert 'host.className = "material-feature-kind-host"' in source
-    assert 'className="material-feature-kind-select"' in source
-    assert "setMaterialFeatureKind(column, event.target.value)" in source
+    assert 'className="material-feature-kind-options"' in source
+    assert 'role="radiogroup"' in source
+    assert 'role="radio"' in source
+    assert "setMaterialFeatureKind(column, value)" in source
+    assert 'categorical: "通常"' in source
+    assert 'composition: "組成式"' in source
+    assert 'smiles: "SMILES"' in source
+    assert "<select" not in source
     assert '["categorical", "通常カテゴリ"]' in store
     assert '["composition", "組成式"]' in store
     assert '["smiles", "分子表記（SMILES）"]' in store
@@ -100,7 +106,7 @@ def test_training_payload_separates_material_columns_from_categories() -> None:
 
 
 def test_material_descriptor_layout_stays_compact() -> None:
-    """Descriptor choices should use tabs and internal scrolling instead of long cards."""
+    """Descriptor and material-kind choices should stay within their cards."""
 
     css = CSS.read_text(encoding="utf-8")
     kind_css = KIND_CSS.read_text(encoding="utf-8")
@@ -111,7 +117,12 @@ def test_material_descriptor_layout_stays_compact() -> None:
     assert "max-height: 210px" in css
     assert "overflow-y: auto" in css
     assert ".material-feature-kind-host" in kind_css
-    assert "grid-column: 2" in kind_css
+    assert "grid-column: 1 / -1" in kind_css
+    assert "grid-row: 2" in kind_css
+    assert ".material-feature-kind-options" in kind_css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in kind_css
+    assert ".material-feature-kind-option.composition.active" in kind_css
+    assert ".material-feature-kind-option.smiles.active" in kind_css
 
 
 def test_material_controls_are_mounted_in_the_workbench() -> None:
