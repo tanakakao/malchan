@@ -16,13 +16,12 @@ MACHINE_LEARNING_PLOTS = Path(
 )
 
 
-def test_optimize_categorical_candidates_use_dropdown_like_multi_select() -> None:
-    """Categorical search values should be selectable as a non-empty subset."""
+def test_optimize_categorical_candidates_use_inline_dropdown_multi_select() -> None:
+    """Categorical candidates should be configured inside each variable table row."""
 
     source = CATEGORY_CONTROL.read_text(encoding="utf-8")
     style = CATEGORY_STYLE.read_text(encoding="utf-8")
 
-    assert "カテゴリ探索候補" in source
     assert "CategoryMultiSelect" in source
     assert "category-candidate-trigger" in source
     assert "category-candidate-menu" in source
@@ -35,17 +34,30 @@ def test_optimize_categorical_candidates_use_dropdown_like_multi_select() -> Non
     assert "categoryValues(rows, column)" in source
     assert "Math.max(rows.length, 1)" in source
     assert "candidateSelectionsByModel" in source
-    assert "fixed-variable-row" in source
+
+    assert 'const panel = document.querySelector(".optimize-variable-panel")' in source
+    assert "const lowerLimitCell = cells[2]" in source
+    assert 'lowerLimitCell.classList.add("category-candidate-cell")' in source
+    assert 'host.className = "category-candidate-inline-host"' in source
+    assert "lowerLimitCell.append(host)" in source
+    assert "category-candidate-inline-control" in source
+    assert "探索候補" in source
+    assert "optimize-category-candidates-host" not in source
+    assert "optimize-category-candidates-head" not in source
 
     for class_name in (
-        "optimize-category-candidates",
-        "category-candidate-grid",
-        "category-candidate-card",
+        "category-candidate-cell",
+        "category-candidate-inline-host",
+        "category-candidate-inline-control",
+        "category-candidate-inline-label",
         "category-candidate-trigger",
         "category-candidate-menu",
         "category-candidate-filter",
     ):
         assert f".{class_name}" in style
+
+    assert ".optimize-category-candidates" not in style
+    assert ".category-candidate-card" not in style
 
 
 def test_selected_category_candidates_override_only_searchable_categories() -> None:
@@ -63,7 +75,9 @@ def test_selected_category_candidates_override_only_searchable_categories() -> N
 
     assert "setInverseCategoryCandidatesOverride(selections)" in control_source
     assert "setInverseCategoryCandidatesOverride(null)" in control_source
-    assert "固定中の変数は固定値が優先されます" in control_source
+    assert "fixed-variable-row" in control_source
+    assert "固定値を優先" in control_source
+    assert "固定値を使用" in control_source
 
 
 def test_explain_adds_shap_scatter_with_interactive_column_selection() -> None:
