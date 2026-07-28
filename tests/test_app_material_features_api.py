@@ -130,6 +130,29 @@ def test_fastapi_forwards_normalized_smiles_and_composition_settings() -> None:
     ]
 
 
+def test_fastapi_forwards_pymatgen_basic_statistics_settings() -> None:
+    """Pymatgen basic properties should be accepted as an app composition method."""
+
+    client, pipeline, _ = _make_client()
+    payload = _single_payload()
+    payload["comp_method"] = "PYMATGEN"
+    payload["comp_feats"] = [
+        "atomic_number",
+        "atomic_mass",
+        "electronegativity",
+    ]
+
+    response = client.post("/api/models", json=payload)
+
+    assert response.status_code == 201
+    assert pipeline.fit_kwargs["comp_method"] == "pymatgen"
+    assert pipeline.fit_kwargs["comp_feats"] == [
+        "atomic_number",
+        "atomic_mass",
+        "electronegativity",
+    ]
+
+
 def test_fastapi_forwards_material_features_to_multi_output_pipeline() -> None:
     """Multi-output training should use the same shared feature configuration."""
 
@@ -191,8 +214,8 @@ def test_fastapi_forwards_material_features_to_multi_output_pipeline() -> None:
             "Unsupported Matminer comp_feats",
         ),
         (
-            {"comp_method": "xenonpy", "comp_feats": ["ElementProperty"]},
-            "comp_feats is not used",
+            {"comp_method": "xenonpy", "comp_feats": []},
+            "Unsupported comp_method",
         ),
         (
             {"comp_method": "unknown"},
