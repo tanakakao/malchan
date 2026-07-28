@@ -10,7 +10,6 @@ import {
   patchMaterialFeatureSettings,
   useMaterialFeatureSettings,
 } from "../materialFeatures";
-import "../material-features.css";
 
 function SelectedColumns({ columns }) {
   return (
