@@ -5,6 +5,7 @@ import { useWorkbench } from "../context/WorkbenchContext";
 import {
   MATMINER_DESCRIPTORS,
   MENDELEEV_PROPERTIES,
+  PYMATGEN_PROPERTIES,
   SMILES_FINGERPRINTS,
   THREE_DIMENSIONAL_FINGERPRINTS,
   patchMaterialFeatureSettings,
@@ -50,13 +51,33 @@ function SmilesDescriptorPanel({ columns, settings }) {
   );
 }
 
+function compositionMethodSettings(settings) {
+  if (settings.compMethod === "pymatgen") {
+    return {
+      values: PYMATGEN_PROPERTIES,
+      selected: settings.pymatgenProperties,
+      patchKey: "pymatgenProperties",
+      note: "元素数、還元組成の原子数・式量、組成エントロピー、元素分率の最小・最大を常に生成します。選択した元素物性には組成加重平均・標準偏差・最小・最大・範囲を適用します。",
+    };
+  }
+  if (settings.compMethod === "mendeleev") {
+    return {
+      values: MENDELEEV_PROPERTIES,
+      selected: settings.mendeleevProperties,
+      patchKey: "mendeleevProperties",
+      note: "元素プロパティを組成分率で重み付けし、平均・標準偏差・最小・最大・範囲を生成します。",
+    };
+  }
+  return {
+    values: MATMINER_DESCRIPTORS,
+    selected: settings.matminerDescriptors,
+    patchKey: "matminerDescriptors",
+    note: "ElementPropertyとStoichiometryを既定値とし、必要なMatminer記述子だけを追加してください。",
+  };
+}
+
 function CompositionDescriptorPanel({ columns, settings }) {
-  const useMendeleev = settings.compMethod === "mendeleev";
-  const values = useMendeleev ? MENDELEEV_PROPERTIES : MATMINER_DESCRIPTORS;
-  const selected = useMendeleev
-    ? settings.mendeleevProperties
-    : settings.matminerDescriptors;
-  const patchKey = useMendeleev ? "mendeleevProperties" : "matminerDescriptors";
+  const methodSettings = compositionMethodSettings(settings);
 
   return (
     <div className="material-descriptor-panel" role="tabpanel">
@@ -65,8 +86,8 @@ function CompositionDescriptorPanel({ columns, settings }) {
           <strong>組成記述子</strong>
           <span>組成式を元素組成へ変換し、選択した記述子を生成します。</span>
         </div>
-        <span className={`status-chip ${selected.length ? "success" : "warning"}`}>
-          {selected.length} selected
+        <span className={`status-chip ${methodSettings.selected.length ? "success" : "warning"}`}>
+          {methodSettings.selected.length} selected
         </span>
       </div>
       <SelectedColumns columns={columns} />
@@ -75,21 +96,22 @@ function CompositionDescriptorPanel({ columns, settings }) {
           value={settings.compMethod}
           onChange={(event) => patchMaterialFeatureSettings({ compMethod: event.target.value })}
         >
+          <option value="pymatgen">Pymatgen基本統計</option>
           <option value="matminer">Matminer</option>
           <option value="mendeleev">Mendeleev元素プロパティ</option>
         </select>
       </Field>
       <div className="material-descriptor-checklist">
         <CheckboxList
-          values={values}
-          selected={selected}
-          onChange={(nextValues) => patchMaterialFeatureSettings({ [patchKey]: nextValues })}
+          values={methodSettings.values}
+          selected={methodSettings.selected}
+          onChange={(nextValues) => patchMaterialFeatureSettings({
+            [methodSettings.patchKey]: nextValues,
+          })}
         />
       </div>
       <p className="settings-note material-descriptor-note">
-        {useMendeleev
-          ? "元素プロパティを組成分率で重み付けし、平均・標準偏差・最小・最大・範囲を生成します。"
-          : "ElementPropertyとStoichiometryを既定値とし、必要なMatminer記述子だけを追加してください。"}
+        {methodSettings.note}
       </p>
     </div>
   );
