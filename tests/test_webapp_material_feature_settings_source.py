@@ -58,9 +58,25 @@ def test_preprocessing_shows_descriptor_settings_only_for_material_columns() -> 
     assert "SmilesDescriptorPanel" in source
     assert "CompositionDescriptorPanel" in source
     assert "SMILES_FINGERPRINTS" in source
+    assert "PYMATGEN_PROPERTIES" in source
     assert "MATMINER_DESCRIPTORS" in source
     assert "MENDELEEV_PROPERTIES" in source
     assert "MutationObserver" not in source
+
+
+def test_web_composition_methods_default_to_pymatgen_and_hide_xenonpy() -> None:
+    """Pymatgen should be the default app method and XenonPy should not be selectable."""
+
+    source = DESCRIPTOR_CONTROL.read_text(encoding="utf-8")
+    store = STORE.read_text(encoding="utf-8")
+
+    assert 'compMethod: "pymatgen"' in store
+    assert "pymatgenProperties" in store
+    assert '<option value="pymatgen">Pymatgen基本統計</option>' in source
+    assert '<option value="matminer">Matminer</option>' in source
+    assert '<option value="mendeleev">Mendeleev元素プロパティ</option>' in source
+    assert 'option value="xenonpy"' not in source
+    assert "組成加重平均・標準偏差・最小・最大・範囲" in source
 
 
 def test_training_payload_separates_material_columns_from_categories() -> None:
@@ -76,6 +92,8 @@ def test_training_payload_separates_material_columns_from_categories() -> None:
     assert "comp_cols: compositionColumns" in store
     assert "comp_method: compositionColumns.length ? settings.compMethod : null" in store
     assert "comp_feats: compositionColumns.length ? compositionDescriptors : []" in store
+    assert 'settings.compMethod === "pymatgen"' in store
+    assert "compositionDescriptors = settings.pymatgenProperties" in store
     assert "SMILES列に使用する分子記述子を1件以上選択してください" in store
     assert "組成式列に使用する記述子を1件以上選択してください" in store
     assert "ensembleTrainingPayload(applyMaterialFeatureTrainingPayload(payload))" in api
