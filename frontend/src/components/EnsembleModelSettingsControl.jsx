@@ -103,7 +103,7 @@ export default function EnsembleModelSettingsControl() {
   }, [stackingModels.join("\u0001"), modelNames, targets]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || step !== "model" || !host) {
       setEnsembleTrainingOptions(null);
       return undefined;
     }
@@ -114,7 +114,7 @@ export default function EnsembleModelSettingsControl() {
       tuning,
     });
     return () => setEnsembleTrainingOptions(null);
-  }, [enabled, ensembleType, stackingBaseModel, membersByTarget, tuning]);
+  }, [enabled, step, host, ensembleType, stackingBaseModel, membersByTarget, tuning]);
 
   useEffect(() => {
     if (step !== "model") {
