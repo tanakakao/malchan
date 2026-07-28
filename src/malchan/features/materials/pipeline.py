@@ -7,6 +7,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 
+SUPPORTED_COMPOSITION_METHODS = ("xenonpy", "matminer", "mendeleev")
+
+
 def make_comp_preprocess(
     method: str | None = "xenonpy",
     feats: list[str] | tuple[str, ...] = (),
@@ -93,4 +96,4 @@ def make_comp_preprocess(
     )
 
 
-__all__ = ["make_comp_preprocess"]
+__all__ = ["SUPPORTED_COMPOSITION_METHODS", "make_comp_preprocess"]
