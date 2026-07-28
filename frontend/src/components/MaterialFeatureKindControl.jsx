@@ -8,6 +8,12 @@ import {
   useMaterialFeatureSettings,
 } from "../materialFeatures";
 
+const COMPACT_REPRESENTATION_LABELS = {
+  categorical: "通常",
+  composition: "組成式",
+  smiles: "SMILES",
+};
+
 function featureCard(column) {
   return [...document.querySelectorAll(".feature-variable-choice")].find((card) => (
     card.querySelector(".variable-choice-main span")?.textContent?.trim() === column
@@ -107,17 +113,28 @@ export default function MaterialFeatureKindControl() {
   return (
     <>
       {Object.entries(hosts).map(([column, host]) => createPortal(
-        <label className="material-feature-kind-select">
-          <span>入力表記</span>
-          <select
-            value={settings.kinds[column] || "categorical"}
-            onChange={(event) => setMaterialFeatureKind(column, event.target.value)}
-          >
-            {FEATURE_REPRESENTATIONS.map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>,
+        <div
+          className="material-feature-kind-options"
+          role="radiogroup"
+          aria-label={`${column}の入力表記`}
+        >
+          {FEATURE_REPRESENTATIONS.map(([value, label]) => {
+            const selected = (settings.kinds[column] || "categorical") === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`material-feature-kind-option ${value} ${selected ? "active" : ""}`}
+                title={label}
+                onClick={() => setMaterialFeatureKind(column, value)}
+              >
+                {COMPACT_REPRESENTATION_LABELS[value] || label}
+              </button>
+            );
+          })}
+        </div>,
         host,
         column,
       ))}
