@@ -22,6 +22,15 @@ export const SMILES_FINGERPRINTS = [
 
 export const THREE_DIMENSIONAL_FINGERPRINTS = ["Autocorr", "E3FP", "MORSE", "RDF"];
 
+export const PYMATGEN_PROPERTIES = [
+  "atomic_number",
+  "atomic_mass",
+  "atomic_radius",
+  "electronegativity",
+  "row",
+  "group",
+];
+
 export const MATMINER_DESCRIPTORS = [
   "ElementProperty",
   "Stoichiometry",
@@ -49,7 +58,8 @@ export const MENDELEEV_PROPERTIES = [
 const DEFAULT_SETTINGS = {
   kinds: {},
   fingerprints: ["ECFP"],
-  compMethod: "matminer",
+  compMethod: "pymatgen",
+  pymatgenProperties: [...PYMATGEN_PROPERTIES],
   matminerDescriptors: ["ElementProperty", "Stoichiometry"],
   mendeleevProperties: [
     "atomic_number",
@@ -123,6 +133,9 @@ export function patchMaterialFeatureSettings(patch) {
   if (Object.prototype.hasOwnProperty.call(patch, "fingerprints")) {
     next.fingerprints = unique(patch.fingerprints);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, "pymatgenProperties")) {
+    next.pymatgenProperties = unique(patch.pymatgenProperties);
+  }
   if (Object.prototype.hasOwnProperty.call(patch, "matminerDescriptors")) {
     next.matminerDescriptors = unique(patch.matminerDescriptors);
   }
@@ -152,9 +165,13 @@ export function applyMaterialFeatureTrainingPayload(payload) {
 
   let compositionDescriptors = [];
   if (compositionColumns.length) {
-    compositionDescriptors = settings.compMethod === "mendeleev"
-      ? settings.mendeleevProperties
-      : settings.matminerDescriptors;
+    if (settings.compMethod === "pymatgen") {
+      compositionDescriptors = settings.pymatgenProperties;
+    } else if (settings.compMethod === "mendeleev") {
+      compositionDescriptors = settings.mendeleevProperties;
+    } else {
+      compositionDescriptors = settings.matminerDescriptors;
+    }
     if (!compositionDescriptors.length) {
       throw new Error("組成式列に使用する記述子を1件以上選択してください。");
     }
