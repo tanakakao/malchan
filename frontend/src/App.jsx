@@ -4,6 +4,7 @@ import ComparisonTuningControl from "./components/ComparisonTuningControl";
 import EnsembleModelSettingsControl from "./components/EnsembleModelSettingsControl";
 import MaterialDescriptorSettingsControl from "./components/MaterialDescriptorSettingsControl";
 import MaterialFeatureKindControl from "./components/MaterialFeatureKindControl";
+import ModelSettingDefaultsControl from "./components/ModelSettingDefaultsControl";
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import OptimizeCategoryCandidatesControl from "./components/OptimizeCategoryCandidatesControl";
 import ShapScatterControl from "./components/ShapScatterControl";
@@ -151,6 +152,7 @@ function WorkbenchLayout() {
       <EnsembleModelSettingsControl />
       <MaterialFeatureKindControl />
       <MaterialDescriptorSettingsControl />
+      <ModelSettingDefaultsControl />
       <YyDiagnosticsControl />
       <OptimizeCategoryCandidatesControl />
       <ShapScatterControl />
