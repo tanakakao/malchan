@@ -346,13 +346,6 @@ class ModelInfo(BaseModel):
     target_col: str | None = None
     task: TaskType | None = None
     model_names: list[str] = Field(default_factory=list)
-    num_cols: list[str] = Field(default_factory=list)
-    cat_cols: list[str] = Field(default_factory=list)
-    smiles_cols: list[str] = Field(default_factory=list)
-    fingerprints: list[str] = Field(default_factory=list)
-    comp_cols: list[str] = Field(default_factory=list)
-    comp_method: str | None = None
-    comp_feats: list[str] = Field(default_factory=list)
     xai_status: str = "not_requested"
 
 
