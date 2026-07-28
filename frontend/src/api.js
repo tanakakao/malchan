@@ -92,12 +92,19 @@ function ensembleTrainingPayload(payload) {
     ensembleType,
     baseModel,
     membersByTarget = {},
-    tuning = true,
+    parameterMode: configuredParameterMode,
+    tuning: legacyTuning,
+    memberParamsByTarget = {},
+    baseParamsByTarget = {},
   } = ensembleTrainingOptions;
+  const parameterMode = configuredParameterMode
+    || (legacyTuning === false ? "default" : "tuning");
+  const manualParameters = parameterMode === "manual";
   const targetColumns = payload?.target_cols?.length
     ? payload.target_cols
     : [payload?.target_col].filter(Boolean);
   const requiresMultiple = ensembleType === "アンサンブル" || ensembleType === "スタッキング";
+  const usesBaseParameters = ["スタッキング", "バギング", "ブースティング"].includes(ensembleType);
 
   if (!ensembleType) {
     throw new Error("アンサンブル方式を選択してください。");
@@ -127,11 +134,29 @@ function ensembleTrainingPayload(payload) {
     }),
   );
 
+  const normalizedModelParams = Object.fromEntries(
+    targetColumns.map((target) => [
+      target,
+      normalizedMembers[target].map((model) => ({
+        ...(memberParamsByTarget[target]?.[model] || {}),
+      })),
+    ]),
+  );
+  const normalizedBaseParams = Object.fromEntries(
+    targetColumns.map((target) => {
+      if (ensembleType === "スタッキング") {
+        return [target, { ...(baseParamsByTarget[target] || {}) }];
+      }
+      const baseMember = normalizedMembers[target][0];
+      return [target, { ...(memberParamsByTarget[target]?.[baseMember] || {}) }];
+    }),
+  );
+
   const common = {
     ensemble: true,
     ens_type: ensembleType,
     base_model: ensembleType === "スタッキング" ? baseModel : null,
-    tuning: Boolean(tuning),
+    tuning: parameterMode === "tuning",
   };
 
   if (payload?.target_cols?.length) {
@@ -139,22 +164,36 @@ function ensembleTrainingPayload(payload) {
       ...payload,
       ...common,
       model_names_by_target: normalizedMembers,
-      model_params_by_target: {},
+      model_params_by_target: manualParameters ? normalizedModelParams : {},
+      base_model_params_by_target: manualParameters && usesBaseParameters
+        ? normalizedBaseParams
+        : {},
     };
     delete merged.model_names;
     delete merged.model_params;
+    delete merged.base_model_param;
     return merged;
   }
 
   const target = targetColumns[0];
+  const singleBaseModel = ensembleType === "スタッキング"
+    ? baseModel
+    : usesBaseParameters
+      ? normalizedMembers[target]?.[0] || null
+      : null;
   const merged = {
     ...payload,
     ...common,
+    base_model: singleBaseModel,
     model_names: normalizedMembers[target] || [],
-    model_params: null,
+    model_params: manualParameters ? normalizedModelParams[target] : null,
+    base_model_param: manualParameters && usesBaseParameters
+      ? normalizedBaseParams[target]
+      : null,
   };
   delete merged.model_names_by_target;
   delete merged.model_params_by_target;
+  delete merged.base_model_params_by_target;
   return merged;
 }
 
