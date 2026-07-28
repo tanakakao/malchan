@@ -184,9 +184,23 @@ export default function OptimizeCategoryCandidatesControl() {
     }
 
     const content = document.querySelector(".content-inner") || document.body;
+    let frameId = null;
+    let disposed = false;
+
+    const removeInlineHosts = () => {
+      content.querySelectorAll(".category-candidate-inline-host").forEach((host) => {
+        const cell = host.parentElement;
+        const row = host.closest("tr");
+        host.remove();
+        cell?.classList.remove("category-candidate-cell");
+        row?.classList.remove("categorical-candidate-row");
+      });
+    };
 
     const connect = () => {
-      const panel = document.querySelector(".optimize-variable-panel");
+      if (disposed) return;
+
+      const panel = content.querySelector(".optimize-variable-panel");
       const tableRows = panel?.querySelectorAll(".optimize-variable-table tbody > tr") || [];
       const nextHosts = {};
       const nextFixed = new Set();
@@ -213,7 +227,7 @@ export default function OptimizeCategoryCandidatesControl() {
         if (row.classList.contains("fixed-variable-row")) nextFixed.add(column);
       });
 
-      panel?.querySelectorAll(".category-candidate-inline-host").forEach((host) => {
+      content.querySelectorAll(".category-candidate-inline-host").forEach((host) => {
         const column = host.dataset.column;
         if (column && nextHosts[column] === host) return;
         const cell = host.parentElement;
@@ -227,25 +241,27 @@ export default function OptimizeCategoryCandidatesControl() {
       setFixedColumns((current) => (sameSet(current, nextFixed) ? current : nextFixed));
     };
 
-    connect();
-    const observer = new MutationObserver(connect);
-    observer.observe(content, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+    const scheduleConnect = () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        connect();
+      });
+    };
+
+    const handleTableChange = (event) => {
+      if (!event.target?.closest?.(".optimize-variable-table")) return;
+      scheduleConnect();
+    };
+
+    scheduleConnect();
+    content.addEventListener("change", handleTableChange);
 
     return () => {
-      observer.disconnect();
-      document.querySelectorAll(".category-candidate-inline-host").forEach((host) => {
-        const cell = host.parentElement;
-        const row = host.closest("tr");
-        host.remove();
-        cell?.classList.remove("category-candidate-cell");
-        row?.classList.remove("categorical-candidate-row");
-      });
-      setHosts({});
+      disposed = true;
+      content.removeEventListener("change", handleTableChange);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      removeInlineHosts();
     };
   }, [step, candidateKey]);
 
