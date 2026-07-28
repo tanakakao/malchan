@@ -31,6 +31,13 @@ function sameSet(left, right) {
   return [...left].every((value) => right.has(value));
 }
 
+function sameHosts(left, right) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => left[key] === right[key]);
+}
+
 function CategoryMultiSelect({ column, available, selected, disabled, onChange }) {
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -88,13 +95,13 @@ function CategoryMultiSelect({ column, available, selected, disabled, onChange }
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>{selected.length} / {available.length} 候補</span>
+        <span>{disabled ? "固定値を使用" : `${selected.length} / ${available.length} 候補`}</span>
         <span aria-hidden="true">⌄</span>
       </button>
       {open && !disabled && (
         <div className="category-candidate-menu">
           <div className="category-candidate-menu-head">
-            <strong>{column}</strong>
+            <strong>{column} の探索候補</strong>
             <button type="button" onClick={() => onChange([...available])}>全選択</button>
           </div>
           {available.length > 8 && (
@@ -141,7 +148,7 @@ export default function OptimizeCategoryCandidatesControl() {
     )).join("\u0002"),
     [rows, catFeatures],
   );
-  const [host, setHost] = useState(null);
+  const [hosts, setHosts] = useState({});
   const [fixedColumns, setFixedColumns] = useState(new Set());
   const [selections, setSelections] = useState(() => normalizedSelections(
     rows,
@@ -172,36 +179,51 @@ export default function OptimizeCategoryCandidatesControl() {
 
   useEffect(() => {
     if (step !== "optimize" || !catFeatures.length) {
-      setHost(null);
+      setHosts({});
       return undefined;
     }
 
     const content = document.querySelector(".content-inner") || document.body;
-    let currentHost = null;
 
     const connect = () => {
       const panel = document.querySelector(".optimize-variable-panel");
-      const tableWrap = panel?.querySelector(".optimize-variable-table-wrap");
-      if (!panel || !tableWrap) {
-        setHost(null);
-        return;
-      }
-
-      let nextHost = panel.querySelector(":scope > .optimize-category-candidates-host");
-      if (!nextHost) {
-        nextHost = document.createElement("div");
-        nextHost.className = "optimize-category-candidates-host";
-        tableWrap.insertAdjacentElement("afterend", nextHost);
-      }
-      currentHost = nextHost;
-      setHost(nextHost);
-
+      const tableRows = panel?.querySelectorAll(".optimize-variable-table tbody > tr") || [];
+      const nextHosts = {};
       const nextFixed = new Set();
-      panel.querySelectorAll(".optimize-variable-table tbody tr").forEach((row) => {
-        if (!row.classList.contains("fixed-variable-row")) return;
+
+      tableRows.forEach((row) => {
         const column = row.querySelector("td:first-child strong")?.textContent?.trim();
-        if (column) nextFixed.add(column);
+        if (!column || !catFeatures.includes(column)) return;
+
+        const cells = row.querySelectorAll(":scope > td");
+        const lowerLimitCell = cells[2];
+        if (!lowerLimitCell) return;
+
+        row.classList.add("categorical-candidate-row");
+        lowerLimitCell.classList.add("category-candidate-cell");
+
+        let host = lowerLimitCell.querySelector(":scope > .category-candidate-inline-host");
+        if (!host) {
+          host = document.createElement("div");
+          host.className = "category-candidate-inline-host";
+          host.dataset.column = column;
+          lowerLimitCell.append(host);
+        }
+        nextHosts[column] = host;
+        if (row.classList.contains("fixed-variable-row")) nextFixed.add(column);
       });
+
+      panel?.querySelectorAll(".category-candidate-inline-host").forEach((host) => {
+        const column = host.dataset.column;
+        if (column && nextHosts[column] === host) return;
+        const cell = host.parentElement;
+        const row = host.closest("tr");
+        host.remove();
+        cell?.classList.remove("category-candidate-cell");
+        row?.classList.remove("categorical-candidate-row");
+      });
+
+      setHosts((current) => (sameHosts(current, nextHosts) ? current : nextHosts));
       setFixedColumns((current) => (sameSet(current, nextFixed) ? current : nextFixed));
     };
 
@@ -216,52 +238,46 @@ export default function OptimizeCategoryCandidatesControl() {
 
     return () => {
       observer.disconnect();
-      currentHost?.remove();
-      setHost(null);
+      document.querySelectorAll(".category-candidate-inline-host").forEach((host) => {
+        const cell = host.parentElement;
+        const row = host.closest("tr");
+        host.remove();
+        cell?.classList.remove("category-candidate-cell");
+        row?.classList.remove("categorical-candidate-row");
+      });
+      setHosts({});
     };
-  }, [step, catFeatures.length]);
+  }, [step, candidateKey]);
 
-  if (!host || !catFeatures.length) return null;
+  if (!catFeatures.length) return null;
 
-  return createPortal(
-    <section className="optimize-category-candidates">
-      <div className="optimize-category-candidates-head">
-        <div>
-          <span>CATEGORICAL CANDIDATES</span>
-          <h4>カテゴリ探索候補</h4>
-          <p>カテゴリ説明変数ごとに、逆解析で探索させる値を複数選択します。</p>
-        </div>
-        <span className="optimize-count-badge">{catFeatures.length} categorical</span>
-      </div>
-      <div className="category-candidate-grid">
-        {catFeatures.map((column) => {
-          const available = categoryValues(rows, column);
-          const selected = selections[column] || available;
-          const fixed = fixedColumns.has(column);
-          return (
-            <div key={column} className={`category-candidate-card ${fixed ? "fixed" : ""}`}>
-              <div className="category-candidate-label">
-                <strong>{column}</strong>
-                <span>{fixed ? "固定値を使用" : `${selected.length}候補を探索`}</span>
-              </div>
-              <CategoryMultiSelect
-                column={column}
-                available={available}
-                selected={selected}
-                disabled={fixed || available.length === 0}
-                onChange={(next) => setSelections((current) => ({
-                  ...current,
-                  [column]: next,
-                }))}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <p className="optimize-card-note">
-        選択した値だけを逆解析APIの`categories`へ渡します。固定中の変数は固定値が優先されます。
-      </p>
-    </section>,
-    host,
+  return (
+    <>
+      {catFeatures.map((column) => {
+        const host = hosts[column];
+        if (!host) return null;
+        const available = categoryValues(rows, column);
+        const selected = selections[column] || available;
+        const fixed = fixedColumns.has(column);
+        return createPortal(
+          <div className={`category-candidate-inline-control ${fixed ? "fixed" : ""}`}>
+            <span className="category-candidate-inline-label">
+              {fixed ? "固定値を優先" : "探索候補"}
+            </span>
+            <CategoryMultiSelect
+              column={column}
+              available={available}
+              selected={selected}
+              disabled={fixed || available.length === 0}
+              onChange={(next) => setSelections((current) => ({
+                ...current,
+                [column]: next,
+              }))}
+            />
+          </div>,
+          host,
+        );
+      })}
+    </>
   );
 }
