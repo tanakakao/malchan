@@ -2,22 +2,34 @@ from pathlib import Path
 
 
 OPTIMIZE_PAGE = Path("frontend/src/pages/OptimizePage.jsx")
+OPTIMIZE_STYLE = Path("frontend/src/optimize-variable-settings.css")
 API = Path("frontend/src/api.js")
 INVERSE_SCHEMA = Path("src/malchan/app/schemas/inverse_analysis.py")
 INVERSE_SERVICE = Path("src/malchan/app/services/model_service.py")
 INVERSE_FUNCTION = Path("src/malchan/inverse_analysis/models.py")
 
 
-def test_objective_control_uses_max_min_and_target_value() -> None:
-    """Target value input should be visible only for the target-value mode."""
+def test_objective_control_uses_direction_constraint_and_target_value() -> None:
+    """The bochan-style objective table should separate direction and constraint."""
 
     source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
 
-    assert '<option value="max"' in source
-    assert '<option value="min"' in source
+    for heading in (
+        "目的変数",
+        "最適化対象",
+        "方向",
+        "制約",
+        "しきい値 / 目標値",
+        "対象クラス",
+    ):
+        assert f"<th>{heading}</th>" in source
+
+    assert '<option value="max">最大化</option>' in source
+    assert '<option value="min">最小化</option>' in source
+    assert '<option value="none">なし</option>' in source
     assert '<option value="target">目標値</option>' in source
-    assert 'mode === "target" ? (' in source
-    assert '<span className="muted-cell">入力不要</span>' in source
+    assert 'mode === "target" && !classification' in source
+    assert "changeObjectiveConstraint" in source
     assert "target_value" in source
     assert "direction: mode" in source
 
@@ -31,7 +43,7 @@ def test_inverse_objective_targets_are_selectable_and_filtered() -> None:
 
     assert "objectiveSelectionByModel" in source
     assert "selectedTargets" in source
-    assert "<th>使用</th>" in source
+    assert "<th>最適化対象</th>" in source
     assert "逆解析に使用" in source
     assert "selectedTargets.map((target) =>" in source
     assert "selectedTargets.length > 1" in source
@@ -50,6 +62,7 @@ def test_search_variable_table_matches_bochan_style_settings() -> None:
 
     source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
 
+    assert "探索変数（検索空間）" in source
     for heading in ("変数", "型", "下限", "上限", "刻み", "固定", "固定値"):
         assert f"<th>{heading}</th>" in source
 
@@ -60,6 +73,32 @@ def test_search_variable_table_matches_bochan_style_settings() -> None:
     assert "setInverseAnalysisPayloadOverride(inversePayloadOverride())" in source
 
 
+def test_optimize_page_uses_bochan_style_header_cards_and_primary_action() -> None:
+    """The page should expose the requested summary, cards, and prominent action."""
+
+    source = OPTIMIZE_PAGE.read_text(encoding="utf-8")
+    style = OPTIMIZE_STYLE.read_text(encoding="utf-8")
+
+    for class_name in (
+        "optimize-hero",
+        "optimize-summary-strip",
+        "optimize-section-card",
+        "optimize-section-title",
+        "optimize-primary-run",
+        "optimize-bottom-action",
+    ):
+        assert class_name in source
+        assert f".{class_name}" in style
+
+    assert "Optimize" in source
+    assert "目的変数" in source
+    assert "探索変数" in source
+    assert "設定ステータス" in source
+    assert "逆解析を実行" in source
+    assert "詳細設定" in source
+    assert "準備完了" in source
+
+
 def test_sum_constraint_is_configurable_and_sent_to_inverse_api() -> None:
     """The UI should expose the inverse function's numeric sum-equality constraint."""
 
@@ -67,7 +106,7 @@ def test_sum_constraint_is_configurable_and_sent_to_inverse_api() -> None:
     schema_source = INVERSE_SCHEMA.read_text(encoding="utf-8")
     service_source = INVERSE_SERVICE.read_text(encoding="utf-8")
 
-    assert "説明変数の合計制約" in source
+    assert 'title="合計制約"' in source
     assert "合計制約を使用する" in source
     assert "sumConstraint.columns" in source
     assert "constraintRange.minimum" in source
