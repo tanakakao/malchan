@@ -3,7 +3,7 @@ import {
   setInverseAnalysisPayloadOverride,
 } from "../api";
 import DataTable from "../components/DataTable";
-import { Field, SectionHeader } from "../components/Common";
+import { Field } from "../components/Common";
 import { uniqueValues } from "../data";
 import { useWorkbench } from "../context/WorkbenchContext";
 import "../optimize-variable-settings.css";
@@ -91,6 +91,30 @@ function objectiveMode(objective, task) {
 
 function originalValue(values, selected) {
   return values.find((value) => String(value) === String(selected)) ?? selected;
+}
+
+function OptimizeSectionTitle({ symbol, title, description }) {
+  return (
+    <div className="optimize-section-title">
+      <span className="optimize-section-symbol" aria-hidden="true">{symbol}</span>
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function OptimizeSummary({ symbol, label, value, status = false }) {
+  return (
+    <div className="optimize-summary-item">
+      <span className="optimize-summary-symbol" aria-hidden="true">{symbol}</span>
+      <div>
+        <span>{label}</span>
+        {status ? value : <strong>{value}</strong>}
+      </div>
+    </div>
+  );
 }
 
 export default function OptimizePage() {
@@ -212,6 +236,15 @@ export default function OptimizePage() {
     return { minimum, maximum };
   }, [bounds, sumConstraint, variableSettings]);
 
+  const readyForRun = Boolean(modelInfo && selectedTargets.length > 0 && searchedCount > 0);
+  const statusLabel = busy ? "実行中" : readyForRun ? "準備完了" : "設定待ち";
+  const statusClass = busy ? "running" : readyForRun ? "ready" : "waiting";
+  const objectiveModeLabel = selectedTargets.length === 0
+    ? "未選択"
+    : multiObjective
+      ? "多目的"
+      : "単目的";
+
   function patchVariable(column, patch) {
     setVariableSettings((current) => ({
       ...current,
@@ -252,6 +285,7 @@ export default function OptimizePage() {
     if (task === "classification" && nextMode !== "target") return;
     const current = objectives[target] || {};
     const values = uniqueValues(rows, target);
+    const currentMode = objectiveMode(current, task);
     const defaultTarget = task === "classification"
       ? values[0] ?? ""
       : rows.find((row) => Number.isFinite(row[target]))?.[target] ?? 0;
@@ -259,6 +293,9 @@ export default function OptimizePage() {
       ...objectives,
       [target]: {
         mode: nextMode,
+        direction: nextMode === "target"
+          ? current.direction || (currentMode === "min" ? "min" : "max")
+          : nextMode,
         value: nextMode === "target"
           ? current.mode === "target"
             ? current.value
@@ -266,6 +303,19 @@ export default function OptimizePage() {
           : nextMode,
       },
     });
+  }
+
+  function changeObjectiveConstraint(target, nextConstraint) {
+    if (tasks[target] === "classification") {
+      changeObjective(target, "target");
+      return;
+    }
+    if (nextConstraint === "target") {
+      changeObjective(target, "target");
+      return;
+    }
+    const previousDirection = objectives[target]?.direction;
+    changeObjective(target, previousDirection === "min" ? "min" : "max");
   }
 
   function changeTargetValue(target, rawValue) {
@@ -443,6 +493,10 @@ export default function OptimizePage() {
     const errors = validateSettings();
     if (errors.length) {
       setSettingsError(errors.join("\n"));
+      document.getElementById("optimize-search-settings")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
       return;
     }
     setSettingsError("");
@@ -450,62 +504,98 @@ export default function OptimizePage() {
     await runInverseAnalysis();
   }
 
-  const objectiveModeLabel = selectedTargets.length === 0
-    ? "未選択"
-    : multiObjective
-      ? "多目的"
-      : "単目的";
+  function showDetailedSettings() {
+    document.getElementById("optimize-search-settings")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   return (
-    <>
-      <SectionHeader
-        step="7 · OPTIMIZE"
-        title="目的条件を満たす入力候補を逆解析する"
-        text="使用する目的変数、目的条件、説明変数の探索範囲・固定値、合計制約、探索手法を設定します。"
-      />
+    <div className="optimize-page">
+      <header className="optimize-hero">
+        <div className="optimize-hero-copy">
+          <span className="optimize-hero-kicker">STEP 7 · OPTIMIZE</span>
+          <h2>Optimize</h2>
+          <p>最適化の目的（目的変数）と探索条件（変数の範囲や制約）を設定します。</p>
+        </div>
+        <div className="optimize-hero-tools">
+          <div className="optimize-summary-strip">
+            <OptimizeSummary symbol="◎" label="目的変数" value={`${selectedTargets.length} 件`} />
+            <OptimizeSummary symbol="☷" label="探索変数" value={`${searchedCount} 件`} />
+            <OptimizeSummary
+              symbol="✓"
+              label="設定ステータス"
+              status
+              value={<strong className={`optimize-status-badge ${statusClass}`}>{statusLabel}</strong>}
+            />
+          </div>
+          <div className="optimize-hero-run-actions">
+            <button
+              type="button"
+              className="optimize-primary-run"
+              disabled={!modelInfo || busy || selectedTargets.length === 0}
+              onClick={executeInverseAnalysis}
+            >
+              <span aria-hidden="true">▶</span>
+              {busy ? "逆解析を実行中" : "逆解析を実行"}
+            </button>
+            <button
+              type="button"
+              className="optimize-detail-button"
+              onClick={showDetailedSettings}
+            >
+              詳細設定 <span aria-hidden="true">›</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
       {!modelInfo && (
-        <article className="panel">
-          <p className="settings-note">先にModel画面で逆解析に使用するモデルを学習してください。</p>
+        <article className="panel optimize-model-warning">
+          <span aria-hidden="true">!</span>
+          <p>先にModel画面で逆解析に使用するモデルを学習してください。</p>
         </article>
       )}
 
-      <article className="panel optimize-target-panel">
-        <div className="panel-title">
-          <div>
-            <span className="panel-kicker">1 · OBJECTIVES</span>
-            <h3>使用する目的変数と条件</h3>
-            <p>逆解析に使う目的変数を選択し、最大化・最小化・目標値を設定します。</p>
-          </div>
-          <div className="optimize-objective-summary">
-            <span className="status-chip success">
-              {selectedTargets.length} / {targets.length} use
+      <article className="panel optimize-section-card optimize-target-panel">
+        <div className="optimize-card-header">
+          <OptimizeSectionTitle
+            symbol="◎"
+            title="目的変数"
+            description="最適化の目標となる出力と条件を設定します。"
+          />
+          <div className="optimize-card-actions">
+            <span className="optimize-count-badge">
+              {selectedTargets.length} / {targets.length} 使用
             </span>
             <button
               type="button"
-              className="secondary compact-action"
+              className="optimize-outline-button"
               onClick={() => setSelectedTargets([...targets])}
             >
               すべて使用
             </button>
             <button
               type="button"
-              className="secondary compact-action"
+              className="optimize-outline-button"
               onClick={() => setSelectedTargets([])}
             >
               選択解除
             </button>
           </div>
         </div>
-        <div className="table-wrap">
-          <table className="inverse-objective-table selectable-objective-table">
+
+        <div className="table-wrap optimize-table-wrap objective-table-wrap">
+          <table className="inverse-objective-table bochan-objective-table">
             <thead>
               <tr>
-                <th>使用</th>
                 <th>目的変数</th>
-                <th>タスク</th>
-                <th>条件</th>
-                <th>目標値</th>
+                <th>最適化対象</th>
+                <th>方向</th>
+                <th>制約</th>
+                <th>しきい値 / 目標値</th>
+                <th>対象クラス</th>
               </tr>
             </thead>
             <tbody>
@@ -513,68 +603,85 @@ export default function OptimizePage() {
                 const selected = selectedTargets.includes(target);
                 const mode = objectiveMode(objectives[target], tasks[target]);
                 const targetValues = uniqueValues(rows, target);
+                const classification = tasks[target] === "classification";
+                const direction = mode === "target"
+                  ? objectives[target]?.direction || "max"
+                  : mode;
                 return (
                   <tr
                     key={target}
                     className={selected ? "selected-objective-row" : "excluded-objective-row"}
                   >
+                    <td className="inverse-name-cell optimize-name-cell">
+                      <strong>{target}</strong>
+                      <span className={`optimize-type-badge ${classification ? "classification" : "regression"}`}>
+                        {classification ? "classification" : "regression"}
+                      </span>
+                    </td>
                     <td className="objective-checkbox-cell">
                       <input
-                        className="table-checkbox"
+                        className="table-checkbox optimize-checkbox"
                         type="checkbox"
                         checked={selected}
                         onChange={() => toggleTarget(target)}
                         aria-label={`${target}を逆解析に使用`}
                       />
                     </td>
-                    <td className="inverse-name-cell">
-                      <strong>{target}</strong>
-                      {!selected && <span className="objective-excluded-label">対象外</span>}
-                    </td>
                     <td>
-                      <span
-                        className={`status-chip ${tasks[target] === "classification" ? "categorical-chip" : ""}`}
-                      >
-                        {tasks[target] === "classification" ? "分類" : "回帰"}
-                      </span>
+                      {classification ? (
+                        <span className="optimize-empty-value">—</span>
+                      ) : (
+                        <select
+                          value={direction}
+                          disabled={!selected || mode === "target"}
+                          onChange={(event) => changeObjective(target, event.target.value)}
+                        >
+                          <option value="max">最大化</option>
+                          <option value="min">最小化</option>
+                        </select>
+                      )}
                     </td>
                     <td>
                       <select
-                        value={mode}
-                        disabled={!selected}
-                        onChange={(event) => changeObjective(target, event.target.value)}
+                        value={mode === "target" ? "target" : "none"}
+                        disabled={!selected || classification}
+                        onChange={(event) => changeObjectiveConstraint(target, event.target.value)}
                       >
-                        <option value="max" disabled={tasks[target] === "classification"}>最大化</option>
-                        <option value="min" disabled={tasks[target] === "classification"}>最小化</option>
+                        <option value="none">なし</option>
                         <option value="target">目標値</option>
                       </select>
                     </td>
                     <td>
-                      {mode === "target" ? (
-                        tasks[target] === "classification" ? (
-                          <select
-                            value={String(objectives[target]?.value ?? "")}
-                            disabled={!selected}
-                            onChange={(event) => changeTargetValue(target, event.target.value)}
-                          >
-                            <option value="">選択</option>
-                            {targetValues.map((value) => (
-                              <option key={String(value)} value={String(value)}>
-                                {String(value)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            type="number"
-                            step="any"
-                            disabled={!selected}
-                            value={objectives[target]?.value ?? ""}
-                            onChange={(event) => changeTargetValue(target, event.target.value)}
-                          />
-                        )
+                      {mode === "target" && !classification ? (
+                        <input
+                          type="number"
+                          step="any"
+                          disabled={!selected}
+                          value={objectives[target]?.value ?? ""}
+                          onChange={(event) => changeTargetValue(target, event.target.value)}
+                        />
                       ) : (
-                        <span className="muted-cell">入力不要</span>
+                        <span className="muted-cell">
+                          {classification ? "対象クラスを指定" : "制約なし"}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {classification ? (
+                        <select
+                          value={String(objectives[target]?.value ?? "")}
+                          disabled={!selected}
+                          onChange={(event) => changeTargetValue(target, event.target.value)}
+                        >
+                          <option value="">選択</option>
+                          {targetValues.map((value) => (
+                            <option key={String(value)} value={String(value)}>
+                              {String(value)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="optimize-empty-value">—</span>
                       )}
                     </td>
                   </tr>
@@ -583,30 +690,26 @@ export default function OptimizePage() {
             </tbody>
           </table>
         </div>
-        <p className="settings-note">
-          対象外にした目的変数の設定値は保持されますが、逆解析APIの`objectives`と元関数の`target_cols`には含まれません。
+        <p className="optimize-card-note">
+          対象外にした目的変数の設定は保持されますが、逆解析の対象には含まれません。
         </p>
-        {selectedTargets.some((target) => tasks[target] === "classification") && (
-          <p className="settings-note">
-            分類では目標クラスを指定するため、「目標値」を使用します。
-          </p>
-        )}
       </article>
 
-      <article className="panel optimize-variable-panel">
-        <div className="panel-title">
-          <div>
-            <span className="panel-kicker">2 · SEARCH SPACE</span>
-            <h3>説明変数の探索範囲</h3>
-            <p>bochanの変数設定に合わせ、下限・上限・刻み・固定・固定値を同じ表で設定します。</p>
-          </div>
-          <div className="optimize-variable-summary">
-            <span className="status-chip success">{searchedCount} search</span>
-            <span className="status-chip">{fixedCount} fixed</span>
+      <article className="panel optimize-section-card optimize-variable-panel">
+        <div className="optimize-card-header">
+          <OptimizeSectionTitle
+            symbol="☷"
+            title="探索変数（検索空間）"
+            description="探索に使用する入力変数の範囲や固定条件を設定します。"
+          />
+          <div className="optimize-card-actions">
+            <span className="optimize-count-badge success">{searchedCount} 探索</span>
+            <span className="optimize-count-badge">{fixedCount} 固定</span>
           </div>
         </div>
-        <div className="table-wrap optimize-variable-table-wrap">
-          <table className="optimize-variable-table">
+
+        <div className="table-wrap optimize-table-wrap optimize-variable-table-wrap">
+          <table className="optimize-variable-table bochan-variable-table">
             <thead>
               <tr>
                 <th>変数</th>
@@ -629,9 +732,9 @@ export default function OptimizePage() {
                 const categories = numeric ? [] : uniqueValues(rows, column);
                 return (
                   <tr key={column} className={setting.fixed ? "fixed-variable-row" : ""}>
-                    <td className="inverse-name-cell"><strong>{column}</strong></td>
+                    <td className="inverse-name-cell optimize-name-cell"><strong>{column}</strong></td>
                     <td>
-                      <span className={`status-chip ${numeric ? "" : "categorical-chip"}`}>
+                      <span className={`optimize-type-badge ${numeric ? "numeric" : "categorical"}`}>
                         {numeric ? "numeric" : "categorical"}
                       </span>
                     </td>
@@ -650,7 +753,7 @@ export default function OptimizePage() {
                             },
                           })}
                         />
-                      ) : <span className="muted-cell">—</span>}
+                      ) : <span className="optimize-empty-value">—</span>}
                     </td>
                     <td>
                       {numeric ? (
@@ -667,7 +770,7 @@ export default function OptimizePage() {
                             },
                           })}
                         />
-                      ) : <span className="muted-cell">—</span>}
+                      ) : <span className="optimize-empty-value">—</span>}
                     </td>
                     <td>
                       {numeric ? (
@@ -682,11 +785,11 @@ export default function OptimizePage() {
                             step: event.target.value,
                           })}
                         />
-                      ) : <span className="muted-cell">—</span>}
+                      ) : <span className="optimize-empty-value">—</span>}
                     </td>
                     <td className="fixed-checkbox-cell">
                       <input
-                        className="table-checkbox"
+                        className="table-checkbox optimize-checkbox"
                         type="checkbox"
                         checked={Boolean(setting.fixed)}
                         onChange={(event) => patchVariable(column, {
@@ -721,7 +824,7 @@ export default function OptimizePage() {
                           </select>
                         )
                       ) : (
-                        <span className="muted-cell">—</span>
+                        <span className="optimize-empty-value">—</span>
                       )}
                     </td>
                   </tr>
@@ -730,20 +833,20 @@ export default function OptimizePage() {
             </tbody>
           </table>
         </div>
-        <p className="settings-note">
-          固定をONにした変数は探索せず、指定した固定値を`fixed_values`として逆解析へ渡します。
+        <p className="optimize-card-note">
+          固定をONにした変数は探索せず、指定した固定値を逆解析へ渡します。
         </p>
       </article>
 
-      <article className="panel optimize-constraint-panel">
-        <div className="panel-title">
-          <div>
-            <span className="panel-kicker">3 · CONSTRAINT</span>
-            <h3>説明変数の合計制約</h3>
-            <p>選択した数値説明変数の合計を、指定値と等しくする制約を設定します。</p>
-          </div>
-          <span className={`status-chip ${sumConstraint.enabled ? "success" : ""}`}>
-            {sumConstraint.enabled ? "ON" : "OFF"}
+      <article className="panel optimize-section-card optimize-constraint-panel">
+        <div className="optimize-card-header">
+          <OptimizeSectionTitle
+            symbol="Σ"
+            title="合計制約"
+            description="選択した数値説明変数の合計を指定値と等しくします。"
+          />
+          <span className={`optimize-count-badge ${sumConstraint.enabled ? "success" : ""}`}>
+            {sumConstraint.enabled ? "使用中" : "未使用"}
           </span>
         </div>
 
@@ -787,7 +890,7 @@ export default function OptimizePage() {
               <div className="constraint-bulk-actions">
                 <button
                   type="button"
-                  className="secondary"
+                  className="optimize-outline-button"
                   onClick={() => setSumConstraint((current) => ({
                     ...current,
                     columns: [...numFeatures],
@@ -797,7 +900,7 @@ export default function OptimizePage() {
                 </button>
                 <button
                   type="button"
-                  className="secondary"
+                  className="optimize-outline-button"
                   onClick={() => setSumConstraint((current) => ({
                     ...current,
                     columns: [],
@@ -833,21 +936,24 @@ export default function OptimizePage() {
                 );
               })}
             </div>
-            <p className="settings-note">
-              固定済みの数値変数も合計に含められます。固定値を差し引いた残りを、探索対象変数の範囲内で調整します。
+            <p className="optimize-card-note">
+              固定済みの数値変数も合計に含められます。固定値を差し引いた残りを探索変数で調整します。
             </p>
           </div>
         )}
       </article>
 
-      <article className="panel optimize-run-panel">
-        <div className="panel-title">
-          <div>
-            <span className="panel-kicker">4 · SEARCH</span>
-            <h3>探索設定</h3>
-            <p>使用する目的変数の数に対応した探索アルゴリズム、試行回数、候補数を設定します。</p>
-          </div>
-          <span className="status-chip success">
+      <article
+        id="optimize-search-settings"
+        className="panel optimize-section-card optimize-run-panel"
+      >
+        <div className="optimize-card-header">
+          <OptimizeSectionTitle
+            symbol="⚙"
+            title="探索設定"
+            description="目的数に対応する探索手法、試行回数、候補数を設定します。"
+          />
+          <span className="optimize-count-badge success">
             {selectedTargets.length === 0
               ? "目的変数未選択"
               : multiObjective
@@ -855,6 +961,7 @@ export default function OptimizePage() {
                 : "単目的"}
           </span>
         </div>
+
         <div className="form-grid optimize-run-grid">
           <Field label={`探索手法（${objectiveModeLabel}）`}>
             <select
@@ -884,33 +991,49 @@ export default function OptimizePage() {
             />
           </Field>
         </div>
+
         <div className="sampler-description">
-          <strong>{selectedTargets.length ? selectedSampler.label : "目的変数を選択してください"}</strong>
-          <span>
-            {selectedTargets.length
-              ? selectedSampler.description
-              : "目的変数の使用チェックに応じて、単目的または多目的の探索手法を表示します。"}
-          </span>
+          <span className="sampler-description-symbol" aria-hidden="true">i</span>
+          <div>
+            <strong>{selectedTargets.length ? selectedSampler.label : "目的変数を選択してください"}</strong>
+            <span>
+              {selectedTargets.length
+                ? selectedSampler.description
+                : "目的変数の選択数に応じて、単目的または多目的の探索手法を表示します。"}
+            </span>
+          </div>
         </div>
+
         {settingsError && (
           <p className="xai-error optimize-settings-error">{settingsError}</p>
         )}
-        <button
-          disabled={!modelInfo || busy || selectedTargets.length === 0}
-          onClick={executeInverseAnalysis}
-        >
-          逆解析を実行 →
-        </button>
+
+        <div className="optimize-bottom-action">
+          <div>
+            <strong>設定内容で逆解析を開始</strong>
+            <span>選択した目的条件と探索空間を使用して候補を生成します。</span>
+          </div>
+          <button
+            type="button"
+            className="optimize-primary-run"
+            disabled={!modelInfo || busy || selectedTargets.length === 0}
+            onClick={executeInverseAnalysis}
+          >
+            <span aria-hidden="true">▶</span>
+            {busy ? "実行中" : "逆解析を実行"}
+          </button>
+        </div>
       </article>
 
       {inverseResult && (
-        <article className="panel">
-          <div className="panel-title">
-            <div>
-              <span className="panel-kicker">CANDIDATES</span>
-              <h3>逆解析候補</h3>
-            </div>
-            <span className="status-chip success">
+        <article className="panel optimize-section-card optimize-result-panel">
+          <div className="optimize-card-header">
+            <OptimizeSectionTitle
+              symbol="✓"
+              title="逆解析候補"
+              description="目的条件に対して評価された候補を表示します。"
+            />
+            <span className="optimize-count-badge success">
               {inverseResult.candidates.length} candidates
             </span>
           </div>
@@ -920,6 +1043,6 @@ export default function OptimizePage() {
           />
         </article>
       )}
-    </>
+    </div>
   );
 }
