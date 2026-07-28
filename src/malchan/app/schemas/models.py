@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from malchan.features.chemistry.fingerprints import SUPPORTED_FINGERPRINTS
 from malchan.features.materials.matminer import SUPPORTED_MATMINER_FEATURIZERS
 from malchan.features.materials.pipeline import SUPPORTED_COMPOSITION_METHODS
+from malchan.features.materials.pymatgen_basic import SUPPORTED_PYMATGEN_PROPERTIES
 
 TaskType = Literal["regression", "classification"]
 EnsembleType = Literal["アンサンブル", "スタッキング", "バギング", "ブースティング"]
@@ -18,6 +19,9 @@ _FINGERPRINT_BY_CASEFOLD = {
 }
 _MATMINER_FEATURIZER_BY_CASEFOLD = {
     name.casefold(): name for name in SUPPORTED_MATMINER_FEATURIZERS
+}
+_PYMATGEN_PROPERTY_BY_CASEFOLD = {
+    name.casefold(): name for name in SUPPORTED_PYMATGEN_PROPERTIES
 }
 
 
@@ -202,7 +206,27 @@ class TrainModelRequest(BaseModel):
             raise ValueError("comp_cols is required when comp_method is specified.")
         if self.comp_feats and not self.comp_cols:
             raise ValueError("comp_cols is required when comp_feats is specified.")
-        if self.comp_method == "matminer":
+
+        if self.comp_method == "pymatgen":
+            if not self.comp_feats:
+                raise ValueError(
+                    "comp_feats must contain at least one Pymatgen property."
+                )
+            canonical_properties: list[str] = []
+            unknown_properties: list[str] = []
+            for value in self.comp_feats:
+                canonical = _PYMATGEN_PROPERTY_BY_CASEFOLD.get(value.casefold())
+                if canonical is None:
+                    unknown_properties.append(value)
+                elif canonical not in canonical_properties:
+                    canonical_properties.append(canonical)
+            if unknown_properties:
+                raise ValueError(
+                    f"Unsupported Pymatgen comp_feats: {unknown_properties}. "
+                    f"Available: {list(SUPPORTED_PYMATGEN_PROPERTIES)}"
+                )
+            self.comp_feats = canonical_properties
+        elif self.comp_method == "matminer":
             if not self.comp_feats:
                 raise ValueError(
                     "comp_feats must contain at least one Matminer featurizer."
@@ -221,10 +245,6 @@ class TrainModelRequest(BaseModel):
                     f"Available: {list(SUPPORTED_MATMINER_FEATURIZERS)}"
                 )
             self.comp_feats = canonical_features
-        elif self.comp_method == "xenonpy" and self.comp_feats:
-            raise ValueError(
-                "comp_feats is not used when comp_method is 'xenonpy'."
-            )
 
         uses_single_fields = self.target_col is not None or self.task is not None
         uses_multi_fields = bool(self.target_cols) or bool(self.tasks)
