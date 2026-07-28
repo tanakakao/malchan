@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from imblearn.pipeline import Pipeline as ImbalancedPipeline
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import FastICA, KernelPCA, NMF, PCA
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
@@ -174,12 +175,26 @@ def make_preprocess_pipeline(
     if smiles_cols:
         if smiles_process is None:
             raise ValueError("smiles_colsを指定する場合はfingerprintsを指定してください。")
-        transforms.append(("smiles", smiles_process, smiles_cols))
+        for index, column in enumerate(smiles_cols):
+            transforms.append(
+                (
+                    f"smiles_{index}",
+                    clone(smiles_process),
+                    [column],
+                )
+            )
 
     if comp_cols:
         if comp_process is None:
             raise ValueError("comp_colsを指定する場合はcomp_methodを指定してください。")
-        transforms.append(("comp", comp_process, comp_cols))
+        for index, column in enumerate(comp_cols):
+            transforms.append(
+                (
+                    f"comp_{index}",
+                    clone(comp_process),
+                    [column],
+                )
+            )
 
     steps: list[tuple[str, Any]] = [
         ("column_preprocess", ColumnTransformer(transformers=transforms))

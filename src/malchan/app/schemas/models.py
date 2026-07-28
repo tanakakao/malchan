@@ -3,11 +3,26 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from malchan.features.chemistry.fingerprints import SUPPORTED_FINGERPRINTS
+from malchan.features.materials.matminer import SUPPORTED_MATMINER_FEATURIZERS
+from malchan.features.materials.pipeline import SUPPORTED_COMPOSITION_METHODS
+from malchan.features.materials.pymatgen_basic import SUPPORTED_PYMATGEN_PROPERTIES
 
 TaskType = Literal["regression", "classification"]
 EnsembleType = Literal["アンサンブル", "スタッキング", "バギング", "ブースティング"]
 ModelParameters = dict[str, Any] | list[dict[str, Any]]
+
+_FINGERPRINT_BY_CASEFOLD = {
+    name.casefold(): name for name in SUPPORTED_FINGERPRINTS
+}
+_MATMINER_FEATURIZER_BY_CASEFOLD = {
+    name.casefold(): name for name in SUPPORTED_MATMINER_FEATURIZERS
+}
+_PYMATGEN_PROPERTY_BY_CASEFOLD = {
+    name.casefold(): name for name in SUPPORTED_PYMATGEN_PROPERTIES
+}
 
 
 class TrainModelRequest(BaseModel):
@@ -51,6 +66,54 @@ class TrainModelRequest(BaseModel):
     dec_n_components: int = Field(default=2, ge=1)
     sampling_method: str | None = None
     compute_xai: bool = True
+
+    @field_validator("fingerprints")
+    @classmethod
+    def normalize_fingerprints(cls, values: list[str]) -> list[str]:
+        """Normalize fingerprint names without importing optional chemistry packages."""
+
+        normalized: list[str] = []
+        unknown: list[str] = []
+        for value in values:
+            name = value.strip()
+            canonical = _FINGERPRINT_BY_CASEFOLD.get(name.casefold())
+            if canonical is None:
+                unknown.append(value)
+            elif canonical not in normalized:
+                normalized.append(canonical)
+        if unknown:
+            raise ValueError(
+                f"Unsupported fingerprints: {unknown}. "
+                f"Available: {list(SUPPORTED_FINGERPRINTS)}"
+            )
+        return normalized
+
+    @field_validator("comp_method")
+    @classmethod
+    def normalize_comp_method(cls, value: str | None) -> str | None:
+        """Normalize and validate the composition featurization backend."""
+
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in SUPPORTED_COMPOSITION_METHODS:
+            raise ValueError(
+                f"Unsupported comp_method: {value!r}. "
+                f"Available: {list(SUPPORTED_COMPOSITION_METHODS)}"
+            )
+        return normalized
+
+    @field_validator("comp_feats")
+    @classmethod
+    def normalize_comp_feats(cls, values: list[str]) -> list[str]:
+        """Trim composition feature names and reject blank or duplicate entries."""
+
+        normalized = [value.strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("comp_feats must not contain blank names.")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("comp_feats must not contain duplicates.")
+        return normalized
 
     @property
     def feature_columns(self) -> list[str]:
@@ -126,7 +189,62 @@ class TrainModelRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_training_columns(self) -> "TrainModelRequest":
-        """Validate output, ensemble, and column settings against every row."""
+        """Validate output, material-feature, ensemble, and column settings."""
+
+        if self.smiles_cols and not self.fingerprints:
+            raise ValueError(
+                "fingerprints must contain at least one value when smiles_cols is specified."
+            )
+        if self.fingerprints and not self.smiles_cols:
+            raise ValueError(
+                "smiles_cols must contain at least one column when fingerprints is specified."
+            )
+
+        if self.comp_cols and self.comp_method is None:
+            raise ValueError("comp_method is required when comp_cols is specified.")
+        if self.comp_method is not None and not self.comp_cols:
+            raise ValueError("comp_cols is required when comp_method is specified.")
+        if self.comp_feats and not self.comp_cols:
+            raise ValueError("comp_cols is required when comp_feats is specified.")
+
+        if self.comp_method == "pymatgen":
+            if not self.comp_feats:
+                raise ValueError(
+                    "comp_feats must contain at least one Pymatgen property."
+                )
+            canonical_properties: list[str] = []
+            unknown_properties: list[str] = []
+            for value in self.comp_feats:
+                canonical = _PYMATGEN_PROPERTY_BY_CASEFOLD.get(value.casefold())
+                if canonical is None:
+                    unknown_properties.append(value)
+                elif canonical not in canonical_properties:
+                    canonical_properties.append(canonical)
+            if unknown_properties:
+                raise ValueError(
+                    f"Unsupported Pymatgen comp_feats: {unknown_properties}. "
+                    f"Available: {list(SUPPORTED_PYMATGEN_PROPERTIES)}"
+                )
+            self.comp_feats = canonical_properties
+        elif self.comp_method == "matminer":
+            if not self.comp_feats:
+                raise ValueError(
+                    "comp_feats must contain at least one Matminer featurizer."
+                )
+            canonical_features: list[str] = []
+            unknown_features: list[str] = []
+            for value in self.comp_feats:
+                canonical = _MATMINER_FEATURIZER_BY_CASEFOLD.get(value.casefold())
+                if canonical is None:
+                    unknown_features.append(value)
+                elif canonical not in canonical_features:
+                    canonical_features.append(canonical)
+            if unknown_features:
+                raise ValueError(
+                    f"Unsupported Matminer comp_feats: {unknown_features}. "
+                    f"Available: {list(SUPPORTED_MATMINER_FEATURIZERS)}"
+                )
+            self.comp_feats = canonical_features
 
         uses_single_fields = self.target_col is not None or self.task is not None
         uses_multi_fields = bool(self.target_cols) or bool(self.tasks)
@@ -151,6 +269,8 @@ class TrainModelRequest(BaseModel):
         feature_columns = self.feature_columns
         if not feature_columns:
             raise ValueError("At least one feature column must be specified.")
+        if any(not column.strip() for column in feature_columns):
+            raise ValueError("Feature column names must not be empty.")
         if len(feature_columns) != len(set(feature_columns)):
             raise ValueError("Feature columns must not contain duplicates.")
         overlapping = sorted(set(target_cols).intersection(feature_columns))

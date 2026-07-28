@@ -10,6 +10,20 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
+SUPPORTED_MATMINER_FEATURIZERS = (
+    "BandCenter",
+    "ElementFraction",
+    "ElementProperty",
+    "IonProperty",
+    "Meredig",
+    "Miedema",
+    "Stoichiometry",
+    "TMetalFraction",
+    "ValenceOrbital",
+    "YangSolidSolution",
+)
+
+
 def _featurizer_factories() -> dict[str, Callable[[], Any]]:
     """利用可能なMatminer featurizerの生成関数を返す。"""
     try:
@@ -47,18 +61,23 @@ def _featurizer_factories() -> dict[str, Callable[[], Any]]:
     }
 
 
+def available_matminer_featurizers() -> tuple[str, ...]:
+    """依存パッケージを読み込まず、対応featurizer名を返す。"""
+    return SUPPORTED_MATMINER_FEATURIZERS
+
+
 def resolve_matminer_featurizers(names: list[str] | tuple[str, ...]) -> list[Any]:
     """APIで指定された名前をMatminer featurizerへ変換する。"""
     if not names:
         raise ValueError("matminerではcomp_featsを1つ以上指定してください。")
 
-    factories = _featurizer_factories()
-    unknown = [name for name in names if name not in factories]
+    unknown = [name for name in names if name not in SUPPORTED_MATMINER_FEATURIZERS]
     if unknown:
         raise ValueError(
             f"未対応のMatminer特徴量です: {unknown}. "
-            f"利用可能: {sorted(factories)}"
+            f"利用可能: {list(SUPPORTED_MATMINER_FEATURIZERS)}"
         )
+    factories = _featurizer_factories()
     return [factories[name]() for name in names]
 
 
@@ -171,5 +190,7 @@ class MatminerCompositionFeaturizer(BaseEstimator, TransformerMixin):
 
 __all__ = [
     "MatminerCompositionFeaturizer",
+    "SUPPORTED_MATMINER_FEATURIZERS",
+    "available_matminer_featurizers",
     "resolve_matminer_featurizers",
 ]

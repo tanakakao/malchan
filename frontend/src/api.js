@@ -1,3 +1,5 @@
+import { applyMaterialFeatureTrainingPayload } from "./materialFeatures";
+
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 
 let comparisonTuneBestOverride = false;
@@ -228,7 +230,9 @@ export const api = {
     request(`/model-parameters${query({ task, model_name: modelName })}`),
   train: (payload) => request("/models", {
     method: "POST",
-    body: JSON.stringify(ensembleTrainingPayload(payload)),
+    body: JSON.stringify(
+      ensembleTrainingPayload(applyMaterialFeatureTrainingPayload(payload)),
+    ),
   }),
   listModels: () => request("/models"),
   modelInfo: (modelId) => request(`/models/${encodeURIComponent(modelId)}`),

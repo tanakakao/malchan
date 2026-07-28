@@ -2,6 +2,8 @@ import React from "react";
 import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
 import EnsembleModelSettingsControl from "./components/EnsembleModelSettingsControl";
+import MaterialDescriptorSettingsControl from "./components/MaterialDescriptorSettingsControl";
+import MaterialFeatureKindControl from "./components/MaterialFeatureKindControl";
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import OptimizeCategoryCandidatesControl from "./components/OptimizeCategoryCandidatesControl";
 import ShapScatterControl from "./components/ShapScatterControl";
@@ -147,6 +149,8 @@ function WorkbenchLayout() {
       </footer>
       <ComparisonTuningControl />
       <EnsembleModelSettingsControl />
+      <MaterialFeatureKindControl />
+      <MaterialDescriptorSettingsControl />
       <YyDiagnosticsControl />
       <OptimizeCategoryCandidatesControl />
       <ShapScatterControl />

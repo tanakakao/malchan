@@ -11,6 +11,8 @@ import "./comparison-evaluation.css";
 import "./xai.css";
 import "./prediction.css";
 import "./optimize-header-alignment.css";
+import "./material-features.css";
+import "./material-feature-kind.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
