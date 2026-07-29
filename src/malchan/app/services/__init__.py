@@ -6,12 +6,14 @@ from .comparison_service import (
 )
 from .model_configuration_service import install_model_configuration_service
 from .model_service import InMemoryModelService, ModelNotFoundError
+from .model_visualization_service import install_model_visualization_service
 from .xai_comparison_hook import install_xai_comparison_hooks
 from .xai_service import XaiNotReadyError, install_xai_service
 from .xai_shap_service import install_xai_shap_service
 
 install_comparison_service(InMemoryModelService)
 install_model_configuration_service(InMemoryModelService)
+install_model_visualization_service(InMemoryModelService)
 install_xai_service(InMemoryModelService)
 install_xai_shap_service(InMemoryModelService)
 install_xai_comparison_hooks(InMemoryModelService)
