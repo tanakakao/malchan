@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import {
+  downloadModelBundle as requestModelBundleDownload,
+  importModelBundle as requestModelBundleImport,
+} from "../modelBundles";
+import {
   CLASSIFICATION_MODELS,
   REGRESSION_MODELS,
   coerceRows,
@@ -182,6 +186,100 @@ export function WorkbenchProvider({ children }) {
     setDiagnostics([]);
     setInverseResult(null);
     notify(`${data.rows.length}行 × ${data.columns.length}列を読み込みました。`);
+  }
+
+  async function downloadActiveModel() {
+    if (!modelInfo) {
+      notify("先にモデルを学習または読み込みしてください。", "error");
+      return;
+    }
+    const result = await run(
+      "モデルファイルを作成しています...",
+      () => requestModelBundleDownload(modelInfo.model_id),
+    );
+    if (!result) return;
+
+    const url = URL.createObjectURL(result.blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = result.filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    notify(`${result.filename}をダウンロードしました。`);
+  }
+
+  async function loadModelBundle(file) {
+    if (!file) return null;
+    const response = await run(
+      "モデルファイルを検証して読み込んでいます...",
+      () => requestModelBundleImport(file),
+    );
+    if (!response?.model) return null;
+
+    const info = response.model;
+    const restoredTargets = [...(info.target_cols || [])];
+    const restoredTasks = Object.fromEntries(
+      restoredTargets.map((target, index) => [target, info.tasks?.[index] || "regression"]),
+    );
+    const restoredNum = [...new Set(response.num_cols || [])];
+    const restoredCat = [
+      ...new Set([
+        ...(response.cat_cols || []),
+        ...(response.smiles_cols || []),
+        ...(response.comp_cols || []),
+      ]),
+    ];
+    const restoredFeatures = [...restoredNum, ...restoredCat];
+    const restoredModels = Object.fromEntries(
+      restoredTargets.map((target) => [
+        target,
+        info.model_names_by_target?.[target]?.[0] || defaultModel(restoredTasks[target]),
+      ]),
+    );
+
+    setFileName(file.name || "loaded-model.malchan");
+    setRows([]);
+    setColumns([...restoredFeatures, ...restoredTargets]);
+    setNumeric([
+      ...restoredNum,
+      ...restoredTargets.filter((target) => restoredTasks[target] === "regression"),
+    ]);
+    setCategorical([
+      ...restoredCat,
+      ...restoredTargets.filter((target) => restoredTasks[target] === "classification"),
+    ]);
+    setTargets(restoredTargets);
+    setTasks(restoredTasks);
+    setNumFeatures(restoredNum);
+    setCatFeatures(restoredCat);
+    setModelNames(restoredModels);
+    setCandidates(Object.fromEntries(
+      restoredTargets.map((target) => [target, defaultCandidates(restoredTasks[target])]),
+    ));
+    setChartX(restoredNum[0] || "");
+    setChartY(restoredTargets[0] || "");
+    setPredictValues(Object.fromEntries(restoredFeatures.map((column) => [column, ""])));
+    setObjectives(Object.fromEntries(
+      restoredTargets.map((target) => [
+        target,
+        restoredTasks[target] === "classification"
+          ? { mode: "target", value: "" }
+          : { mode: "direction", value: "max" },
+      ]),
+    ));
+    setBounds(Object.fromEntries(
+      restoredNum.map((column) => [column, { min: 0, max: 1 }]),
+    ));
+    setModelInfo(info);
+    setComparison(null);
+    setPrediction(null);
+    setDiagnostics([]);
+    setInverseResult(null);
+    notify(`モデル ${info.model_id} をメモリへ読み込みました。`);
+    return info;
   }
 
   function changeTargets(nextTargets) {
@@ -496,7 +594,8 @@ ${inverseResult
     sampler, setSampler, inverseTrials, setInverseTrials, topK, setTopK,
     reportProblem, setReportProblem, report, setReport,
     features, stats, missing, ready,
-    loadFile, changeTargets, changeTask, trainModel, compareModels,
+    loadFile, loadModelBundle, downloadActiveModel,
+    changeTargets, changeTask, trainModel, compareModels,
     tuneBestLater, predictOne, updateDiagnostics, runInverseAnalysis,
     makeReportPrompt,
   };
