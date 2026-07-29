@@ -91,11 +91,17 @@ function buildCommon(structure) {
 }
 
 function buildModels(structure, modelNames) {
-  const fitted = walk(structure, [])
-    .filter((node) => node.kind === "estimator")
-    .map((node) => node.class_name || node.name);
-  const models = unique([...(modelNames || []), ...fitted]);
-  return models.length ? models : ["モデル情報なし"];
+  // APIに保存されたモデル名を表示上の正として使用する。
+  // 例: RandomForest と RandomForestRegressor を二重表示しない。
+  const configured = unique(modelNames || []);
+  if (configured.length) return configured;
+
+  const fitted = unique(
+    walk(structure, [])
+      .filter((node) => node.kind === "estimator")
+      .map((node) => node.class_name || node.name),
+  );
+  return fitted.length ? fitted : ["モデル情報なし"];
 }
 
 function TextList({ items }) {
