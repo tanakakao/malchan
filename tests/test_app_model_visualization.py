@@ -1,4 +1,4 @@
-"""Tests for trained-model diagrams and cached validation results."""
+"""Tests for trained-model structures and cached validation results."""
 
 import importlib.util
 
@@ -71,7 +71,7 @@ def _payload() -> dict:
     }
 
 
-def test_model_visualization_returns_sklearn_pipeline_html_and_cached_scores() -> None:
+def test_model_visualization_returns_native_structure_and_cached_scores() -> None:
     from fastapi.testclient import TestClient
 
     from malchan.app import create_app
@@ -96,10 +96,17 @@ def test_model_visualization_returns_sklearn_pipeline_html_and_cached_scores() -
     assert before.json()["evaluation"] is None
     target = before.json()["targets"][0]
     assert target["target"] == "y"
-    assert target["renderer"] == "sklearn"
-    assert "Pipeline" in target["html"]
-    assert "StandardScaler" in target["html"]
-    assert "LinearRegression" in target["html"]
+    assert target["renderer"] == "native"
+    assert target["html"] == ""
+
+    structure = target["structure"]
+    assert structure["kind"] == "pipeline"
+    assert structure["class_name"] == "Pipeline"
+    assert [child["name"] for child in structure["children"]] == ["scale", "predictor"]
+    assert structure["children"][0]["class_name"] == "StandardScaler"
+    assert structure["children"][0]["kind"] == "transformer"
+    assert structure["children"][1]["class_name"] == "LinearRegression"
+    assert structure["children"][1]["kind"] == "estimator"
 
     assert evaluated.status_code == 200
     cached = after.json()["evaluation"]
