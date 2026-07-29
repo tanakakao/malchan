@@ -224,6 +224,15 @@ function inverseAnalysisPayload(payload) {
   };
 }
 
+async function evaluateAndNotify(modelId, payload) {
+  const result = await request(`/models/${encodeURIComponent(modelId)}/evaluate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  window.dispatchEvent(new CustomEvent("malchan:model-evaluated", { detail: result }));
+  return result;
+}
+
 export const api = {
   health: () => request("/health"),
   modelParameters: (task, modelName) =>
@@ -236,16 +245,14 @@ export const api = {
   }),
   listModels: () => request("/models"),
   modelInfo: (modelId) => request(`/models/${encodeURIComponent(modelId)}`),
+  modelVisualization: (modelId) =>
+    request(`/models/${encodeURIComponent(modelId)}/visualization`),
   predict: (modelId, payload) =>
     request(`/models/${encodeURIComponent(modelId)}/predict`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  evaluate: (modelId, payload) =>
-    request(`/models/${encodeURIComponent(modelId)}/evaluate`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+  evaluate: evaluateAndNotify,
   compare: (modelId, payload) =>
     request(`/models/${encodeURIComponent(modelId)}/compare`, {
       method: "POST",
