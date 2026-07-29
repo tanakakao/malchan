@@ -20,6 +20,7 @@ from .model_configuration import (
     ModelParameterSchemaResponse,
     TargetModelEvaluation,
 )
+from .model_visualization import ModelVisualizationResponse, TargetModelDiagram
 from .models import (
     HealthResponse,
     ModelInfo,
@@ -60,6 +61,7 @@ __all__ = [
     "ModelListResponse",
     "ModelParameterDefinition",
     "ModelParameterSchemaResponse",
+    "ModelVisualizationResponse",
     "NumericSearchRange",
     "PlotlyFigureResponse",
     "PredictRequest",
@@ -67,6 +69,7 @@ __all__ = [
     "RecomputeXaiRequest",
     "SumConstraint",
     "TargetComparisonResponse",
+    "TargetModelDiagram",
     "TargetModelEvaluation",
     "TrainModelRequest",
     "TuneBestModelRequest",
