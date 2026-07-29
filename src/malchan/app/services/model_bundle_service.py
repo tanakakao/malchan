@@ -42,6 +42,12 @@ class ModelBundleTooLargeError(ValueError):
     """Raised when a model bundle exceeds the configured in-memory limit."""
 
 
+def _runtime_python_version() -> str:
+    """Return the Python major and minor version relevant to pickle compatibility."""
+
+    return f"{sys.version_info.major}.{sys.version_info.minor}"
+
+
 def _secret_bytes(service: Any) -> bytes:
     """Return the configured HMAC key and reject weak or missing secrets."""
 
@@ -162,7 +168,7 @@ def _build_bundle(service: Any, model_id: str) -> tuple[bytes, str]:
         "format_version": _BUNDLE_FORMAT_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "malchan_version": __version__,
-        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "python_version": _runtime_python_version(),
         "original_model_id": registered.info.model_id,
         "payload_sha256": hashlib.sha256(payload).hexdigest(),
     }
@@ -238,6 +244,13 @@ def _parse_bundle(service: Any, bundle: bytes) -> tuple[dict[str, Any], dict[str
         raise InvalidModelBundleError(
             f"モデルファイルの形式バージョン{header.get('format_version')!r}には対応していません。"
         )
+    bundle_python = str(header.get("python_version") or "")
+    if bundle_python != _runtime_python_version():
+        raise InvalidModelBundleError(
+            "モデルファイルはPython "
+            f"{bundle_python or '不明'}で作成されています。"
+            f"現在のPython {_runtime_python_version()}と同じ環境で読み込んでください。"
+        )
 
     payload = raw[header_end:payload_end]
     if not hmac.compare_digest(
@@ -298,36 +311,47 @@ def import_model_bundle(self: Any, bundle: bytes) -> ModelBundleImportResponse:
             raise InvalidModelBundleError(f"モデルファイルの{name}が不正です。")
         normalized_columns[name] = list(dict.fromkeys(values))
 
+    evaluation_payload = payload.get("evaluation")
+    try:
+        restored_evaluation = (
+            None
+            if evaluation_payload is None
+            else ModelEvaluationResponse.model_validate(evaluation_payload)
+        )
+    except (TypeError, ValueError) as exc:
+        raise InvalidModelBundleError("モデルファイルの精度検証結果が不正です。") from exc
+    xai_state = payload.get("xai_state")
+    restored_xai_state = deepcopy(xai_state) if isinstance(xai_state, dict) else None
+
     with self._lock:
         new_model_id = None
         for _ in range(100):
-            candidate = str(self._id_factory())
+            try:
+                candidate = str(self._id_factory())
+            except StopIteration as exc:
+                raise RuntimeError("読み込みモデルへIDを割り当てられませんでした。") from exc
             if candidate not in self._models:
                 new_model_id = candidate
                 break
         if new_model_id is None:
             raise RuntimeError("読み込みモデルへ一意なIDを割り当てられませんでした。")
+
         restored_info = info.model_copy(update={"model_id": new_model_id})
         self._models[new_model_id] = _RegisteredModel(model=model, info=restored_info)
-
-    evaluation_payload = payload.get("evaluation")
-    if evaluation_payload is not None:
-        evaluation = ModelEvaluationResponse.model_validate(evaluation_payload).model_copy(
-            update={"model_id": new_model_id}
-        )
-        cache = getattr(self, "_model_evaluation_cache", None)
-        if cache is None:
-            cache = {}
-            self._model_evaluation_cache = cache
-        cache[new_model_id] = evaluation
-
-    xai_state = payload.get("xai_state")
-    if isinstance(xai_state, dict):
-        store = getattr(self, "_xai_states", None)
-        if store is None:
-            store = {}
-            self._xai_states = store
-        store[new_model_id] = deepcopy(xai_state)
+        if restored_evaluation is not None:
+            cache = getattr(self, "_model_evaluation_cache", None)
+            if cache is None:
+                cache = {}
+                self._model_evaluation_cache = cache
+            cache[new_model_id] = restored_evaluation.model_copy(
+                update={"model_id": new_model_id}
+            )
+        if restored_xai_state is not None:
+            store = getattr(self, "_xai_states", None)
+            if store is None:
+                store = {}
+                self._xai_states = store
+            store[new_model_id] = restored_xai_state
 
     return ModelBundleImportResponse(
         model=restored_info,
