@@ -16,6 +16,7 @@ from malchan.app.schemas import (
     ModelInfo,
     ModelListResponse,
     ModelParameterSchemaResponse,
+    ModelVisualizationResponse,
     PredictRequest,
     PredictionResponse,
     TrainModelRequest,
@@ -106,6 +107,27 @@ def create_api_router(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Model not found.",
+            ) from exc
+
+    @router.get(
+        "/models/{model_id}/visualization",
+        response_model=ModelVisualizationResponse,
+        tags=["models"],
+    )
+    def get_model_visualization(model_id: str) -> ModelVisualizationResponse:
+        """Return sklearn-style estimator diagrams and cached validation scores."""
+
+        try:
+            return service.get_model_visualization(model_id)
+        except ModelNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found.",
+            ) from exc
+        except (RuntimeError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
             ) from exc
 
     @router.post(
