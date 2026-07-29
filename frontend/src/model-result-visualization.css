@@ -146,21 +146,291 @@
   font-weight: 750;
 }
 
-.sklearn-diagram-frame {
+.model-structure-canvas {
   min-width: 0;
-  height: 460px;
-  overflow: hidden;
+  max-height: 620px;
+  padding: 18px;
+  overflow: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #ffffff;
+  background:
+    linear-gradient(color-mix(in srgb, var(--line) 20%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 20%, transparent) 1px, transparent 1px),
+    var(--surface-raised);
+  background-size: 24px 24px;
 }
 
-.sklearn-diagram-frame iframe {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border: 0;
-  background: #ffffff;
+.model-structure-entry,
+.model-structure-output {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.model-structure-entry {
+  margin-bottom: 6px;
+}
+
+.model-structure-output {
+  margin-top: 12px;
+}
+
+.model-structure-entry span,
+.model-structure-output span {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.model-structure-entry i,
+.model-structure-output i {
+  color: var(--primary);
+  font-size: 17px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.model-structure-node {
+  min-width: 0;
+  position: relative;
+}
+
+.model-structure-canvas > .model-structure-node > .model-structure-card {
+  margin-inline: auto;
+}
+
+.model-structure-card {
+  --node-accent: var(--primary);
+  --node-soft: var(--primary-soft);
+  width: 220px;
+  max-width: 100%;
+  min-height: 92px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  position: relative;
+  padding: 11px 12px 12px;
+  border: 1px solid color-mix(in srgb, var(--node-accent) 30%, var(--line));
+  border-left: 4px solid var(--node-accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-raised) 90%, var(--node-soft));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.model-structure-card.kind-branch,
+.model-structure-card.kind-transformer,
+.model-structure-card.kind-passthrough {
+  --node-accent: var(--success);
+  --node-soft: var(--success-soft);
+}
+
+.model-structure-card.kind-ensemble {
+  --node-accent: var(--warning, var(--primary));
+  --node-soft: var(--warning-soft, var(--primary-soft));
+}
+
+.model-structure-card.kind-estimator {
+  --node-accent: var(--primary);
+  --node-soft: var(--primary-soft);
+  border-width: 2px;
+}
+
+.model-structure-card.kind-dropped,
+.model-structure-card.kind-reference {
+  --node-accent: var(--muted);
+  --node-soft: var(--surface-subtle);
+  opacity: 0.82;
+}
+
+.model-structure-card-head {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-structure-kind,
+.model-structure-count {
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.model-structure-kind {
+  color: var(--node-accent);
+}
+
+.model-structure-count {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--node-soft);
+  color: var(--node-accent);
+}
+
+.model-structure-card > strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.model-structure-card > code {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-structure-columns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.model-structure-columns span {
+  max-width: 100%;
+  padding: 3px 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--node-accent) 18%, var(--line));
+  border-radius: 7px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-structure-parameters {
+  margin-top: 2px;
+  border-top: 1px dashed color-mix(in srgb, var(--node-accent) 20%, var(--line));
+}
+
+.model-structure-parameters summary {
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.model-structure-parameters dl {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+
+.model-structure-parameters dl > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(64px, 0.8fr) minmax(0, 1.2fr);
+  gap: 5px;
+}
+
+.model-structure-parameters dt,
+.model-structure-parameters dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 7px;
+}
+
+.model-structure-parameters dt {
+  color: var(--muted);
+}
+
+.model-structure-parameters dd {
+  overflow: hidden;
+  color: var(--text);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-structure-children {
+  min-width: 0;
+  position: relative;
+  margin-top: 28px;
+}
+
+.model-structure-node:has(> .model-structure-children) > .model-structure-card::after {
+  content: "";
+  width: 2px;
+  height: 22px;
+  position: absolute;
+  left: calc(50% - 1px);
+  bottom: -23px;
+  background: color-mix(in srgb, var(--primary) 45%, var(--line));
+}
+
+.model-structure-child {
+  min-width: 0;
+  position: relative;
+}
+
+.layout-sequence {
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 38px;
+  padding: 0 8px 10px;
+}
+
+.layout-sequence > .model-structure-child:not(:first-child)::before {
+  content: "";
+  width: 27px;
+  position: absolute;
+  left: -33px;
+  top: 45px;
+  border-top: 2px solid color-mix(in srgb, var(--primary) 45%, var(--line));
+}
+
+.layout-sequence > .model-structure-child:not(:first-child)::after {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 41px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid color-mix(in srgb, var(--primary) 55%, var(--line));
+}
+
+.layout-branches {
+  min-width: min(760px, 100%);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  padding: 12px 8px 4px;
+  border-top: 2px solid color-mix(in srgb, var(--success) 35%, var(--line));
+}
+
+.layout-branches > .model-structure-child {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+}
+
+.layout-branches > .model-structure-child::before {
+  content: "";
+  width: 2px;
+  height: 12px;
+  position: absolute;
+  top: -12px;
+  left: calc(50% - 1px);
+  background: color-mix(in srgb, var(--success) 40%, var(--line));
+}
+
+.layout-nested {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
 }
 
 .model-result-metric-head,
@@ -235,6 +505,10 @@
   .model-result-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .model-structure-card {
+    width: 200px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -251,8 +525,22 @@
     justify-content: flex-start;
   }
 
-  .sklearn-diagram-frame {
-    height: 400px;
+  .model-structure-canvas {
+    max-height: 540px;
+    padding: 12px;
+  }
+
+  .model-structure-card {
+    width: 184px;
+  }
+
+  .layout-sequence {
+    justify-content: flex-start;
+  }
+
+  .layout-branches {
+    min-width: 210px;
+    grid-template-columns: 1fr;
   }
 
   .model-result-metric-head,

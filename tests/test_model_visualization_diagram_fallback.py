@@ -1,10 +1,11 @@
-"""Tests for sklearn-style diagrams when direct estimator rendering fails."""
+"""Tests for framework-independent trained-model structures."""
 
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.utils import estimator_html_repr as sklearn_estimator_html_repr
+
+from malchan.app.services.estimator_structure import build_estimator_structure
 
 
 def _sample_pipeline() -> Pipeline:
@@ -16,7 +17,15 @@ def _sample_pipeline() -> Pipeline:
                 "preprocess",
                 ColumnTransformer(
                     transformers=[
-                        ("numeric", SimpleImputer(strategy="mean"), ["x"]),
+                        (
+                            "numeric",
+                            Pipeline(
+                                steps=[
+                                    ("imputer", SimpleImputer(strategy="mean")),
+                                ]
+                            ),
+                            ["x", "temperature"],
+                        ),
                     ]
                 ),
             ),
@@ -25,40 +34,49 @@ def _sample_pipeline() -> Pipeline:
     )
 
 
-def test_diagram_fallback_preserves_sklearn_block_structure(monkeypatch) -> None:
-    """A rendering error should retry with a safe diagram instead of plain repr text."""
+def test_native_structure_preserves_pipeline_and_column_branches() -> None:
+    """Pipeline steps and ColumnTransformer columns should remain explicit."""
 
-    from malchan.app.services import model_visualization_service as service
+    structure = build_estimator_structure(_sample_pipeline())
 
-    calls = []
+    assert structure.kind == "pipeline"
+    assert structure.class_name == "Pipeline"
+    assert [child.name for child in structure.children] == ["preprocess", "predictor"]
 
-    def fail_direct_render_once(estimator):
-        calls.append(estimator)
-        if len(calls) == 1:
-            raise ValueError("simulated estimator incompatibility")
-        return sklearn_estimator_html_repr(estimator)
+    preprocess = structure.children[0]
+    assert preprocess.kind == "branch"
+    assert preprocess.class_name == "ColumnTransformer"
+    assert len(preprocess.children) == 1
 
-    monkeypatch.setattr(service, "estimator_html_repr", fail_direct_render_once)
+    numeric = preprocess.children[0]
+    assert numeric.name == "numeric"
+    assert numeric.columns == ["x", "temperature"]
+    assert numeric.kind == "pipeline"
+    assert numeric.children[0].name == "imputer"
+    assert numeric.children[0].class_name == "SimpleImputer"
+    assert numeric.children[0].parameters["strategy"] == "mean"
 
-    html, renderer = service._diagram_html(_sample_pipeline())
-
-    assert len(calls) == 2
-    assert renderer == "sklearn"
-    assert "sk-container" in html
-    assert "preprocess" in html
-    assert "ColumnTransformer" in html
-    assert "RandomForestRegressor" in html
-    assert "malchan-estimator-fallback" not in html
+    predictor = structure.children[1]
+    assert predictor.kind == "estimator"
+    assert predictor.class_name == "RandomForestRegressor"
+    assert predictor.parameters["n_estimators"] == "5"
+    assert predictor.parameters["random_state"] == "0"
 
 
-def test_display_estimator_handles_unhashable_transformers() -> None:
-    """Estimator objects must not be compared through string-only hash sets."""
+def test_native_structure_marks_passthrough_and_dropped_columns() -> None:
+    """ColumnTransformer string directives should be rendered as terminal nodes."""
 
-    from malchan.app.services import model_visualization_service as service
+    transformer = ColumnTransformer(
+        transformers=[
+            ("keep", "passthrough", ["x"]),
+            ("remove", "drop", ["unused"]),
+        ]
+    )
 
-    display_estimator = service._display_estimator(_sample_pipeline())
-    html = sklearn_estimator_html_repr(display_estimator)
+    structure = build_estimator_structure(transformer, name="columns")
 
-    assert "sk-container" in html
-    assert "numeric" in html
-    assert "predictor" in html
+    assert structure.kind == "branch"
+    assert structure.children[0].kind == "passthrough"
+    assert structure.children[0].columns == ["x"]
+    assert structure.children[1].kind == "dropped"
+    assert structure.children[1].columns == ["unused"]

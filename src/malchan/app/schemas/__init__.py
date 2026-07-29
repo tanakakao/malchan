@@ -20,7 +20,12 @@ from .model_configuration import (
     ModelParameterSchemaResponse,
     TargetModelEvaluation,
 )
-from .model_visualization import ModelVisualizationResponse, TargetModelDiagram
+from .model_visualization import (
+    EstimatorNodeKind,
+    EstimatorStructureNode,
+    ModelVisualizationResponse,
+    TargetModelDiagram,
+)
 from .models import (
     HealthResponse,
     ModelInfo,
@@ -47,6 +52,8 @@ from .xai import (
 
 __all__ = [
     "CompareModelsRequest",
+    "EstimatorNodeKind",
+    "EstimatorStructureNode",
     "HealthResponse",
     "InverseAnalysisRequest",
     "InverseAnalysisResponse",
