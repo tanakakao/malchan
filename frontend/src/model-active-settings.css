@@ -1,0 +1,21 @@
+.preprocessing-panel .model-setting-section {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.preprocessing-panel .model-setting-section:has(input[type="checkbox"]:checked),
+.preprocessing-panel .model-setting-section:has(select > option:checked:not([value=""])) {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 30%, var(--surface-subtle));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary) 48%, transparent);
+}
+
+.preprocessing-panel .model-setting-section:has(input[type="checkbox"]:checked)
+  > .model-setting-heading .switch-label,
+.preprocessing-panel .model-setting-section:has(select > option:checked:not([value=""]))
+  > .model-setting-heading .switch-label {
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--line));
+  background: color-mix(in srgb, var(--primary-soft) 40%, var(--surface-raised));
+}
