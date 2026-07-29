@@ -29,6 +29,17 @@ def test_registered_model_uses_sandboxed_sklearn_diagram() -> None:
     assert "<ModelResultVisualizationControl />" in app
 
 
+def test_diagram_document_forces_visual_blocks_when_script_is_unavailable() -> None:
+    """Fallback text should stay hidden even when sklearn initialization is delayed."""
+
+    source = CONTROL.read_text(encoding="utf-8")
+
+    assert ".sk-text-repr-fallback { display: none !important; }" in source
+    assert ".sk-container { display: inline-block !important; }" in source
+    assert "--sklearn-color-text-on-default-background: #111827;" in source
+    assert "--sklearn-color-background: #ffffff;" in source
+
+
 def test_model_html_is_fixed_directly_below_registered_model_heading() -> None:
     """Estimator HTML should be mounted directly below the registered-model title."""
 
