@@ -1,4 +1,6 @@
-"""Schemas for trained-model diagrams and cached evaluation results."""
+"""Schemas for trained-model structures and cached evaluation results."""
+
+from __future__ import annotations
 
 from typing import Literal
 
@@ -8,22 +10,51 @@ from .model_configuration import ModelEvaluationResponse
 from .models import TaskType
 
 
+EstimatorNodeKind = Literal[
+    "pipeline",
+    "branch",
+    "ensemble",
+    "transformer",
+    "estimator",
+    "passthrough",
+    "dropped",
+    "reference",
+]
+
+
+class EstimatorStructureNode(BaseModel):
+    """Framework-independent node describing a fitted estimator structure."""
+
+    name: str
+    class_name: str
+    kind: EstimatorNodeKind
+    columns: list[str] = Field(default_factory=list)
+    parameters: dict[str, str] = Field(default_factory=dict)
+    children: list[EstimatorStructureNode] = Field(default_factory=list)
+
+
 class TargetModelDiagram(BaseModel):
-    """Scikit-learn style diagram for one target-specific estimator."""
+    """Native structure diagram for one target-specific estimator."""
 
     target: str
     task: TaskType
     model_names: list[str] = Field(default_factory=list)
-    html: str
-    renderer: Literal["sklearn", "text"] = "sklearn"
+    structure: EstimatorStructureNode
+    html: str = ""
+    renderer: Literal["native", "sklearn", "text"] = "native"
 
 
 class ModelVisualizationResponse(BaseModel):
-    """Trained-model diagrams and the latest cached validation result."""
+    """Trained-model structures and the latest cached validation result."""
 
     model_id: str
     targets: list[TargetModelDiagram]
     evaluation: ModelEvaluationResponse | None = None
 
 
-__all__ = ["ModelVisualizationResponse", "TargetModelDiagram"]
+__all__ = [
+    "EstimatorNodeKind",
+    "EstimatorStructureNode",
+    "ModelVisualizationResponse",
+    "TargetModelDiagram",
+]
