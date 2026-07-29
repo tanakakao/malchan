@@ -8,6 +8,7 @@ import "./model.css";
 import "./model-workflow.css";
 import "./model-active-settings.css";
 import "./model-result-visualization.css";
+import "./model-structure-summary.css";
 import "./model-target-tabs.css";
 import "./comparison-evaluation.css";
 import "./xai.css";
