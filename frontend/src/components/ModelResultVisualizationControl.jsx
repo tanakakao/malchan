@@ -274,7 +274,7 @@ export default function ModelResultVisualizationControl() {
           <div className="sklearn-diagram-frame">
             <iframe
               title={`${targetDiagram.target}の学習済みモデル構成`}
-              sandbox=""
+              sandbox="allow-scripts"
               srcDoc={diagramDocument(targetDiagram.html)}
             />
           </div>
