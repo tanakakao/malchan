@@ -54,6 +54,18 @@ def test_summary_table_groups_feature_types_and_preprocessing() -> None:
     assert "featureColumns" in summary
 
 
+def test_model_name_prefers_configured_name_without_estimator_duplication() -> None:
+    """Configured model names should not be combined with equivalent estimator classes."""
+
+    summary = SUMMARY.read_text(encoding="utf-8")
+
+    assert "const configured = unique(modelNames || []);" in summary
+    assert "if (configured.length) return configured;" in summary
+    assert "node.kind === \"estimator\"" in summary
+    assert "return fitted.length ? fitted" in summary
+    assert "[...(modelNames || []), ...fitted]" not in summary
+
+
 def test_model_summary_is_fixed_below_registered_model_heading() -> None:
     """The summary should remain directly below the registered-model title."""
 
