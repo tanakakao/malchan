@@ -130,6 +130,7 @@ export default function ModelResultVisualizationControl() {
   const { step, modelInfo } = useWorkbench();
   const [host, setHost] = useState(null);
   const [result, setResult] = useState(null);
+  const [liveEvaluation, setLiveEvaluation] = useState(null);
   const [activeTarget, setActiveTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -187,6 +188,7 @@ export default function ModelResultVisualizationControl() {
   }, [step, modelInfo?.model_id]);
 
   useEffect(() => {
+    setLiveEvaluation(null);
     if (!modelInfo?.model_id) {
       setResult(null);
       return undefined;
@@ -213,7 +215,7 @@ export default function ModelResultVisualizationControl() {
     const updateEvaluation = (event) => {
       const evaluation = event.detail;
       if (!evaluation || evaluation.model_id !== modelInfo?.model_id) return;
-      setResult((current) => current ? { ...current, evaluation } : current);
+      setLiveEvaluation(evaluation);
     };
     window.addEventListener("malchan:model-evaluated", updateEvaluation);
     return () => window.removeEventListener("malchan:model-evaluated", updateEvaluation);
@@ -231,6 +233,7 @@ export default function ModelResultVisualizationControl() {
   if (!host) return null;
 
   const targetDiagram = targets.find((item) => item.target === activeTarget) || targets[0];
+  const evaluation = liveEvaluation || result?.evaluation;
   const createdAt = modelInfo?.created_at
     ? new Date(modelInfo.created_at).toLocaleString("ja-JP")
     : "—";
@@ -269,7 +272,7 @@ export default function ModelResultVisualizationControl() {
         )}
       </section>
 
-      <EvaluationSummary evaluation={result?.evaluation} target={targetDiagram?.target} />
+      <EvaluationSummary evaluation={evaluation} target={targetDiagram?.target} />
 
       <details className="model-result-metadata">
         <summary>モデル情報をJSONで確認</summary>
