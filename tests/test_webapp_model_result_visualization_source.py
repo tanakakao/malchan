@@ -27,6 +27,19 @@ def test_registered_model_uses_sandboxed_sklearn_diagram() -> None:
     assert "<ModelResultVisualizationControl />" in app
 
 
+def test_model_html_is_fixed_directly_below_registered_model_heading() -> None:
+    """Estimator HTML should be mounted directly below the registered-model title."""
+
+    source = CONTROL.read_text(encoding="utf-8")
+
+    assert 'contentRoot.querySelector(".model-registration-panel")' in source
+    assert 'panel.querySelector(":scope > .panel-title")' in source
+    assert 'nextHost.dataset.location = "registered-model"' in source
+    assert 'nextHost.setAttribute("aria-label", "登録モデルの構成と精度検証")' in source
+    assert 'panelTitle.insertAdjacentElement("afterend", nextHost)' in source
+    assert 'panel.insertBefore(nextHost, codebox)' not in source
+
+
 def test_validation_result_is_grouped_by_metric_and_fold_statistics() -> None:
     """Validation metrics should show Train and Validation means and standard deviations."""
 
