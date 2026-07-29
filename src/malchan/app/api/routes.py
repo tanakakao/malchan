@@ -37,6 +37,22 @@ from .xai_routes import create_xai_router
 _MODEL_BUNDLE_MEDIA_TYPE = "application/vnd.malchan.model"
 
 
+async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
+    """Read a request body into memory while enforcing an upper bound."""
+
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="モデルファイルが設定された上限を超えています。",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def create_api_router(
     service: Any,
     app_name: str,
@@ -123,7 +139,7 @@ def create_api_router(
                     )
             except ValueError:
                 pass
-        bundle = await request.body()
+        bundle = await _read_limited_body(request, configured_limit)
         try:
             return service.import_model_bundle(bundle)
         except ModelBundleUnavailableError as exc:
