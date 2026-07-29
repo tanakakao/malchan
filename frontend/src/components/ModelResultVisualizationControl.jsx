@@ -2,35 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../api";
 import { useWorkbench } from "../context/WorkbenchContext";
-
-const NODE_KIND_LABELS = {
-  pipeline: "処理フロー",
-  branch: "列・特徴量分岐",
-  ensemble: "アンサンブル",
-  transformer: "変換",
-  estimator: "予測器",
-  passthrough: "そのまま使用",
-  dropped: "除外",
-  reference: "省略",
-};
-
-const NODE_NAME_LABELS = {
-  model: "学習パイプライン",
-  preprocess: "前処理",
-  predictor: "予測モデル",
-  column_preprocess: "列別前処理",
-  num_cat_prerprocess: "数値・カテゴリ列の前処理",
-  num_cat_common: "数値・カテゴリ共通変換",
-  common_preprocess: "全特徴量の共通変換",
-  num_cat: "数値・カテゴリ特徴量",
-  num: "数値列",
-  cat: "カテゴリ列",
-  imputer: "欠損値補完",
-  scaler: "スケーリング",
-  identity: "変換なし",
-  "one-hot": "One-Hotエンコード",
-  ordinal: "順序エンコード",
-};
+import ModelStructureSummaryTable from "./ModelStructureSummaryTable";
 
 function formatMetric(value) {
   if (!Number.isFinite(value)) return "—";
@@ -55,91 +27,6 @@ function formatSummary(summary) {
   if (!summary) return "—";
   const mean = formatMetric(summary.mean);
   return summary.count > 1 ? `${mean} ± ${formatMetric(summary.std)}` : mean;
-}
-
-function friendlyNodeName(name) {
-  if (NODE_NAME_LABELS[name]) return NODE_NAME_LABELS[name];
-  if (/^smiles_\d+$/.test(name)) return `SMILES特徴量 ${Number(name.split("_")[1]) + 1}`;
-  if (/^comp_\d+$/.test(name)) return `組成式特徴量 ${Number(name.split("_")[1]) + 1}`;
-  if (/^model_\d+$/.test(name)) return `構成モデル ${Number(name.split("_")[1])}`;
-  return name;
-}
-
-function StructureCard({ node }) {
-  const columns = node?.columns || [];
-  const parameters = Object.entries(node?.parameters || {});
-  const kind = node?.kind || "transformer";
-
-  return (
-    <article className={`model-structure-card kind-${kind}`}>
-      <div className="model-structure-card-head">
-        <span className="model-structure-kind">{NODE_KIND_LABELS[kind] || kind}</span>
-        {columns.length > 0 && <span className="model-structure-count">{columns.length}列</span>}
-      </div>
-      <strong>{friendlyNodeName(node?.name || "step")}</strong>
-      <code>{node?.class_name || "Estimator"}</code>
-
-      {columns.length > 0 && (
-        <div className="model-structure-columns" aria-label="対象列">
-          {columns.map((column, index) => (
-            <span key={`${column}-${index}`} title={column}>{column}</span>
-          ))}
-        </div>
-      )}
-
-      {parameters.length > 0 && (
-        <details className="model-structure-parameters">
-          <summary>主要設定</summary>
-          <dl>
-            {parameters.map(([name, value]) => (
-              <div key={name}>
-                <dt>{name}</dt>
-                <dd title={value}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      )}
-    </article>
-  );
-}
-
-function StructureNode({ node, path = "root" }) {
-  if (!node) return null;
-  const children = node.children || [];
-  const layout = node.kind === "pipeline"
-    ? "sequence"
-    : ["branch", "ensemble"].includes(node.kind)
-      ? "branches"
-      : "nested";
-
-  return (
-    <div className={`model-structure-node node-${node.kind || "transformer"}`}>
-      <StructureCard node={node} />
-      {children.length > 0 && (
-        <div className={`model-structure-children layout-${layout}`}>
-          {children.map((child, index) => (
-            <div className="model-structure-child" key={`${path}-${child.name}-${index}`}>
-              <StructureNode node={child} path={`${path}-${index}`} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ModelStructureDiagram({ structure }) {
-  if (!structure) {
-    return <p className="settings-note">モデル構造を取得できませんでした。</p>;
-  }
-  return (
-    <div className="model-structure-canvas">
-      <div className="model-structure-entry"><span>入力データ</span><i aria-hidden="true">↓</i></div>
-      <StructureNode node={structure} />
-      <div className="model-structure-output"><i aria-hidden="true">↓</i><span>予測結果</span></div>
-    </div>
-  );
 }
 
 function ModelTargetTabs({ targets, activeTarget, onChange }) {
@@ -230,6 +117,7 @@ export default function ModelResultVisualizationControl() {
     const contentRoot = document.querySelector(".content-inner") || document.body;
     let frameId = null;
     let disposed = false;
+
     const resolveHost = () => {
       if (disposed) return;
       const panel = contentRoot.querySelector(".model-registration-panel");
@@ -246,12 +134,15 @@ export default function ModelResultVisualizationControl() {
         nextHost.setAttribute("aria-label", "登録モデルの構成と精度検証");
       }
       if (panelTitle) {
-        if (panelTitle.nextElementSibling !== nextHost) panelTitle.insertAdjacentElement("afterend", nextHost);
+        if (panelTitle.nextElementSibling !== nextHost) {
+          panelTitle.insertAdjacentElement("afterend", nextHost);
+        }
       } else if (panel.firstElementChild !== nextHost) {
         panel.prepend(nextHost);
       }
       setHost(nextHost);
     };
+
     const scheduleResolve = () => {
       if (frameId !== null) window.cancelAnimationFrame(frameId);
       frameId = window.requestAnimationFrame(() => {
@@ -259,6 +150,7 @@ export default function ModelResultVisualizationControl() {
         resolveHost();
       });
     };
+
     scheduleResolve();
     contentRoot.addEventListener("click", scheduleResolve);
     return () => {
@@ -282,10 +174,18 @@ export default function ModelResultVisualizationControl() {
     setLoading(true);
     setError("");
     api.modelVisualization(modelInfo.model_id)
-      .then((payload) => { if (!cancelled) setResult(payload); })
-      .catch((requestError) => { if (!cancelled) setError(requestError.message || String(requestError)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((payload) => {
+        if (!cancelled) setResult(payload);
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(requestError.message || String(requestError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [modelInfo?.model_id]);
 
   useEffect(() => {
@@ -305,9 +205,12 @@ export default function ModelResultVisualizationControl() {
   }, [targets.map((item) => item.target).join("\u0001")]);
 
   if (!host) return null;
+
   const targetDiagram = targets.find((item) => item.target === activeTarget) || targets[0];
   const evaluation = liveEvaluation || result?.evaluation;
-  const createdAt = modelInfo?.created_at ? new Date(modelInfo.created_at).toLocaleString("ja-JP") : "—";
+  const createdAt = modelInfo?.created_at
+    ? new Date(modelInfo.created_at).toLocaleString("ja-JP")
+    : "—";
 
   return createPortal(
     <div className="model-result-visualization">
@@ -322,14 +225,20 @@ export default function ModelResultVisualizationControl() {
 
       <section className="model-result-diagram-section">
         <div className="model-result-section-head">
-          <div><span>MODEL STRUCTURE</span><strong>{targetDiagram?.target || "学習済みモデル"}の処理構成</strong></div>
+          <div><span>MODEL SUMMARY</span><strong>{targetDiagram?.target || "学習済みモデル"}の構成一覧</strong></div>
           <div className="model-result-model-tags">
             {(targetDiagram?.model_names || []).map((name) => <span key={name}>{name}</span>)}
           </div>
         </div>
         {loading && <p className="settings-note">学習済みモデルの構成を取得しています...</p>}
         {error && <p className="xai-error">{error}</p>}
-        {!loading && targetDiagram && <ModelStructureDiagram structure={targetDiagram.structure} />}
+        {!loading && targetDiagram && (
+          <ModelStructureSummaryTable
+            structure={targetDiagram.structure}
+            featureColumns={modelInfo?.feature_columns || []}
+            modelNames={targetDiagram.model_names || []}
+          />
+        )}
       </section>
 
       <EvaluationSummary evaluation={evaluation} target={targetDiagram?.target} />
