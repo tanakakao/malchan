@@ -42,6 +42,14 @@ function diagramDocument(html) {
   html, body { margin: 0; min-height: 100%; background: #ffffff; color: #111827; }
   body { padding: 18px; box-sizing: border-box; font-family: system-ui, sans-serif; }
   .malchan-estimator-fallback { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+  .sk-top-container {
+    --sklearn-color-text-on-default-background: #111827;
+    --sklearn-color-background: #ffffff;
+    --sklearn-color-border-box: #111827;
+    --sklearn-color-icon: #6b7280;
+  }
+  .sk-text-repr-fallback { display: none !important; }
+  .sk-container { display: inline-block !important; }
 </style>
 </head>
 <body>${html || ""}</body>
