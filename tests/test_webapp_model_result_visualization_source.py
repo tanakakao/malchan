@@ -11,7 +11,7 @@ CSS = ROOT / "frontend" / "src" / "model-result-visualization.css"
 
 
 def test_registered_model_uses_sandboxed_sklearn_diagram() -> None:
-    """The raw model JSON should be replaced by a target-specific diagram panel."""
+    """The iframe should execute only the sklearn diagram's internal script."""
 
     source = CONTROL.read_text(encoding="utf-8")
     api = API.read_text(encoding="utf-8")
@@ -19,12 +19,25 @@ def test_registered_model_uses_sandboxed_sklearn_diagram() -> None:
 
     assert "api.modelVisualization(modelInfo.model_id)" in source
     assert 'className="sklearn-diagram-frame"' in source
-    assert 'sandbox=""' in source
+    assert 'sandbox="allow-scripts"' in source
+    assert 'sandbox=""' not in source
+    assert "allow-same-origin" not in source
     assert "srcDoc={diagramDocument(targetDiagram.html)}" in source
     assert "ModelTargetTabs" in source
     assert 'request(`/models/${encodeURIComponent(modelId)}/visualization`)' in api
     assert "ModelResultVisualizationControl" in app
     assert "<ModelResultVisualizationControl />" in app
+
+
+def test_diagram_document_forces_visual_blocks_when_script_is_unavailable() -> None:
+    """Fallback text should stay hidden even when sklearn initialization is delayed."""
+
+    source = CONTROL.read_text(encoding="utf-8")
+
+    assert ".sk-text-repr-fallback { display: none !important; }" in source
+    assert ".sk-container { display: inline-block !important; }" in source
+    assert "--sklearn-color-text-on-default-background: #111827;" in source
+    assert "--sklearn-color-background: #ffffff;" in source
 
 
 def test_model_html_is_fixed_directly_below_registered_model_heading() -> None:
