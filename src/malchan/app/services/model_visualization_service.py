@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from html import escape
 from typing import Any, Callable
 
+from sklearn.base import BaseEstimator
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.utils import estimator_html_repr
 
 from malchan.app.schemas import (
@@ -43,14 +47,95 @@ def _estimator_from_target_model(target_model: Any) -> Any:
     return estimator
 
 
+def _display_leaf(estimator: Any) -> BaseEstimator:
+    """Create a harmless sklearn estimator preserving a leaf's name and details."""
+
+    class_name = re.sub(r"\W|^(?=\d)", "_", type(estimator).__name__) or "Estimator"
+    details = repr(estimator)
+
+    def fit(self: BaseEstimator, *_args: Any, **_kwargs: Any) -> BaseEstimator:
+        return self
+
+    def estimator_repr(self: BaseEstimator) -> str:
+        return details
+
+    display_type = type(
+        class_name,
+        (BaseEstimator,),
+        {
+            "fit": fit,
+            "__repr__": estimator_repr,
+            "__str__": estimator_repr,
+            "__module__": __name__,
+        },
+    )
+    return display_type()
+
+
+def _display_estimator(estimator: Any, seen: set[int] | None = None) -> Any:
+    """Copy an estimator's connection structure into sklearn display primitives."""
+
+    if estimator is None or isinstance(estimator, str):
+        return estimator
+
+    visited = set() if seen is None else seen
+    estimator_id = id(estimator)
+    if estimator_id in visited:
+        return _display_leaf(estimator)
+    visited.add(estimator_id)
+
+    steps = getattr(estimator, "steps", None)
+    if isinstance(steps, (list, tuple)) and steps:
+        normalized_steps = [
+            (str(name), _display_estimator(child, visited.copy()))
+            for name, child in steps
+        ]
+        return Pipeline(steps=normalized_steps)
+
+    transformers = getattr(estimator, "transformers_", None)
+    if not isinstance(transformers, (list, tuple)):
+        transformers = getattr(estimator, "transformers", None)
+    if isinstance(transformers, (list, tuple)) and transformers:
+        normalized_transformers = []
+        for name, transformer, columns in transformers:
+            normalized_transformers.append(
+                (
+                    str(name),
+                    transformer
+                    if transformer in {"drop", "passthrough"}
+                    else _display_estimator(transformer, visited.copy()),
+                    columns,
+                )
+            )
+        return ColumnTransformer(transformers=normalized_transformers)
+
+    members = getattr(estimator, "estimators", None)
+    if isinstance(members, (list, tuple)) and members and all(
+        isinstance(item, tuple) and len(item) == 2 for item in members
+    ):
+        normalized_members = [
+            (str(name), _display_estimator(member, visited.copy()))
+            for name, member in members
+            if member not in {None, "drop"}
+        ]
+        if normalized_members:
+            return FeatureUnion(transformer_list=normalized_members)
+
+    return _display_leaf(estimator)
+
+
 def _diagram_html(estimator: Any) -> tuple[str, str]:
-    """Return sklearn HTML, falling back to escaped estimator text."""
+    """Return sklearn HTML and preserve a block diagram when direct rendering fails."""
 
     try:
         return estimator_html_repr(estimator), "sklearn"
-    except (AttributeError, RuntimeError, TypeError, ValueError):
-        text = escape(repr(estimator))
-        return f'<pre class="malchan-estimator-fallback">{text}</pre>', "text"
+    except Exception:
+        try:
+            display_estimator = _display_estimator(estimator)
+            return estimator_html_repr(display_estimator), "sklearn"
+        except Exception:
+            text = escape(repr(estimator))
+            return f'<pre class="malchan-estimator-fallback">{text}</pre>', "text"
 
 
 def get_model_visualization(self: Any, model_id: str) -> ModelVisualizationResponse:
