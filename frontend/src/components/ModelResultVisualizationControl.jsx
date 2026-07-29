@@ -155,13 +155,22 @@ export default function ModelResultVisualizationControl() {
         setHost(null);
         return;
       }
+
+      const panelTitle = panel.querySelector(":scope > .panel-title");
       let nextHost = panel.querySelector(":scope > .model-result-visualization-host");
       if (!nextHost) {
         nextHost = document.createElement("div");
         nextHost.className = "model-result-visualization-host";
-        const codebox = panel.querySelector(":scope > .codebox");
-        if (codebox) panel.insertBefore(nextHost, codebox);
-        else panel.appendChild(nextHost);
+        nextHost.dataset.location = "registered-model";
+        nextHost.setAttribute("aria-label", "登録モデルの構成と精度検証");
+      }
+
+      if (panelTitle) {
+        if (panelTitle.nextElementSibling !== nextHost) {
+          panelTitle.insertAdjacentElement("afterend", nextHost);
+        }
+      } else if (panel.firstElementChild !== nextHost) {
+        panel.prepend(nextHost);
       }
       setHost(nextHost);
     };
