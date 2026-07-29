@@ -94,6 +94,10 @@ export default function ModelBundleControl() {
             読み込み時はファイル全体のHMAC署名を確認してからモデルをメモリへ復元します。
             FastAPIの停止後は、読み込んだモデルもメモリから消えます。
           </span>
+          <span>
+            モデル内部に学習データや説明用キャッシュが含まれる場合があります。
+            ダウンロードしたファイルは機密データとして管理してください。
+          </span>
         </div>
 
         <div className="model-bundle-actions">
@@ -125,7 +129,7 @@ export default function ModelBundleControl() {
       <p className="model-bundle-config-note">
         利用前にFastAPI環境へ32文字以上の
         <code>MALCHAN_MODEL_BUNDLE_SECRET</code>
-        を設定してください。同じ秘密値を使用する環境間でのみ読み込めます。
+        を設定してください。同じ秘密値とPythonメジャー・マイナーバージョンを使用する環境間で読み込めます。
       </p>
     </article>,
     host,
