@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from html import escape
 from typing import Any, Callable
@@ -17,6 +18,8 @@ from malchan.app.schemas import (
     ModelVisualizationResponse,
     TargetModelDiagram,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _evaluation_cache(service: Any) -> dict[str, ModelEvaluationResponse]:
@@ -98,11 +101,15 @@ def _display_estimator(estimator: Any, seen: set[int] | None = None) -> Any:
     if isinstance(transformers, (list, tuple)) and transformers:
         normalized_transformers = []
         for name, transformer, columns in transformers:
+            passthrough = isinstance(transformer, str) and transformer in {
+                "drop",
+                "passthrough",
+            }
             normalized_transformers.append(
                 (
                     str(name),
                     transformer
-                    if transformer in {"drop", "passthrough"}
+                    if passthrough
                     else _display_estimator(transformer, visited.copy()),
                     columns,
                 )
@@ -116,7 +123,8 @@ def _display_estimator(estimator: Any, seen: set[int] | None = None) -> Any:
         normalized_members = [
             (str(name), _display_estimator(member, visited.copy()))
             for name, member in members
-            if member not in {None, "drop"}
+            if member is not None
+            and not (isinstance(member, str) and member == "drop")
         ]
         if normalized_members:
             return FeatureUnion(transformer_list=normalized_members)
@@ -129,11 +137,21 @@ def _diagram_html(estimator: Any) -> tuple[str, str]:
 
     try:
         return estimator_html_repr(estimator), "sklearn"
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Direct estimator HTML rendering failed for %s: %s",
+            type(estimator).__name__,
+            exc,
+        )
         try:
             display_estimator = _display_estimator(estimator)
             return estimator_html_repr(display_estimator), "sklearn"
-        except Exception:
+        except Exception as fallback_exc:
+            logger.warning(
+                "Display-estimator HTML rendering also failed for %s: %s",
+                type(estimator).__name__,
+                fallback_exc,
+            )
             text = escape(repr(estimator))
             return f'<pre class="malchan-estimator-fallback">{text}</pre>', "text"
 
