@@ -1,9 +1,9 @@
 name: Temporary Data Page Build
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/apply-materials-workbench-design
+      - main
 
 jobs:
   build:
