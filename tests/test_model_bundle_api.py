@@ -1,6 +1,7 @@
-"""Tests for signed downloadable model bundles."""
+"""Tests for downloadable trusted model artifacts."""
 
 import importlib.util
+import pickle
 from pathlib import Path
 
 import pandas as pd
@@ -63,7 +64,7 @@ def _payload() -> dict:
     }
 
 
-def _client(secret: str | None, ids: list[str], max_bytes: int = 1024 * 1024):
+def _client(ids: list[str], max_bytes: int = 1024 * 1024):
     """Create a client with deterministic model identifiers."""
 
     from fastapi.testclient import TestClient
@@ -78,16 +79,15 @@ def _client(secret: str | None, ids: list[str], max_bytes: int = 1024 * 1024):
     )
     settings = AppSettings(
         serve_frontend=False,
-        model_bundle_secret=secret,
         model_bundle_max_bytes=max_bytes,
     )
     return TestClient(create_app(settings=settings, model_service=service))
 
 
 def test_model_bundle_round_trip_restores_prediction_and_columns() -> None:
-    """A downloaded bundle should restore a usable model without server storage."""
+    """A downloaded artifact should restore a usable model without server storage."""
 
-    client = _client("a" * 32, ["model-1", "model-2"])
+    client = _client(["model-1", "model-2"])
     trained = client.post("/api/models", json=_payload())
     exported = client.get("/api/models/model-1/export")
 
@@ -96,6 +96,11 @@ def test_model_bundle_round_trip_restores_prediction_and_columns() -> None:
     assert exported.headers["content-type"].startswith("application/vnd.malchan.model")
     assert exported.headers["cache-control"] == "no-store"
     assert ".malchan" in exported.headers["content-disposition"]
+
+    artifact = pickle.loads(exported.content)
+    assert artifact["format"] == "malchan-model-artifact"
+    assert artifact["artifact_version"] == 1
+    assert artifact["metadata"]["original_model_id"] == "model-1"
 
     assert client.delete("/api/models/model-1").status_code == 204
     restored = client.post(
@@ -116,39 +121,36 @@ def test_model_bundle_round_trip_restores_prediction_and_columns() -> None:
     assert predicted.json()["predictions"] == [{"y": 6.0}]
 
 
-def test_model_bundle_rejects_modified_or_differently_signed_files() -> None:
-    """HMAC verification should reject tampering and a different environment secret."""
+def test_model_bundle_is_portable_without_shared_secret() -> None:
+    """Another compatible malchan process should load the artifact without a key."""
 
-    source = _client("a" * 32, ["model-1"])
+    source = _client(["model-1"])
     source.post("/api/models", json=_payload())
     bundle = source.get("/api/models/model-1/export").content
 
-    tampered = bytearray(bundle)
-    tampered[-1] ^= 1
-    assert source.post("/api/model-bundles/import", content=bytes(tampered)).status_code == 422
+    destination = _client(["model-2"])
+    restored = destination.post("/api/model-bundles/import", content=bundle)
 
-    destination = _client("b" * 32, ["model-2"])
-    response = destination.post("/api/model-bundles/import", content=bundle)
-    assert response.status_code == 422
-    assert "署名" in response.json()["detail"]
+    assert restored.status_code == 201
+    assert restored.json()["model"]["model_id"] == "model-2"
+    assert restored.json()["original_model_id"] == "model-1"
 
 
-def test_model_bundle_requires_configured_secret_and_enforces_size_limit() -> None:
-    """Unsafe unsigned operation and oversized uploads should remain disabled."""
+def test_model_bundle_rejects_invalid_content_and_enforces_size_limit() -> None:
+    """Malformed and oversized uploads should return validation errors."""
 
-    unsigned = _client(None, ["model-1"])
-    unsigned.post("/api/models", json=_payload())
-    unavailable = unsigned.get("/api/models/model-1/export")
-    assert unavailable.status_code == 503
-    assert "MALCHAN_MODEL_BUNDLE_SECRET" in unavailable.json()["detail"]
+    client = _client(["model-1"])
+    invalid = client.post("/api/model-bundles/import", content=b"not-a-pickle")
+    assert invalid.status_code == 422
+    assert "復元できません" in invalid.json()["detail"]
 
-    limited = _client("a" * 32, ["model-1"], max_bytes=64)
+    limited = _client(["model-1"], max_bytes=64)
     oversized = limited.post("/api/model-bundles/import", content=b"x" * 65)
     assert oversized.status_code == 413
 
 
-def test_model_bundle_service_does_not_use_server_filesystem() -> None:
-    """The implementation should serialize request and response bytes only in memory."""
+def test_model_bundle_service_does_not_use_server_filesystem_or_signatures() -> None:
+    """The implementation should use a simple bounded in-memory artifact."""
 
     source = (
         Path(__file__).resolve().parents[1]
@@ -163,6 +165,10 @@ def test_model_bundle_service_does_not_use_server_filesystem() -> None:
     assert "NamedTemporaryFile" not in source
     assert "Path(" not in source
     assert "open(" not in source
-    assert "pickle.loads(payload)" in source
-    assert "hmac.compare_digest(supplied_signature, expected_signature)" in source
-    assert source.index("hmac.compare_digest(supplied_signature, expected_signature)") < source.index("pickle.loads(payload)")
+    assert "pickle.dumps(artifact" in source
+    assert "pickle.loads(raw)" in source
+    assert "malchan-model-artifact" in source
+    assert "artifact_version" in source
+    assert "hmac" not in source
+    assert "payload_sha256" not in source
+    assert "MALCHAN_MODEL_BUNDLE_SECRET" not in source

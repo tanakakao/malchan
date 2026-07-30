@@ -41,7 +41,8 @@ def test_model_file_card_is_available_on_model_page() -> None:
     assert "モデルをダウンロード" in control
     assert "モデルファイルを読み込む" in control
     assert "Server storage off" in control
-    assert "機密データとして管理" in control
+    assert "作成元を信頼できるファイルだけ" in control
+    assert "署名用の秘密値は不要" in control
     assert 'accept=".malchan,application/vnd.malchan.model"' in control
     assert "<ModelBundleControl />" in app
     assert 'import "./model-bundle.css";' in main
@@ -64,8 +65,8 @@ def test_loaded_model_restores_workbench_metadata_without_training_rows() -> Non
     assert "URL.createObjectURL(result.blob)" in context
 
 
-def test_fastapi_bundle_routes_require_signature_configuration() -> None:
-    """The API should expose bounded in-memory transfer and environment-backed signing."""
+def test_fastapi_bundle_routes_use_bounded_in_memory_artifacts() -> None:
+    """The API should expose bounded transfer without signing configuration."""
 
     routes = ROUTES.read_text(encoding="utf-8")
     settings = SETTINGS.read_text(encoding="utf-8")
@@ -75,6 +76,5 @@ def test_fastapi_bundle_routes_require_signature_configuration() -> None:
     assert "async for chunk in request.stream()" in routes
     assert "bundle = await _read_limited_body(request, configured_limit)" in routes
     assert '"Cache-Control": "no-store"' in routes
-    assert "MALCHAN_MODEL_BUNDLE_SECRET" in settings
+    assert "MALCHAN_MODEL_BUNDLE_SECRET" not in settings
     assert "MALCHAN_MODEL_BUNDLE_MAX_MB" in settings
-    assert "repr=False" in settings

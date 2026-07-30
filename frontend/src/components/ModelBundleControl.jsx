@@ -81,7 +81,7 @@ export default function ModelBundleControl() {
           <span className="panel-kicker">MODEL FILE</span>
           <h3>モデルの保存・読み込み</h3>
           <p>
-            サーバーへ永続保存せず、署名付きモデルファイルをPCへダウンロードして管理します。
+            サーバーへ永続保存せず、モデルファイルをPCへダウンロードして管理します。
           </p>
         </div>
         <span className="status-chip">Server storage off</span>
@@ -89,14 +89,14 @@ export default function ModelBundleControl() {
 
       <div className="model-bundle-content">
         <div className="model-bundle-security-note">
-          <strong>署名検証あり</strong>
+          <strong>bochanと同様の信頼済みファイル方式</strong>
           <span>
-            読み込み時はファイル全体のHMAC署名を確認してからモデルをメモリへ復元します。
-            FastAPIの停止後は、読み込んだモデルもメモリから消えます。
+            モデルファイルはpickle形式です。malchanからダウンロードしたものなど、
+            作成元を信頼できるファイルだけを読み込んでください。
           </span>
           <span>
             モデル内部に学習データや説明用キャッシュが含まれる場合があります。
-            ダウンロードしたファイルは機密データとして管理してください。
+            FastAPIの停止後は、読み込んだモデルもメモリから消えます。
           </span>
         </div>
 
@@ -127,9 +127,8 @@ export default function ModelBundleControl() {
       </div>
 
       <p className="model-bundle-config-note">
-        利用前にFastAPI環境へ32文字以上の
-        <code>MALCHAN_MODEL_BUNDLE_SECRET</code>
-        を設定してください。同じ秘密値とPythonメジャー・マイナーバージョンを使用する環境間で読み込めます。
+        署名用の秘密値は不要です。作成時と互換性のあるmalchanおよび依存ライブラリの
+        環境で読み込んでください。
       </p>
     </article>,
     host,
