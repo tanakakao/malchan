@@ -3,10 +3,16 @@ import ComparisonTable from "../components/ComparisonTable";
 import { SectionHeader } from "../components/Common";
 import { useWorkbench } from "../context/WorkbenchContext";
 
-const SIMPLE_MODELS = [
+const SIMPLE_REGRESSION_MODELS = [
   "線形回帰",
   "ElasticNet",
   "ランダムフォレスト回帰",
+  "LightGBM",
+];
+
+const SIMPLE_CLASSIFICATION_MODELS = [
+  "ロジスティック回帰",
+  "ランダムフォレスト",
   "LightGBM",
 ];
 
@@ -22,7 +28,7 @@ export default function SimpleModelResultPage() {
       <SectionHeader
         step="3 · MODEL"
         title="自動モデル比較の結果"
-        text="固定した4候補を同じ5-fold交差検証で比較し、Validation RMSEが最も小さいモデルを有効化します。"
+        text="回帰はValidation RMSE、分類はValidation F1で候補を5-fold交差検証し、目的変数ごとの最良モデルを有効化します。"
         action={(
           <button
             type="button"
@@ -39,18 +45,23 @@ export default function SimpleModelResultPage() {
           <div>
             <span className="panel-kicker">SIMPLE MODE</span>
             <h3>自動選択の条件</h3>
-            <p>詳細な前処理・モデル・パラメータ設定は行わず、共通条件で公平に比較します。</p>
+            <p>詳細な前処理・モデル・パラメータ設定は行わず、タスク別の固定候補を共通条件で比較します。</p>
           </div>
           <span className={`status-chip ${comparison ? "success" : "warning"}`}>
             {comparison ? "Completed" : "Not run"}
           </span>
         </div>
         <div className="simple-default-grid">
-          <span><strong>Task</strong> 単一目的の回帰</span>
-          <span><strong>Metric</strong> Validation RMSE</span>
+          <span><strong>Regression metric</strong> Validation RMSE</span>
+          <span><strong>Classification metric</strong> Validation F1</span>
           <span><strong>Validation</strong> 5-fold CV</span>
-          <span><strong>Activation</strong> 1位を自動採用</span>
-          <span className="simple-model-list"><strong>Models</strong> {SIMPLE_MODELS.join(" / ")}</span>
+          <span><strong>Activation</strong> 各目的変数の1位を自動採用</span>
+          <span className="simple-model-list">
+            <strong>Regression</strong> {SIMPLE_REGRESSION_MODELS.join(" / ")}
+          </span>
+          <span className="simple-model-list">
+            <strong>Classification</strong> {SIMPLE_CLASSIFICATION_MODELS.join(" / ")}
+          </span>
           <span><strong>Selected</strong> {bestModels || "未実行"}</span>
         </div>
       </article>
@@ -60,7 +71,7 @@ export default function SimpleModelResultPage() {
       {!comparison && (
         <div className="button-row simple-result-actions">
           <button type="button" className="secondary" onClick={() => setStep("prepare")}>
-            説明変数の選択へ戻る
+            変数選択へ戻る
           </button>
         </div>
       )}
