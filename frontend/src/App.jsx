@@ -15,10 +15,12 @@ import DataPage from "./pages/DataPage";
 import ExplorePage from "./pages/ExplorePage";
 import PreparePage from "./pages/PreparePage";
 import ModelPage from "./pages/ModelPage";
+import SimpleModelResultPage from "./pages/SimpleModelResultPage";
 import ExplainPage from "./pages/ExplainPage";
 import PredictionPage from "./pages/PredictionPage";
 import OptimizePage from "./pages/OptimizePage";
 import ReportPage from "./pages/ReportPage";
+import { setWorkbenchMode, useWorkbenchMode } from "./workbenchMode";
 
 const APP_STEPS = [
   ["data", "Data", "読込・確認"],
@@ -31,6 +33,16 @@ const APP_STEPS = [
   ["report", "Report", "レポート"],
 ];
 
+const SIMPLE_STEP_IDS = new Set([
+  "data",
+  "prepare",
+  "model",
+  "explain",
+  "predict",
+  "optimize",
+  "report",
+]);
+
 const PAGES = {
   data: DataPage,
   explore: ExplorePage,
@@ -41,7 +53,16 @@ const PAGES = {
   optimize: OptimizePage,
   report: ReportPage,
 };
-const ICONS = ["▦", "◫", "◇", "⌁", "◎", "◉", "↗", "▧"];
+const ICONS = {
+  data: "▦",
+  explore: "◫",
+  prepare: "◇",
+  model: "⌁",
+  explain: "◎",
+  predict: "◉",
+  optimize: "↗",
+  report: "▧",
+};
 const API_STATUS_LABELS = {
   loading: "確認中",
   ready: "利用可能",
@@ -50,13 +71,25 @@ const API_STATUS_LABELS = {
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL?.trim() || "http://127.0.0.1:5172";
 
 function WorkbenchLayout() {
+  const mode = useWorkbenchMode();
   const {
     theme, setTheme, step, setStep, health, busy, toast, setToast,
     fileName, rows, features, targets, modelInfo, comparison,
   } = useWorkbench();
-  const index = APP_STEPS.findIndex(([id]) => id === step);
-  const Page = PAGES[step] || DataPage;
+  const visibleSteps = mode === "simple"
+    ? APP_STEPS.filter(([id]) => SIMPLE_STEP_IDS.has(id))
+    : APP_STEPS;
+  const index = visibleSteps.findIndex(([id]) => id === step);
+  const Page = mode === "simple" && step === "model"
+    ? SimpleModelResultPage
+    : PAGES[step] || DataPage;
   const apiStatusLabel = API_STATUS_LABELS[health.status] || "利用不可";
+
+  React.useEffect(() => {
+    if (mode === "simple" && step === "explore") {
+      setStep(rows.length ? "prepare" : "data");
+    }
+  }, [mode, rows.length, setStep, step]);
 
   return (
     <div className="app-root">
@@ -69,7 +102,7 @@ function WorkbenchLayout() {
           </div>
         </div>
         <div className="workflow-strip" aria-label="ワークフロー">
-          {APP_STEPS.map(([id, label], stepIndex) => (
+          {visibleSteps.map(([id, label], stepIndex) => (
             <React.Fragment key={id}>
               <button
                 className={`workflow-step ${id === step ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
@@ -78,7 +111,7 @@ function WorkbenchLayout() {
               >
                 <span>{stepIndex + 1}</span><strong>{label}</strong>
               </button>
-              {stepIndex < APP_STEPS.length - 1 && <i />}
+              {stepIndex < visibleSteps.length - 1 && <i />}
             </React.Fragment>
           ))}
         </div>
@@ -110,16 +143,36 @@ function WorkbenchLayout() {
 
       <main className="app-shell">
         <aside className="left-rail">
+          <div className="rail-section-label">MODE</div>
+          <div className="workbench-mode-switch" role="group" aria-label="実行モード">
+            <button
+              type="button"
+              className={mode === "simple" ? "active" : ""}
+              aria-pressed={mode === "simple"}
+              onClick={() => setWorkbenchMode("simple")}
+            >
+              簡易
+            </button>
+            <button
+              type="button"
+              className={mode === "advanced" ? "active" : ""}
+              aria-pressed={mode === "advanced"}
+              onClick={() => setWorkbenchMode("advanced")}
+            >
+              詳細
+            </button>
+          </div>
+
           <div className="rail-section-label">WORKFLOW</div>
           <nav className="tabs" aria-label="ページナビゲーション">
-            {APP_STEPS.map(([id, label, detail], stepIndex) => (
+            {visibleSteps.map(([id, label, detail], stepIndex) => (
               <button
                 key={id}
                 className={`tab ${step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
                 onClick={() => setStep(id)}
                 aria-current={step === id ? "page" : undefined}
               >
-                <span className="nav-icon">{ICONS[stepIndex]}</span>
+                <span className="nav-icon">{ICONS[id]}</span>
                 <span><strong>{label}</strong><small>{detail}</small></span>
                 <em>{stepIndex + 1}</em>
               </button>
