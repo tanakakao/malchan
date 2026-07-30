@@ -1,3 +1,70 @@
+.dropzone {
+  position: relative;
+  min-height: 190px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  padding: 34px 18px;
+  overflow: hidden;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 17px;
+  color: var(--text);
+  text-align: center;
+  background: var(--surface-subtle);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.dropzone::after {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  filter: blur(5px);
+  transform: translate(110px, -90px);
+  pointer-events: none;
+}
+
+.dropzone:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: translateY(-1px);
+}
+
+.dropzone input {
+  display: none;
+}
+
+.dropzone span {
+  position: relative;
+  z-index: 1;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.dropzone strong {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+}
+
+.dropzone .upload-symbol {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
+  border-radius: 15px;
+  color: var(--primary);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+  font-size: 23px;
+}
+
 .dropzone.dragging {
   border-color: var(--primary);
   background: var(--primary-soft);
