@@ -17,6 +17,7 @@ import "./prediction.css";
 import "./optimize-header-alignment.css";
 import "./material-features.css";
 import "./material-feature-kind.css";
+import "./simple-mode.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout.css";
