@@ -15,6 +15,12 @@ const SIMPLE_REGRESSION_MODELS = [
   "LightGBM",
 ];
 
+const SIMPLE_CLASSIFICATION_MODELS = [
+  "ロジスティック回帰",
+  "ランダムフォレスト",
+  "LightGBM",
+];
+
 const SIMPLE_PREPROCESSING = {
   impute: true,
   numImputeType: "mean",
@@ -28,6 +34,12 @@ const SIMPLE_PREPROCESSING = {
   decNComponents: 2,
   samplingMethod: "",
 };
+
+function simpleModelsFor(task) {
+  return task === "classification"
+    ? SIMPLE_CLASSIFICATION_MODELS
+    : SIMPLE_REGRESSION_MODELS;
+}
 
 export default function PreparePage() {
   const mode = useWorkbenchMode();
@@ -61,7 +73,7 @@ export default function PreparePage() {
     [columns, targetSet],
   );
   const simpleTargetsSupported = targets.length > 0 && targets.every(
-    (target) => numericSet.has(target) && tasks[target] === "regression",
+    (target) => tasks[target] === "regression" || tasks[target] === "classification",
   );
 
   useEffect(() => {
@@ -161,7 +173,7 @@ export default function PreparePage() {
         cvSplits: 5,
         activateBest: true,
         candidatesByTarget: Object.fromEntries(
-          targets.map((target) => [target, SIMPLE_REGRESSION_MODELS]),
+          targets.map((target) => [target, simpleModelsFor(tasks[target])]),
         ),
       });
       setStep("model");
@@ -172,6 +184,11 @@ export default function PreparePage() {
 
   const selectedFeatureCount = numFeatures.length + catFeatures.length;
   const simpleMode = mode === "simple";
+  const selectedTaskSummary = targets.length
+    ? targets
+        .map((target) => `${target}: ${tasks[target] === "classification" ? "分類" : "回帰"}`)
+        .join(" / ")
+    : "未選択";
 
   return (
     <>
@@ -179,7 +196,7 @@ export default function PreparePage() {
         step={simpleMode ? "2 · PREPARE" : "3 · PREPARE"}
         title={simpleMode ? "目的変数と説明変数を選択してモデルを自動決定する" : "目的変数と説明変数を選択する"}
         text={simpleMode
-          ? "変数選択は詳細モードと同じです。選択した回帰目的変数ごとに4つの候補モデルを比較し、最良モデルを自動採用します。"
+          ? "変数選択は詳細モードと同じです。回帰・分類のタスクに応じた候補モデルを比較し、最良モデルを目的変数ごとに自動採用します。"
           : "bochanと同じカード式の操作で列を選択し、目的変数のタスクと説明変数の型を同じ画面で設定します。"}
         action={simpleMode ? (
           <button
@@ -201,22 +218,17 @@ export default function PreparePage() {
               <p>目的変数と説明変数の選択以外は、固定した既定値で自動実行します。</p>
             </div>
             <span className={`status-chip ${simpleTargetsSupported ? "success" : "warning"}`}>
-              {simpleTargetsSupported ? "Ready" : "Regression required"}
+              {simpleTargetsSupported ? "Ready" : "Target required"}
             </span>
           </div>
           <div className="simple-default-grid">
-            <span><strong>Target</strong> {targets.join(", ") || "未選択"}</span>
-            <span><strong>Task</strong> 回帰</span>
-            <span><strong>Models</strong> 線形回帰 / ElasticNet / Random Forest / LightGBM</span>
+            <span><strong>Target / Task</strong> {selectedTaskSummary}</span>
+            <span><strong>Regression</strong> 線形回帰 / ElasticNet / Random Forest / LightGBM</span>
+            <span><strong>Classification</strong> ロジスティック回帰 / Random Forest / LightGBM</span>
             <span><strong>Validation</strong> 5-fold CV</span>
-            <span><strong>Metric</strong> Validation RMSE</span>
+            <span><strong>Metric</strong> 回帰=RMSE / 分類=F1</span>
             <span><strong>Activation</strong> 各目的変数の1位を自動採用</span>
           </div>
-          {!simpleTargetsSupported && targets.length > 0 && (
-            <p className="simple-mode-warning">
-              簡易モードの自動比較は数値目的変数の回帰に対応しています。分類を選択した場合は詳細モードを使用してください。
-            </p>
-          )}
         </article>
       )}
 
