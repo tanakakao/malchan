@@ -21,6 +21,7 @@ class BundlePipeline:
         """Initialize raw feature metadata."""
 
         self.X = None
+        self.y = None
         self.num_cols = []
         self.cat_cols = []
         self.smiles_cols = []
@@ -40,6 +41,7 @@ class BundlePipeline:
             *self.comp_cols,
         ]
         self.X = kwargs["df"][columns].copy()
+        self.y = kwargs["df"][kwargs["target_col"]].copy()
 
     def predict(self, X, proba=False, idx2item=False):
         """Return deterministic predictions after loading."""
@@ -84,8 +86,8 @@ def _client(ids: list[str], max_bytes: int = 1024 * 1024):
     return TestClient(create_app(settings=settings, model_service=service))
 
 
-def test_model_bundle_round_trip_restores_prediction_and_columns() -> None:
-    """A downloaded artifact should restore a usable model without server storage."""
+def test_model_bundle_round_trip_restores_prediction_columns_and_training_rows() -> None:
+    """A downloaded artifact should restore a usable model and retained data."""
 
     client = _client(["model-1", "model-2"])
     trained = client.post("/api/models", json=_payload())
@@ -118,6 +120,10 @@ def test_model_bundle_round_trip_restores_prediction_and_columns() -> None:
     assert restored.json()["original_model_id"] == "model-1"
     assert restored.json()["num_cols"] == ["x"]
     assert restored.json()["cat_cols"] == []
+    assert restored.json()["training_rows"] == [
+        {"x": 1.0, "y": 2.0},
+        {"x": 2.0, "y": 4.0},
+    ]
     assert predicted.json()["predictions"] == [{"y": 6.0}]
 
 
@@ -134,6 +140,7 @@ def test_model_bundle_is_portable_without_shared_secret() -> None:
     assert restored.status_code == 201
     assert restored.json()["model"]["model_id"] == "model-2"
     assert restored.json()["original_model_id"] == "model-1"
+    assert restored.json()["training_rows"][0]["x"] == 1.0
 
 
 def test_model_bundle_rejects_invalid_content_and_enforces_size_limit() -> None:

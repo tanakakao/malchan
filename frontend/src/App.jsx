@@ -2,6 +2,7 @@ import React from "react";
 import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
 import EnsembleModelSettingsControl from "./components/EnsembleModelSettingsControl";
+import ImportedModelDefaultsControl from "./components/ImportedModelDefaultsControl";
 import MaterialDescriptorSettingsControl from "./components/MaterialDescriptorSettingsControl";
 import MaterialFeatureKindControl from "./components/MaterialFeatureKindControl";
 import ModelBundleControl from "./components/ModelBundleControl";
@@ -152,6 +153,7 @@ function WorkbenchLayout() {
       </footer>
       <ComparisonTuningControl />
       <EnsembleModelSettingsControl />
+      <ImportedModelDefaultsControl />
       <MaterialFeatureKindControl />
       <MaterialDescriptorSettingsControl />
       <ModelSettingDefaultsControl />
