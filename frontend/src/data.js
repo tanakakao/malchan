@@ -128,8 +128,10 @@ export function columnStats(rows, columns) {
 }
 
 export function uniqueValues(rows, column, limit = 50) {
+  const usingImportedRows = !Array.isArray(rows) || rows.length === 0;
   const sourceRows = valueRows(rows);
-  return Array.from(new Set(sourceRows.map((row) => row[column]).filter((value) => !emptyLike(value)))).slice(0, limit);
+  const resolvedLimit = usingImportedRows ? Math.max(limit, sourceRows.length) : limit;
+  return Array.from(new Set(sourceRows.map((row) => row[column]).filter((value) => !emptyLike(value)))).slice(0, resolvedLimit);
 }
 
 export function pearson(xValues, yValues) {
