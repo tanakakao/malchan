@@ -2,6 +2,8 @@ import { ApiError } from "./api";
 
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 const MODEL_BUNDLE_MEDIA_TYPE = "application/vnd.malchan.model";
+const importedRowsByModel = new Map();
+let activeImportedRows = [];
 
 async function responseError(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -30,6 +32,15 @@ function attachmentFilename(header, modelId) {
   if (quoted) return quoted[1];
   const plain = header.match(/filename=([^;]+)/i);
   return plain?.[1]?.trim() || `malchan-model-${modelId}.malchan`;
+}
+
+export function importedModelRows(modelId) {
+  if (!modelId) return [];
+  return importedRowsByModel.get(modelId) || [];
+}
+
+export function activeImportedModelRows() {
+  return activeImportedRows;
 }
 
 export async function downloadModelBundle(modelId) {
@@ -65,7 +76,15 @@ export async function importModelBundle(file) {
     body: file,
   });
   if (!response.ok) throw await responseError(response);
-  return response.json();
+
+  const payload = await response.json();
+  const modelId = payload?.model?.model_id;
+  const trainingRows = Array.isArray(payload?.training_rows)
+    ? payload.training_rows
+    : [];
+  activeImportedRows = trainingRows;
+  if (modelId) importedRowsByModel.set(modelId, trainingRows);
+  return payload;
 }
 
 export { MODEL_BUNDLE_MEDIA_TYPE };
