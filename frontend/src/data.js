@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import readXlsxFile from "read-excel-file";
+import { activeImportedModelRows } from "./modelBundles";
 
 export const REGRESSION_MODELS = [
   "線形回帰",
@@ -37,6 +38,10 @@ export const CLASSIFICATION_MODELS = [
 ];
 
 const emptyLike = (value) => value === null || value === undefined || value === "";
+
+function valueRows(rows) {
+  return Array.isArray(rows) && rows.length ? rows : activeImportedModelRows();
+}
 
 function normalizeCell(value) {
   if (value instanceof Date) return value.toISOString();
@@ -123,7 +128,10 @@ export function columnStats(rows, columns) {
 }
 
 export function uniqueValues(rows, column, limit = 50) {
-  return Array.from(new Set(rows.map((row) => row[column]).filter((value) => !emptyLike(value)))).slice(0, limit);
+  const usingImportedRows = !Array.isArray(rows) || rows.length === 0;
+  const sourceRows = valueRows(rows);
+  const resolvedLimit = usingImportedRows ? Math.max(limit, sourceRows.length) : limit;
+  return Array.from(new Set(sourceRows.map((row) => row[column]).filter((value) => !emptyLike(value)))).slice(0, resolvedLimit);
 }
 
 export function pearson(xValues, yValues) {
@@ -154,7 +162,8 @@ export function correlationMatrix(rows, columns) {
 }
 
 export function numericSummary(rows, column) {
-  const values = rows.map((row) => row[column]).filter((value) => Number.isFinite(value));
+  const sourceRows = valueRows(rows);
+  const values = sourceRows.map((row) => row[column]).filter((value) => Number.isFinite(value));
   if (!values.length) return { min: 0, max: 1 };
   const min = Math.min(...values);
   const max = Math.max(...values);

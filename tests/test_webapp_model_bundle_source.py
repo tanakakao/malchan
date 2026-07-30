@@ -5,7 +5,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_BUNDLES = ROOT / "frontend" / "src" / "modelBundles.js"
 CONTROL = ROOT / "frontend" / "src" / "components" / "ModelBundleControl.jsx"
+DEFAULTS = ROOT / "frontend" / "src" / "components" / "ImportedModelDefaultsControl.jsx"
 CONTEXT = ROOT / "frontend" / "src" / "context" / "WorkbenchContext.jsx"
+DATA = ROOT / "frontend" / "src" / "data.js"
 APP = ROOT / "frontend" / "src" / "App.jsx"
 MAIN = ROOT / "frontend" / "src" / "main.jsx"
 CSS = ROOT / "frontend" / "src" / "model-bundle.css"
@@ -49,8 +51,8 @@ def test_model_file_card_is_available_on_model_page() -> None:
     assert ".model-bundle-actions" in css
 
 
-def test_loaded_model_restores_workbench_metadata_without_training_rows() -> None:
-    """Import should activate the model and restore input groups without raw data."""
+def test_loaded_model_restores_metadata_without_displaying_training_rows() -> None:
+    """Import should activate the model while keeping retained rows out of the data table."""
 
     context = CONTEXT.read_text(encoding="utf-8")
 
@@ -63,6 +65,28 @@ def test_loaded_model_restores_workbench_metadata_without_training_rows() -> Non
     assert "setModelInfo(info);" in context
     assert "downloadActiveModel" in context
     assert "URL.createObjectURL(result.blob)" in context
+
+
+def test_loaded_model_training_rows_initialize_prediction_and_optimization_defaults() -> None:
+    """Retained rows should drive defaults and categorical choices without table restore."""
+
+    bundles = MODEL_BUNDLES.read_text(encoding="utf-8")
+    defaults = DEFAULTS.read_text(encoding="utf-8")
+    data = DATA.read_text(encoding="utf-8")
+    app = APP.read_text(encoding="utf-8")
+
+    assert "payload?.training_rows" in bundles
+    assert "importedRowsByModel.set(modelId, trainingRows)" in bundles
+    assert "export function importedModelRows(modelId)" in bundles
+    assert "function medianValue(rows, column)" in defaults
+    assert "function modeValue(rows, column)" in defaults
+    assert "setPredictValues" in defaults
+    assert "setBounds" in defaults
+    assert "setObjectives" in defaults
+    assert "numericSummary(rows, column)" in defaults
+    assert "activeImportedModelRows()" in data
+    assert "const resolvedLimit = usingImportedRows" in data
+    assert "<ImportedModelDefaultsControl />" in app
 
 
 def test_fastapi_bundle_routes_use_bounded_in_memory_artifacts() -> None:

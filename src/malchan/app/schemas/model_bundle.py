@@ -1,4 +1,6 @@
-"""Schemas for downloading and restoring signed model bundles."""
+"""Schemas for downloading and restoring model artifacts."""
+
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +16,7 @@ class ModelBundleImportResponse(BaseModel):
     cat_cols: list[str] = Field(default_factory=list)
     smiles_cols: list[str] = Field(default_factory=list)
     comp_cols: list[str] = Field(default_factory=list)
+    training_rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
 __all__ = ["ModelBundleImportResponse"]
