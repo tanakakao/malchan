@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
+
+import pandas as pd
 
 from malchan import __version__
 from malchan.app.schemas import (
@@ -101,6 +104,191 @@ def _xai_payload(service: Any, model_id: str) -> dict[str, Any] | None:
         return None
     state = store[model_id]
     return deepcopy(state) if isinstance(state, dict) else None
+
+
+def _as_dataframe(value: Any, columns: list[str] | None = None) -> pd.DataFrame | None:
+    """Convert a stored tabular value to a detached DataFrame when possible."""
+
+    if value is None:
+        return None
+    if isinstance(value, pd.DataFrame):
+        frame = value.copy()
+    elif isinstance(value, pd.Series):
+        frame = value.to_frame()
+    else:
+        try:
+            frame = pd.DataFrame(value)
+        except (TypeError, ValueError):
+            return None
+
+    if columns and frame.shape[1] == len(columns) and not set(columns).issubset(frame.columns):
+        frame.columns = columns
+    return frame.reset_index(drop=True)
+
+
+def _target_series_from_source(
+    source: Any,
+    *,
+    target: str,
+    target_index: int,
+    target_count: int,
+    row_count: int,
+) -> pd.Series | None:
+    """Select one target column from a stored target container."""
+
+    if source is None:
+        return None
+    if isinstance(source, dict):
+        source = source.get(target)
+        if source is None:
+            return None
+
+    frame = _as_dataframe(source)
+    if frame is None or frame.empty:
+        return None
+    if target in frame.columns:
+        series = frame[target]
+    elif frame.shape[1] == target_count and target_index < frame.shape[1]:
+        series = frame.iloc[:, target_index]
+    elif target_count == 1 and frame.shape[1] == 1:
+        series = frame.iloc[:, 0]
+    else:
+        return None
+    if len(series) != row_count:
+        return None
+    return series.reset_index(drop=True)
+
+
+def _target_training_series(
+    model: Any,
+    *,
+    target: str,
+    target_index: int,
+    target_count: int,
+    row_count: int,
+) -> pd.Series | None:
+    """Resolve one raw target series from a model, context, or child model."""
+
+    containers = [model, getattr(model, "context", None)]
+    for container in containers:
+        if container is None:
+            continue
+        for name in ("y", "Y", "target_data", "targets"):
+            series = _target_series_from_source(
+                getattr(container, name, None),
+                target=target,
+                target_index=target_index,
+                target_count=target_count,
+                row_count=row_count,
+            )
+            if series is not None:
+                return series
+        getter = getattr(container, "_get_y", None)
+        if callable(getter):
+            try:
+                source = getter()
+            except (AttributeError, KeyError, TypeError, ValueError):
+                source = None
+            series = _target_series_from_source(
+                source,
+                target=target,
+                target_index=target_index,
+                target_count=target_count,
+                row_count=row_count,
+            )
+            if series is not None:
+                return series
+
+    children = getattr(model, "models", None)
+    if isinstance(children, dict):
+        prioritized: list[Any] = []
+        direct = children.get(target)
+        if direct is not None:
+            prioritized.append(direct)
+        prioritized.extend(
+            child
+            for child in children.values()
+            if child is not direct and getattr(child, "target_col", None) == target
+        )
+        if target_count == 1:
+            prioritized.extend(child for child in children.values() if child not in prioritized)
+        for child in prioritized:
+            series = _target_training_series(
+                child,
+                target=target,
+                target_index=0,
+                target_count=1,
+                row_count=row_count,
+            )
+            if series is not None:
+                return series
+    return None
+
+
+def _training_dataframe(model: Any, info: ModelInfo) -> pd.DataFrame | None:
+    """Reconstruct raw training rows retained by a fitted model."""
+
+    feature_columns = list(info.feature_columns)
+    target_columns = list(info.target_cols)
+
+    for name in ("df", "training_data", "train_df", "dataframe"):
+        frame = _as_dataframe(_shared_value(model, name))
+        if frame is not None and set(feature_columns).issubset(frame.columns):
+            break
+    else:
+        source = _shared_value(model, "X")
+        if source is None:
+            getter = getattr(model, "_get_X", None)
+            if callable(getter):
+                try:
+                    source = getter()
+                except (AttributeError, KeyError, TypeError, ValueError):
+                    source = None
+        frame = _as_dataframe(source, columns=feature_columns)
+
+    if frame is None or frame.empty or not set(feature_columns).issubset(frame.columns):
+        return None
+
+    for target_index, target in enumerate(target_columns):
+        if target in frame.columns:
+            continue
+        series = _target_training_series(
+            model,
+            target=target,
+            target_index=target_index,
+            target_count=len(target_columns),
+            row_count=len(frame),
+        )
+        if series is not None:
+            frame[target] = series
+
+    ordered = [
+        column
+        for column in [*feature_columns, *target_columns]
+        if column in frame.columns
+    ]
+    return frame.loc[:, ordered].reset_index(drop=True)
+
+
+def _training_rows(model: Any, info: ModelInfo) -> list[dict[str, Any]]:
+    """Return JSON-safe retained training rows for browser-side defaults."""
+
+    frame = _training_dataframe(model, info)
+    if frame is None:
+        return []
+    try:
+        return json.loads(frame.to_json(orient="records", date_format="iso"))
+    except (TypeError, ValueError, OverflowError):
+        normalized = frame.astype(object).where(pd.notna(frame), None)
+        return [
+            {
+                str(column): value
+                if value is None or isinstance(value, (str, int, float, bool))
+                else str(value)
+                for column, value in row.items()
+            }
+            for row in normalized.to_dict(orient="records")
+        ]
 
 
 def _bundle_filename(info: ModelInfo) -> str:
@@ -262,6 +450,7 @@ def import_model_bundle(
         raise InvalidModelBundleError("モデルファイルの精度検証結果が不正です。") from exc
     xai_state = state.get("xai_state")
     restored_xai_state = deepcopy(xai_state) if isinstance(xai_state, dict) else None
+    restored_training_rows = _training_rows(model, info)
 
     with self._lock:
         new_model_id = None
@@ -296,6 +485,7 @@ def import_model_bundle(
     return ModelBundleImportResponse(
         model=restored_info,
         original_model_id=str(metadata.get("original_model_id") or info.model_id),
+        training_rows=restored_training_rows,
         **normalized_columns,
     )
 
