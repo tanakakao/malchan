@@ -1,0 +1,153 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  background: var(--bg);
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+body {
+  margin: 0;
+  padding-bottom: var(--footer-height);
+  color: var(--text);
+  background:
+    radial-gradient(circle at 42% -10%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 34rem),
+    linear-gradient(180deg, var(--bg), var(--bg-deep));
+  font-family: Inter, "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: var(--control-height);
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-xs);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--primary-hover);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 20%, transparent);
+  transform: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 48%, transparent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+button.secondary {
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--line);
+  box-shadow: var(--shadow-xs);
+}
+
+button.secondary:hover:not(:disabled) {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--line));
+  box-shadow: var(--shadow-sm);
+}
+
+button.ghost {
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+button.ghost:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-strong);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+button.danger {
+  color: #ffffff;
+  background: var(--danger);
+}
+
+button.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 86%, #000000);
+}
+
+.icon-button {
+  width: var(--control-height);
+  min-width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 9px 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+::selection {
+  color: var(--text);
+  background: var(--primary-soft-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

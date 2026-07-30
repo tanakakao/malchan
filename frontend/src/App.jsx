@@ -42,6 +42,12 @@ const PAGES = {
   report: ReportPage,
 };
 const ICONS = ["▦", "◫", "◇", "⌁", "◎", "◉", "↗", "▧"];
+const API_STATUS_LABELS = {
+  loading: "確認中",
+  ready: "利用可能",
+  error: "エラー",
+};
+const PORTAL_URL = import.meta.env.VITE_PORTAL_URL?.trim() || "http://127.0.0.1:5172";
 
 function WorkbenchLayout() {
   const {
@@ -50,6 +56,7 @@ function WorkbenchLayout() {
   } = useWorkbench();
   const index = APP_STEPS.findIndex(([id]) => id === step);
   const Page = PAGES[step] || DataPage;
+  const apiStatusLabel = API_STATUS_LABELS[health.status] || "利用不可";
 
   return (
     <div className="app-root">
@@ -57,8 +64,8 @@ function WorkbenchLayout() {
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true"><span>m</span></div>
           <div className="brand-wordmark">
-            <h1>キカイガクシュウ</h1>
-            <p>MALCHAN MACHINE LEARNING WORKBENCH</p>
+            <h1>機械学習</h1>
+            <p>Materials Analysis Workbench · malchan</p>
           </div>
         </div>
         <div className="workflow-strip" aria-label="ワークフロー">
@@ -76,13 +83,20 @@ function WorkbenchLayout() {
           ))}
         </div>
         <div className="header-actions">
-          <div className="runtime-pill" title={health.text}>
+          <div className="runtime-pill" title={`API接続: ${health.text}`}>
             <span className={`dot ${health.status}`} />
             <span className="runtime-copy">
-              <small>API status</small>
-              <strong>{health.text}</strong>
+              <small>API接続</small>
+              <strong>{apiStatusLabel}</strong>
             </span>
           </div>
+          <button
+            className="portal-button secondary"
+            title="ツール一覧へ戻る"
+            onClick={() => window.location.assign(PORTAL_URL)}
+          >
+            ツール一覧
+          </button>
           <button
             className="icon-button secondary"
             title={theme === "dark" ? "ライトテーマへ" : "ダークテーマへ"}
@@ -96,7 +110,7 @@ function WorkbenchLayout() {
 
       <main className="app-shell">
         <aside className="left-rail">
-          <div className="rail-section-label">WORKSPACE</div>
+          <div className="rail-section-label">WORKFLOW</div>
           <nav className="tabs" aria-label="ページナビゲーション">
             {APP_STEPS.map(([id, label, detail], stepIndex) => (
               <button
@@ -119,13 +133,37 @@ function WorkbenchLayout() {
         </aside>
 
         <section className="content">
-          <div className="content-inner"><Page /></div>
+          <div className="content-inner">
+            {toast?.type === "error" && (
+              <div className="inline-alert error" role="alert">
+                <div className="inline-alert-icon" aria-hidden="true">!</div>
+                <div className="inline-alert-copy">
+                  <span className="eyebrow">ERROR</span>
+                  <strong>処理を完了できませんでした</strong>
+                  <p>{toast.text}</p>
+                  <small>入力内容とAPI接続を確認し、もう一度実行してください。</small>
+                </div>
+                <button
+                  className="alert-close icon-button ghost"
+                  aria-label="エラー表示を閉じる"
+                  title="閉じる"
+                  onClick={() => setToast(null)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            <Page />
+          </div>
         </section>
 
         <aside className="right-rail">
           <div className={`side-card runtime-card ${health.status}`}>
             <div className="side-card-title"><span>RUNTIME</span><strong>API接続</strong></div>
-            <div className="runtime-large"><span className={`dot ${health.status}`} /><div><strong>FastAPI</strong><small>{health.text}</small></div></div>
+            <div className="runtime-large">
+              <span className={`dot ${health.status}`} />
+              <div><strong>FastAPI</strong><small>{apiStatusLabel} · {health.text}</small></div>
+            </div>
           </div>
           <div className="side-card">
             <div className="side-card-title"><span>DATA CONTEXT</span><strong>現在のデータ</strong></div>
@@ -147,7 +185,7 @@ function WorkbenchLayout() {
       </main>
 
       <footer className="statusbar">
-        <span><span className={`dot ${health.status}`} /> API {health.status}</span>
+        <span><span className={`dot ${health.status}`} /> API接続 {apiStatusLabel}</span>
         <span>{rows.length ? `${rows.length} rows` : "No data"}</span>
         <span className="privacy-status">React + FastAPI</span>
       </footer>
@@ -162,10 +200,17 @@ function WorkbenchLayout() {
       <YyDiagnosticsControl />
       <OptimizeCategoryCandidatesControl />
       <ShapScatterControl />
-      {toast && <button className={`message ${toast.type}`} onClick={() => setToast(null)}>{toast.text}</button>}
+      {toast && toast.type !== "error" && (
+        <button className={`message ${toast.type}`} onClick={() => setToast(null)}>{toast.text}</button>
+      )}
       {busy && (
-        <div className="overlay">
-          <div className="busy-card"><div className="spinner" /><h3>{busy}</h3><div className="busy-progress"><span /></div></div>
+        <div className="overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="busy-card">
+            <div className="spinner" aria-hidden="true" />
+            <span className="eyebrow">PROCESSING</span>
+            <h3>{busy}</h3>
+            <p>処理中は画面操作を一時停止しています。</p>
+          </div>
         </div>
       )}
     </div>

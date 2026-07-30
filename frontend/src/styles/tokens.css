@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --bg-deep: #edf1f5;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-subtle: #f8fafc;
+  --surface-strong: #eef2f6;
+  --surface-2: var(--surface-subtle);
+  --surface-3: var(--surface-strong);
+  --line: rgba(15, 23, 42, 0.09);
+  --line-strong: rgba(15, 23, 42, 0.16);
+  --text: #101828;
+  --muted: #667085;
+  --subtle: #98a2b3;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-2: var(--primary-hover);
+  --primary-soft: #eff6ff;
+  --primary-soft-strong: #dbeafe;
+  --success: #07875f;
+  --success-soft: #ecfdf5;
+  --warning: #b54708;
+  --warning-soft: #fffaeb;
+  --danger: #d92d20;
+  --danger-soft: #fef3f2;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius: var(--radius-lg);
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.03);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.05),
+               0 6px 18px rgba(16, 24, 40, 0.035);
+  --shadow-lg: 0 18px 48px rgba(16, 24, 40, 0.12);
+  --shadow: var(--shadow-lg);
+  --header-height: 72px;
+  --footer-height: 30px;
+  --left-rail-width: 236px;
+  --right-rail-width: 286px;
+  --control-height: 40px;
+  --header-h: var(--header-height);
+  --footer-h: var(--footer-height);
+  --left-w: var(--left-rail-width);
+  --right-w: var(--right-rail-width);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0f17;
+  --bg-deep: #080b11;
+  --surface: #121823;
+  --surface-raised: #161d29;
+  --surface-subtle: #171f2b;
+  --surface-strong: #202a38;
+  --surface-2: var(--surface-subtle);
+  --surface-3: var(--surface-strong);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #f2f4f7;
+  --muted: #a4adbd;
+  --subtle: #737f91;
+  --primary: #7aa2ff;
+  --primary-hover: #94b5ff;
+  --primary-2: var(--primary-hover);
+  --primary-soft: rgba(72, 112, 255, 0.13);
+  --primary-soft-strong: rgba(72, 112, 255, 0.23);
+  --success: #5dd6a7;
+  --success-soft: rgba(25, 170, 112, 0.13);
+  --warning: #f6bd60;
+  --warning-soft: rgba(226, 146, 35, 0.13);
+  --danger: #ff8a80;
+  --danger-soft: rgba(217, 45, 32, 0.14);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24),
+               0 10px 28px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.42);
+  --shadow: var(--shadow-lg);
+}
