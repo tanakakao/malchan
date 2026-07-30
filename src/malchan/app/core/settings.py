@@ -1,7 +1,7 @@
 """Settings used by the FastAPI and web application layers."""
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 
 DEFAULT_APP_NAME = "malchan"
@@ -48,8 +48,7 @@ class AppSettings:
         cors_origins: Allowed browser origins for the Vite development server.
         serve_frontend: Whether to serve a built React application when found.
         frontend_dist: Optional explicit path to the React build directory.
-        model_bundle_secret: HMAC secret used to sign downloaded model bundles.
-        model_bundle_max_bytes: Maximum accepted model-bundle size in bytes.
+        model_bundle_max_bytes: Maximum accepted model-artifact size in bytes.
     """
 
     app_name: str = DEFAULT_APP_NAME
@@ -58,7 +57,6 @@ class AppSettings:
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     serve_frontend: bool = True
     frontend_dist: str | None = None
-    model_bundle_secret: str | None = field(default=None, repr=False)
     model_bundle_max_bytes: int = DEFAULT_MODEL_BUNDLE_MAX_MB * 1024 * 1024
 
 
@@ -83,6 +81,5 @@ def get_settings() -> AppSettings:
         cors_origins=origins,
         serve_frontend=_env_flag("MALCHAN_SERVE_FRONTEND", True),
         frontend_dist=os.getenv("MALCHAN_FRONTEND_DIST") or None,
-        model_bundle_secret=os.getenv("MALCHAN_MODEL_BUNDLE_SECRET") or None,
         model_bundle_max_bytes=max_bundle_mb * 1024 * 1024,
     )
