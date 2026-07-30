@@ -6,6 +6,7 @@ import { useWorkbench } from "../context/WorkbenchContext";
 export default function DataPage() {
   const { rows, columns, fileName, stats, loadFile } = useWorkbench();
   const [dragging, setDragging] = useState(false);
+  const dataLoaded = rows.length > 0;
 
   function loadDataFile(file) {
     if (file) loadFile(file);
@@ -18,9 +19,14 @@ export default function DataPage() {
         title="データを読み込む"
         text="CSV / XLSXを読み込み、データの内容を確認します。"
       />
-      <article className="panel">
+      <article className="panel data-file-panel">
         <div className="panel-title">
-          <div><span className="panel-kicker">DATA SOURCE</span><h3>ファイルを読み込む</h3></div>
+          <div>
+            <span className="panel-kicker">DATA SOURCE</span>
+            <h3>{dataLoaded ? "データを入れ替える" : "データファイル"}</h3>
+            <p>対応形式: CSV / XLSX</p>
+          </div>
+          {dataLoaded && <span className="status-chip success">Loaded</span>}
         </div>
         <label
           className={`dropzone ${dragging ? "dragging" : ""}`}
@@ -47,8 +53,18 @@ export default function DataPage() {
             onChange={(event) => loadDataFile(event.target.files?.[0])}
           />
           <span className="upload-symbol">⇧</span>
-          <strong>{dragging ? "ここにドロップして読み込む" : "CSV / XLSXをドロップまたは選択"}</strong>
-          <span>{fileName || "ここにファイルをドロップできます"}</span>
+          <strong>
+            {dragging
+              ? "ここにドロップして読み込む"
+              : dataLoaded
+                ? "別のファイルをドロップまたは選択"
+                : "CSVまたはExcelをドロップまたは選択"}
+          </strong>
+          <span>
+            {fileName
+              ? `読込中のファイル: ${fileName}`
+              : "ファイルはブラウザで解析され、現在のワークスペース内に保持されます。"}
+          </span>
         </label>
       </article>
       <article className="panel">
