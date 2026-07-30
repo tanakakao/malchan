@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/apply-materials-workbench-design
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
