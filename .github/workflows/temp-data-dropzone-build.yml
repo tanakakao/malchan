@@ -1,6 +1,9 @@
 name: Temporary Data Dropzone Build
 
 on:
+  push:
+    branches:
+      - agent/add-data-dropzone
   pull_request:
     branches:
       - main
