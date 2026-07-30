@@ -13,6 +13,7 @@ from .inverse_analysis import (
     NumericSearchRange,
     SumConstraint,
 )
+from .model_bundle import ModelBundleImportResponse
 from .model_configuration import (
     ModelEvaluationRequest,
     ModelEvaluationResponse,
@@ -61,6 +62,7 @@ __all__ = [
     "LocalShapRequest",
     "LocalShapResponse",
     "LocalShapTargetResponse",
+    "ModelBundleImportResponse",
     "ModelComparisonResponse",
     "ModelEvaluationRequest",
     "ModelEvaluationResponse",

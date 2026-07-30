@@ -23,8 +23,7 @@ def create_app(
 
     Args:
         settings: Runtime settings controlling the API prefix, CORS, debug mode,
-            and optional React frontend mounting. Environment-backed defaults
-            are used when omitted.
+            optional React frontend mounting, and signed model bundles.
         model_service: Optional model service implementation. A process-local
             :class:`~malchan.app.services.InMemoryModelService` is created when
             omitted.
@@ -54,6 +53,12 @@ def create_app(
 
     resolved_settings = settings or get_settings()
     resolved_service = model_service or InMemoryModelService()
+    configure_model_bundles = getattr(resolved_service, "configure_model_bundles", None)
+    if callable(configure_model_bundles):
+        configure_model_bundles(
+            resolved_settings.model_bundle_secret,
+            resolved_settings.model_bundle_max_bytes,
+        )
     resolved_title = title or resolved_settings.app_name
     resolved_version = version or __version__
 
@@ -69,6 +74,7 @@ def create_app(
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["Content-Disposition"],
         )
 
     app.state.settings = resolved_settings
