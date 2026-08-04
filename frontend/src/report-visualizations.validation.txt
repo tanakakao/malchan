@@ -1,5 +1,0 @@
-Validation performed:
-- node --check frontend/src/report-visualizations.js
-- source regression assertions for Y-Y CV/residual, model/SHAP/PFI importance, baseline+SHAP PD, SHAP beeswarm, 2D PD, and Plotly image conversion
-
-Full Vite build and browser rendering were not run in the connector execution environment.
