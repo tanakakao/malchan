@@ -1,0 +1,197 @@
+:root {
+  --bg: #fcfbfb;
+  --bg-deep: #f4eeee;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-subtle: #faf6f6;
+  --surface-strong: #f1eaea;
+  --surface-2: var(--surface-subtle);
+  --surface-3: var(--surface-strong);
+  --line: rgba(53, 43, 43, 0.10);
+  --line-strong: rgba(53, 43, 43, 0.18);
+  --text: #302929;
+  --muted: #716565;
+  --subtle: #9b8e8e;
+  --primary: #b94f57;
+  --primary-hover: #a64249;
+  --primary-2: var(--primary-hover);
+  --primary-soft: #fbecee;
+  --primary-soft-strong: #f5d9dc;
+  --success: #9f4b51;
+  --success-soft: #f8e9ea;
+  --warning: #bf672d;
+  --warning-soft: #fff0e4;
+  --danger: #b53e47;
+  --danger-soft: #fbe6e8;
+  --category: #c36a2d;
+  --category-hover: #a95622;
+  --category-soft: #fff0e3;
+  --category-soft-strong: #f9d8bd;
+  --composition: #a77d00;
+  --composition-hover: #876500;
+  --composition-soft: #fff9d9;
+  --composition-soft-strong: #f6e89d;
+  --shadow-xs: 0 1px 2px rgba(52, 43, 43, 0.035);
+  --shadow-sm: 0 1px 3px rgba(52, 43, 43, 0.055),
+               0 7px 20px rgba(52, 43, 43, 0.04);
+  --shadow-lg: 0 18px 48px rgba(52, 43, 43, 0.13);
+  --shadow: var(--shadow-lg);
+}
+
+html[data-theme="dark"] {
+  --bg: #201a1a;
+  --bg-deep: #171313;
+  --surface: #292222;
+  --surface-raised: #302828;
+  --surface-subtle: #332b2b;
+  --surface-strong: #3c3232;
+  --surface-2: var(--surface-subtle);
+  --surface-3: var(--surface-strong);
+  --line: rgba(255, 242, 242, 0.09);
+  --line-strong: rgba(255, 242, 242, 0.17);
+  --text: #faf4f4;
+  --muted: #c9bbbb;
+  --subtle: #9f9090;
+  --primary: #e3949a;
+  --primary-hover: #efabb0;
+  --primary-2: var(--primary-hover);
+  --primary-soft: rgba(213, 82, 92, 0.16);
+  --primary-soft-strong: rgba(213, 82, 92, 0.27);
+  --success: #df8e94;
+  --success-soft: rgba(205, 79, 89, 0.16);
+  --warning: #eda160;
+  --warning-soft: rgba(218, 124, 48, 0.16);
+  --danger: #f08b93;
+  --danger-soft: rgba(211, 63, 75, 0.18);
+  --category: #f0a05e;
+  --category-hover: #f4b27b;
+  --category-soft: rgba(218, 124, 48, 0.16);
+  --category-soft-strong: rgba(218, 124, 48, 0.27);
+  --composition: #f2d35d;
+  --composition-hover: #ffe27d;
+  --composition-soft: rgba(232, 198, 55, 0.15);
+  --composition-soft-strong: rgba(232, 198, 55, 0.27);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.20);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24),
+               0 10px 28px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.42);
+  --shadow: var(--shadow-lg);
+}
+
+body {
+  background:
+    radial-gradient(
+      circle at 42% -10%,
+      color-mix(in srgb, var(--primary) 8%, transparent),
+      transparent 34rem
+    ),
+    linear-gradient(180deg, var(--bg), var(--bg-deep));
+}
+
+::selection {
+  color: var(--text);
+  background: var(--primary-soft-strong);
+}
+
+.brand-mark {
+  color: #ffffff;
+  background: var(--text);
+  border-color: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.workflow-step.active,
+.tab.active,
+.workbench-mode-switch button.active {
+  color: var(--primary);
+  background: var(--primary-soft-strong);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--primary) 8%, transparent),
+    var(--shadow-xs);
+}
+
+.workflow-step.active span,
+.tab.active em,
+.tab.active .nav-icon {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary-soft-strong) 82%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+}
+
+.tab.active::before {
+  background: var(--primary);
+}
+
+.feature-variable-choice.selected-categorical,
+.feature-variable-choice.selected-categorical:hover {
+  color: var(--category);
+  background: var(--category-soft);
+  border-color: color-mix(in srgb, var(--category) 48%, var(--line));
+  box-shadow: inset 4px 0 0 var(--category), var(--shadow-xs);
+}
+
+.feature-variable-choice.selected-categorical .feature-type-toggle,
+.feature-type-toggle:has(input:checked) {
+  color: var(--category);
+  background: color-mix(in srgb, var(--category-soft-strong) 58%, var(--surface));
+  border-color: color-mix(in srgb, var(--category) 38%, var(--line));
+}
+
+.feature-type-toggle input {
+  accent-color: var(--category);
+}
+
+input[type="checkbox"],
+input[type="radio"],
+.table-checkbox {
+  accent-color: var(--primary);
+}
+
+.train-launcher {
+  color: #ffffff;
+  background: linear-gradient(120deg, #3b3031, #a94850);
+}
+
+.train-launcher span {
+  color: #f5dcde;
+}
+
+.pipeline-node.accent {
+  color: #ffffff;
+  background: linear-gradient(135deg, #8f3f46, #c66b73);
+}
+
+.pipeline-node.accent small {
+  color: #f9e5e7;
+}
+
+.busy-progress span {
+  background: linear-gradient(90deg, var(--primary), #d78a90);
+}
+
+.statusbar {
+  color: #e8dddd;
+  background: #211b1b;
+  border-top-color: #3b3030;
+}
+
+.statusbar .privacy-status {
+  color: #e3a1a6;
+}
+
+.model-rank-best td {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface)) !important;
+}
+
+.best-model-panel {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: linear-gradient(
+    145deg,
+    var(--surface),
+    color-mix(in srgb, var(--primary) 5%, var(--surface))
+  );
+}
+
+button:hover:not(:disabled) {
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 18%, transparent);
+}
