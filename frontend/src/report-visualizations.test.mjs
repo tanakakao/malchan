@@ -16,7 +16,7 @@ assert.match(source, /Partial dependence/);
 assert.match(source, /visualizationBeeswarm/);
 assert.match(source, /visualizationPdp2d/);
 assert.match(source, /figureToPng/);
-assert.match(source, /data:image/);
+assert.match(source, /plotly\.toImage/);
 assert.match(reportPage, /downloadDetailedHtmlReport/);
 assert.match(reportPage, /Y–Y、重要度、PD、SHAPを収集しています/);
 
