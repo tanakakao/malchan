@@ -321,11 +321,27 @@ function renderComparison(snapshot) {
   }).join("");
 }
 
+function normalizeDiagnosticPair(item, target) {
+  const actual = item?.actual?.[target]
+    ?? item?.actual
+    ?? item?.y_true
+    ?? item?.observed;
+  const predicted = item?.predicted?.[target]
+    ?? item?.predicted
+    ?? item?.y_pred
+    ?? item?.prediction;
+  return { actual, predicted };
+}
+
 function diagnosticPairs(snapshot, target) {
-  return (snapshot.diagnostics?.rows || []).map((item) => ({
-    actual: item?.actual?.[target],
-    predicted: item?.predicted?.[target],
-  })).filter((item) => present(item.actual) && present(item.predicted));
+  const direct = (snapshot.diagnostics?.rows || [])
+    .map((item) => normalizeDiagnosticPair(item, target))
+    .filter((item) => present(item.actual) && present(item.predicted));
+  if (direct.length) return direct;
+
+  return (snapshot.comparison?.targets?.[target]?.best_cv_predictions?.test || [])
+    .map((item) => normalizeDiagnosticPair(item, target))
+    .filter((item) => present(item.actual) && present(item.predicted));
 }
 
 function regressionMetrics(pairs) {
@@ -413,11 +429,9 @@ function renderClassificationDiagnostics(pairs) {
 }
 
 function renderDiagnostics(snapshot) {
-  if (!snapshot.diagnostics?.totalRows) {
-    return '<p class="empty">診断用予測はまだ計算されていません。Explain画面で診断結果を表示してから出力すると、実測値と予測値を収録できます。</p>';
-  }
-  return snapshot.data.targets.map(({ name, task }) => {
+  const targetSections = snapshot.data.targets.map(({ name, task }) => {
     const pairs = diagnosticPairs(snapshot, name);
+    if (!pairs.length) return "";
     if (task === "classification") {
       return `<article class="subcard"><div class="card-heading"><div><span>CLASSIFICATION</span><h3>${escapeHtml(name)}</h3></div><span class="badge">${pairs.length} rows</span></div>${renderClassificationDiagnostics(pairs)}</article>`;
     }
@@ -440,7 +454,11 @@ function renderDiagnostics(snapshot) {
         ${scatterSvg(metrics.rows, name)}
         <details><summary>診断データ</summary>${renderObjectTable(tableRows, MAX_DIAGNOSTIC_TABLE_ROWS)}</details>
       </article>`;
-  }).join("");
+  });
+  const available = targetSections.filter(Boolean);
+  return available.length
+    ? available.join("")
+    : '<p class="empty">診断用予測はまだ計算されていません。モデル比較のCV予測値、または診断用予測を生成すると実測値と予測値を収録できます。</p>';
 }
 
 function renderOptimization(snapshot) {
