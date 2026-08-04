@@ -1,0 +1,84 @@
+.report-export-panel {
+  overflow: hidden;
+}
+
+.report-export-metrics {
+  margin-bottom: 14px;
+}
+
+.report-export-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-export-grid > div {
+  min-width: 0;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.report-export-grid span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.report-export-grid strong {
+  display: block;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.report-export-note {
+  margin-top: 14px;
+}
+
+.report-download-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.report-download-actions span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-download-status {
+  margin: 10px 0 0;
+  color: var(--success);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.report-download-status.error {
+  color: var(--danger);
+}
+
+@media (max-width: 1080px) {
+  .report-export-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .report-export-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-download-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
