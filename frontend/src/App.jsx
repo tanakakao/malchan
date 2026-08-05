@@ -1,6 +1,7 @@
 import React from "react";
 import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
+import ConversationIcon from "./components/ConversationIcon";
 import EnsembleModelSettingsControl from "./components/EnsembleModelSettingsControl";
 import ImportedModelDefaultsControl from "./components/ImportedModelDefaultsControl";
 import MaterialDescriptorSettingsControl from "./components/MaterialDescriptorSettingsControl";
@@ -11,6 +12,7 @@ import ModelSettingDefaultsControl from "./components/ModelSettingDefaultsContro
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import OptimizeCategoryCandidatesControl from "./components/OptimizeCategoryCandidatesControl";
 import ShapScatterControl from "./components/ShapScatterControl";
+import ConversationPage from "./pages/ConversationPage";
 import DataPage from "./pages/DataPage";
 import ExplorePage from "./pages/ExplorePage";
 import PreparePage from "./pages/PreparePage";
@@ -70,8 +72,18 @@ const API_STATUS_LABELS = {
 };
 const PORTAL_URL = import.meta.env.VITE_PORTAL_URL?.trim() || "http://127.0.0.1:5172";
 
+function currentAuxiliaryPage() {
+  return window.location.hash === "#conversation" ? "conversation" : null;
+}
+
+function clearAuxiliaryHash() {
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
 function WorkbenchLayout() {
   const mode = useWorkbenchMode();
+  const [auxiliaryPage, setAuxiliaryPage] = React.useState(currentAuxiliaryPage);
   const {
     theme, setTheme, step, setStep, health, busy, toast, setToast,
     fileName, rows, features, targets, modelInfo, comparison,
@@ -80,16 +92,34 @@ function WorkbenchLayout() {
     ? APP_STEPS.filter(([id]) => SIMPLE_STEP_IDS.has(id))
     : APP_STEPS;
   const index = visibleSteps.findIndex(([id]) => id === step);
-  const Page = mode === "simple" && step === "model"
-    ? SimpleModelResultPage
-    : PAGES[step] || DataPage;
+  const activeAuxiliaryPage = auxiliaryPage === "conversation" ? "conversation" : null;
+  const Page = activeAuxiliaryPage === "conversation"
+    ? ConversationPage
+    : mode === "simple" && step === "model"
+      ? SimpleModelResultPage
+      : PAGES[step] || DataPage;
   const apiStatusLabel = API_STATUS_LABELS[health.status] || "利用不可";
+
+  React.useEffect(() => {
+    const handleHashChange = () => setAuxiliaryPage(currentAuxiliaryPage());
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
 
   React.useEffect(() => {
     if (mode === "simple" && step === "explore") {
       setStep(rows.length ? "prepare" : "data");
     }
   }, [mode, rows.length, setStep, step]);
+
+  function openStep(id) {
+    if (auxiliaryPage) clearAuxiliaryHash();
+    setStep(id);
+  }
+
+  function openConversation() {
+    window.location.hash = "conversation";
+  }
 
   return (
     <div className="app-root">
@@ -105,9 +135,9 @@ function WorkbenchLayout() {
           {visibleSteps.map(([id, label], stepIndex) => (
             <React.Fragment key={id}>
               <button
-                className={`workflow-step ${id === step ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
-                onClick={() => setStep(id)}
-                aria-current={id === step ? "step" : undefined}
+                className={`workflow-step ${!activeAuxiliaryPage && id === step ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
+                onClick={() => openStep(id)}
+                aria-current={!activeAuxiliaryPage && id === step ? "step" : undefined}
               >
                 <span>{stepIndex + 1}</span><strong>{label}</strong>
               </button>
@@ -143,6 +173,20 @@ function WorkbenchLayout() {
 
       <main className="app-shell">
         <aside className="left-rail">
+          <button
+            type="button"
+            className={`conversation-launcher ${activeAuxiliaryPage === "conversation" ? "active" : ""}`}
+            onClick={openConversation}
+            aria-current={activeAuxiliaryPage === "conversation" ? "page" : undefined}
+          >
+            <ConversationIcon fallback="m" className="conversation-launcher-icon" />
+            <span className="conversation-launcher-copy">
+              <strong>対話モード</strong>
+              <small>変数を選んでモデルを自動比較</small>
+            </span>
+            <span className="conversation-launcher-arrow" aria-hidden="true">›</span>
+          </button>
+
           <div className="rail-section-label">MODE</div>
           <div className="workbench-mode-switch" role="group" aria-label="実行モード">
             <button
@@ -168,9 +212,9 @@ function WorkbenchLayout() {
             {visibleSteps.map(([id, label, detail], stepIndex) => (
               <button
                 key={id}
-                className={`tab ${step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
-                onClick={() => setStep(id)}
-                aria-current={step === id ? "page" : undefined}
+                className={`tab ${!activeAuxiliaryPage && step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
+                onClick={() => openStep(id)}
+                aria-current={!activeAuxiliaryPage && step === id ? "page" : undefined}
               >
                 <span className="nav-icon">{ICONS[id]}</span>
                 <span><strong>{label}</strong><small>{detail}</small></span>
@@ -221,6 +265,7 @@ function WorkbenchLayout() {
           <div className="side-card">
             <div className="side-card-title"><span>DATA CONTEXT</span><strong>現在のデータ</strong></div>
             <div className="context-list">
+              <div><span>Mode</span><strong>{activeAuxiliaryPage ? "対話" : mode === "simple" ? "簡易" : "詳細"}</strong></div>
               <div><span>File</span><strong>{fileName || "—"}</strong></div>
               <div><span>Rows</span><strong>{rows.length || "—"}</strong></div>
               <div><span>Features</span><strong>{features.length || "—"}</strong></div>
@@ -239,6 +284,7 @@ function WorkbenchLayout() {
 
       <footer className="statusbar">
         <span><span className={`dot ${health.status}`} /> API接続 {apiStatusLabel}</span>
+        <span>{activeAuxiliaryPage ? "Conversation mode" : mode === "simple" ? "Simple mode" : "Advanced mode"}</span>
         <span>{rows.length ? `${rows.length} rows` : "No data"}</span>
         <span className="privacy-status">React + FastAPI</span>
       </footer>
