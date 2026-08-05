@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Field, SectionHeader } from "../components/Common";
 import { useWorkbench } from "../context/WorkbenchContext";
-import { createReportSnapshot, downloadHtmlReport } from "../report";
+import { createReportSnapshot } from "../report";
+import { downloadDetailedHtmlReport } from "../report-visualizations";
 import "../report-page.css";
 
 export default function ReportPage() {
@@ -34,6 +35,7 @@ export default function ReportPage() {
   } = useWorkbench();
   const [downloadStatus, setDownloadStatus] = useState("");
   const [downloadError, setDownloadError] = useState("");
+  const [preparingReport, setPreparingReport] = useState(false);
 
   const snapshot = useMemo(() => createReportSnapshot({
     reportProblem,
@@ -94,26 +96,45 @@ export default function ReportPage() {
     || report.trim(),
   );
 
-  function downloadReport() {
+  async function downloadReport() {
+    if (preparingReport) return;
+    setPreparingReport(true);
     setDownloadError("");
+    setDownloadStatus(modelInfo?.model_id
+      ? "Y–Y、重要度、PD、SHAPを収集しています..."
+      : "HTMLレポートを作成しています...");
     try {
-      const name = downloadHtmlReport(snapshot);
-      setDownloadStatus(`${name} を作成しました。`);
+      const result = await downloadDetailedHtmlReport(snapshot, {
+        modelId: modelInfo?.model_id,
+        targets,
+        tasks,
+        features,
+        numericFeatures: numeric.filter((column) => features.includes(column)),
+        rows,
+        onProgress: setDownloadStatus,
+      });
+      setDownloadStatus(`${result.fileName} を作成しました。`);
     } catch (error) {
       setDownloadStatus("");
       setDownloadError(error.message || String(error));
+    } finally {
+      setPreparingReport(false);
     }
   }
+
+  const downloadLabel = preparingReport
+    ? "レポートを作成中..."
+    : "HTMLレポートをダウンロード";
 
   return (
     <>
       <SectionHeader
         step="8 · REPORT"
         title="分析結果をHTMLレポートにまとめる"
-        text="データ概要、モデル比較、精度診断、逆解析、レポート用テキストを1つのHTMLへ統合します。"
+        text="データ概要、モデル比較、Y–Y・重要度・PD・SHAP、逆解析、レポート用テキストを1つのHTMLへ統合します。"
         action={(
-          <button disabled={!reportReady} onClick={downloadReport}>
-            HTMLレポートをダウンロード
+          <button disabled={!reportReady || preparingReport} onClick={downloadReport}>
+            {downloadLabel}
           </button>
         )}
       />
@@ -126,7 +147,7 @@ export default function ReportPage() {
             <p>ブラウザで閲覧でき、レポート内のボタンから印刷またはPDF保存もできます。</p>
           </div>
           <span className={`status-chip ${reportReady ? "success" : ""}`}>
-            {reportReady ? "Ready" : "No result"}
+            {preparingReport ? "Building" : reportReady ? "Ready" : "No result"}
           </span>
         </div>
 
@@ -155,8 +176,12 @@ export default function ReportPage() {
             <strong>モデル設定・比較ランキング</strong>
           </div>
           <div>
-            <span>条件付き</span>
-            <strong>実測値・予測値の診断</strong>
+            <span>モデル学習後</span>
+            <strong>Y–Y・残差／混同行列</strong>
+          </div>
+          <div>
+            <span>XAI計算後</span>
+            <strong>重要度・SHAP・PD・2D PD</strong>
           </div>
           <div>
             <span>条件付き</span>
@@ -165,12 +190,12 @@ export default function ReportPage() {
         </div>
 
         <p className="settings-note report-export-note">
-          入力データの全行はHTMLへ埋め込みません。共有しやすいように、統計量と分析結果の要約のみを収録します。
+          旧Excel exportと同じ分析情報を収録します。重要度はModel・SHAP・PFIを正規化比較し、PDはPD曲線、ベース値+SHAP、実測値、ベースラインを表示します。XAI未計算の項目は、HTML内に理由を表示します。
         </p>
 
         <div className="report-download-actions">
-          <button disabled={!reportReady} onClick={downloadReport}>
-            HTMLレポートをダウンロード
+          <button disabled={!reportReady || preparingReport} onClick={downloadReport}>
+            {downloadLabel}
           </button>
           <span>{fileName || "分析データ未選択"}</span>
         </div>
