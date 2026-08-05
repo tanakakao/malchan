@@ -3,36 +3,74 @@ import React, { useEffect, useState } from "react";
 const ICON_FILENAMES = ["icon.png", "icon.svg", "icon.webp", "icon.jpg", "icon.jpeg"];
 const ICON_DIRECTORY = `${import.meta.env.BASE_URL}conversation-mode/`;
 
+let resolvedIconUrl;
+let iconResolutionPromise;
+
+function probeImage(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(url);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+async function findConversationIcon() {
+  for (const filename of ICON_FILENAMES) {
+    const url = `${ICON_DIRECTORY}${filename}`;
+    const loadedUrl = await probeImage(url);
+    if (loadedUrl) return loadedUrl;
+  }
+  return null;
+}
+
+function resolveConversationIcon() {
+  if (resolvedIconUrl !== undefined) {
+    return Promise.resolve(resolvedIconUrl);
+  }
+  if (!iconResolutionPromise) {
+    iconResolutionPromise = findConversationIcon().then((url) => {
+      resolvedIconUrl = url;
+      return url;
+    });
+  }
+  return iconResolutionPromise;
+}
+
 export default function ConversationIcon({ fallback = "m", className = "", useImage = true }) {
-  const [index, setIndex] = useState(0);
-  const [loaded, setLoaded] = useState(false);
   const imageEnabled = useImage && fallback !== "自";
-  const filename = imageEnabled ? ICON_FILENAMES[index] : null;
+  const [iconUrl, setIconUrl] = useState(() => resolvedIconUrl ?? null);
 
   useEffect(() => {
-    setIndex(0);
-    setLoaded(false);
+    let active = true;
+    if (!imageEnabled) {
+      setIconUrl(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    resolveConversationIcon().then((url) => {
+      if (active) setIconUrl(url);
+    });
+
+    return () => {
+      active = false;
+    };
   }, [imageEnabled]);
 
-  useEffect(() => {
-    setLoaded(false);
-  }, [index]);
-
-  if (!filename) {
+  if (!imageEnabled || !iconUrl) {
     return <span className={className} aria-hidden="true">{fallback}</span>;
   }
 
   return (
     <span className={`${className} conversation-icon-frame`} aria-hidden="true">
-      {!loaded && <span className="conversation-icon-fallback">{fallback}</span>}
       <img
-        key={filename}
-        className={`conversation-icon-image ${loaded ? "loaded" : ""}`}
-        src={`${ICON_DIRECTORY}${filename}`}
+        className="conversation-icon-image loaded"
+        src={iconUrl}
         alt=""
         decoding="async"
-        onLoad={() => setLoaded(true)}
-        onError={() => setIndex((current) => current + 1)}
       />
     </span>
   );
