@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Field, SectionHeader } from "../components/Common";
 import { useWorkbench } from "../context/WorkbenchContext";
 import { createReportSnapshot } from "../report";
-import { downloadDetailedHtmlReport } from "../report-visualizations";
+import { downloadInteractiveHtmlReport } from "../report-interactive-export";
 import "../report-page.css";
 
 export default function ReportPage() {
@@ -104,7 +104,7 @@ export default function ReportPage() {
       ? "Y–Y、重要度、PD、SHAPを収集しています..."
       : "HTMLレポートを作成しています...");
     try {
-      const result = await downloadDetailedHtmlReport(snapshot, {
+      const result = await downloadInteractiveHtmlReport(snapshot, {
         modelId: modelInfo?.model_id,
         targets,
         tasks,
@@ -113,7 +113,17 @@ export default function ReportPage() {
         rows,
         onProgress: setDownloadStatus,
       });
-      setDownloadStatus(`${result.fileName} を作成しました。`);
+      if (result.interactiveFigureCount && result.interactiveRuntimeEmbedded) {
+        setDownloadStatus(
+          `${result.fileName} を作成しました（${result.interactiveFigureCount}図を拡大・編集できます）。`,
+        );
+      } else if (result.interactiveFigureCount) {
+        setDownloadStatus(
+          `${result.fileName} を作成しました。図の拡大はできますが、Plotly編集機能を埋め込めませんでした。`,
+        );
+      } else {
+        setDownloadStatus(`${result.fileName} を作成しました。`);
+      }
     } catch (error) {
       setDownloadStatus("");
       setDownloadError(error.message || String(error));
@@ -131,7 +141,7 @@ export default function ReportPage() {
       <SectionHeader
         step="8 · REPORT"
         title="分析結果をHTMLレポートにまとめる"
-        text="データ概要、モデル比較、Y–Y・重要度・PD・SHAP、逆解析、レポート用テキストを1つのHTMLへ統合します。"
+        text="データ概要、モデル比較、Y–Y・重要度・PD・SHAP、逆解析を統合し、図はHTML上で拡大・編集できます。"
         action={(
           <button disabled={!reportReady || preparingReport} onClick={downloadReport}>
             {downloadLabel}
@@ -144,7 +154,7 @@ export default function ReportPage() {
           <div>
             <span className="panel-kicker">HTML REPORT</span>
             <h3>共有用の自己完結レポート</h3>
-            <p>ブラウザで閲覧でき、レポート内のボタンから印刷またはPDF保存もできます。</p>
+            <p>図をクリックして拡大し、軸レンジ、文字サイズ、表示高さを後から変更できます。</p>
           </div>
           <span className={`status-chip ${reportReady ? "success" : ""}`}>
             {preparingReport ? "Building" : reportReady ? "Ready" : "No result"}
@@ -184,13 +194,17 @@ export default function ReportPage() {
             <strong>重要度・SHAP・PD・2D PD</strong>
           </div>
           <div>
+            <span>HTML上で操作</span>
+            <strong>拡大・軸範囲・文字サイズ・PNG保存</strong>
+          </div>
+          <div>
             <span>条件付き</span>
             <strong>逆解析条件・候補一覧</strong>
           </div>
         </div>
 
         <p className="settings-note report-export-note">
-          旧Excel exportと同じ分析情報を収録します。重要度はModel・SHAP・PFIを正規化比較し、PDはPD曲線、ベース値+SHAP、実測値、ベースラインを表示します。XAI未計算の項目は、HTML内に理由を表示します。
+          印刷用の静止画像に加えて元のPlotly図もHTMLへ埋め込みます。拡大画面ではズーム、パン、軸範囲、文字サイズ、図の高さを変更し、調整後のPNGを保存できます。
         </p>
 
         <div className="report-download-actions">
