@@ -13,11 +13,39 @@
 
 .xai-results-stack {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "yy evaluation"
+    "importance relationship";
+  align-items: stretch;
   gap: 18px;
+}
+
+.xai-yy-panel {
+  grid-area: yy;
+}
+
+.xai-evaluation-host {
+  min-width: 0;
+  grid-area: evaluation;
+}
+
+.xai-importance-panel {
+  grid-area: importance;
+}
+
+.xai-relationship-panel {
+  grid-area: relationship;
+}
+
+.xai-evaluation-host > .xai-result-panel,
+.xai-results-stack > .xai-result-panel {
+  height: 100%;
 }
 
 .xai-result-panel {
   display: grid;
+  align-content: start;
   gap: 14px;
   min-width: 0;
 }
@@ -35,6 +63,7 @@
   width: 34px;
   height: 34px;
   place-items: center;
+  flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--line));
   border-radius: 10px;
   background: color-mix(in srgb, var(--primary) 10%, transparent);
@@ -42,6 +71,24 @@
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 10px;
   font-weight: 900;
+}
+
+.xai-importance-panel .xai-result-head > span,
+.xai-relationship-panel .xai-result-head > span {
+  font-size: 0;
+}
+
+.xai-importance-panel .xai-result-head > span::after,
+.xai-relationship-panel .xai-result-head > span::after {
+  font-size: 10px;
+}
+
+.xai-importance-panel .xai-result-head > span::after {
+  content: "03";
+}
+
+.xai-relationship-panel .xai-result-head > span::after {
+  content: "04";
 }
 
 .xai-result-head strong {
@@ -56,6 +103,20 @@
 .xai-result-head h3 {
   margin: 0;
   font-size: 15px;
+}
+
+.xai-evaluation-panel .model-result-evaluation {
+  height: 100%;
+  margin: 0;
+}
+
+.xai-evaluation-panel .model-result-metric-head,
+.xai-evaluation-panel .model-result-metric-row {
+  grid-template-columns: minmax(92px, 1fr) repeat(2, minmax(90px, 0.85fr));
+}
+
+.xai-evaluation-panel .model-result-metric-row {
+  min-height: 46px;
 }
 
 .xai-card {
@@ -121,9 +182,13 @@
 
 .plotly-figure {
   width: 100%;
-  min-height: 520px;
+  min-height: 480px;
   overflow: hidden;
   background: white;
+}
+
+.xai-results-stack .plotly-figure {
+  min-height: 430px;
 }
 
 .plotly-figure .js-plotly-plot,
@@ -142,18 +207,21 @@
 .pd-toolbar > label {
   display: grid;
   gap: 5px;
-  min-width: 150px;
+  min-width: 138px;
+  flex: 1 1 138px;
   color: var(--muted);
   font-size: 9px;
 }
 
 .pd-toolbar select {
-  min-width: 150px;
+  min-width: 0;
+  width: 100%;
 }
 
 .pd-toolbar .switch-label {
   display: flex;
   min-width: auto;
+  flex: 0 0 auto;
   padding-bottom: 7px;
 }
 
@@ -189,6 +257,21 @@
   color: var(--danger);
   font-size: 10px;
   line-height: 1.5;
+}
+
+@media (max-width: 1120px) {
+  .xai-results-stack {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "yy"
+      "evaluation"
+      "importance"
+      "relationship";
+  }
+
+  .xai-results-stack .plotly-figure {
+    min-height: 500px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -233,7 +316,14 @@
     flex: 1;
   }
 
-  .plotly-figure {
+  .plotly-figure,
+  .xai-results-stack .plotly-figure {
     min-height: 440px;
+  }
+
+  .xai-evaluation-panel .model-result-metric-head,
+  .xai-evaluation-panel .model-result-metric-row {
+    grid-template-columns: minmax(86px, 1fr) repeat(2, minmax(76px, 0.8fr));
+    gap: 6px;
   }
 }
