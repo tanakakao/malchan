@@ -6,12 +6,13 @@ const ICON_DIRECTORY = `${import.meta.env.BASE_URL}conversation-mode/`;
 export default function ConversationIcon({ fallback = "m", className = "", useImage = true }) {
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const filename = useImage ? ICON_FILENAMES[index] : null;
+  const imageEnabled = useImage && fallback !== "自";
+  const filename = imageEnabled ? ICON_FILENAMES[index] : null;
 
   useEffect(() => {
     setIndex(0);
     setLoaded(false);
-  }, [useImage]);
+  }, [imageEnabled]);
 
   useEffect(() => {
     setLoaded(false);
