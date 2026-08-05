@@ -3,10 +3,15 @@ import React, { useEffect, useState } from "react";
 const ICON_FILENAMES = ["icon.png", "icon.svg", "icon.webp", "icon.jpg", "icon.jpeg"];
 const ICON_DIRECTORY = `${import.meta.env.BASE_URL}conversation-mode/`;
 
-export default function ConversationIcon({ fallback = "m", className = "" }) {
+export default function ConversationIcon({ fallback = "m", className = "", useImage = true }) {
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const filename = ICON_FILENAMES[index];
+  const filename = useImage ? ICON_FILENAMES[index] : null;
+
+  useEffect(() => {
+    setIndex(0);
+    setLoaded(false);
+  }, [useImage]);
 
   useEffect(() => {
     setLoaded(false);
