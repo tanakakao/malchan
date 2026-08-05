@@ -25,6 +25,7 @@ import "./styles/components.css";
 import "./data-dropzone.css";
 import "./red-theme.css";
 import "./conversation-mode.css";
+import "./readability.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
