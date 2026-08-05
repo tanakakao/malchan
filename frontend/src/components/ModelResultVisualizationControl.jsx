@@ -96,6 +96,30 @@ function EvaluationSummary({ evaluation, target }) {
   );
 }
 
+function removeHost(current) {
+  if (current?.isConnected) current.remove();
+  return null;
+}
+
+function markExplainPanels(stack) {
+  const panels = stack?.querySelectorAll(":scope > .xai-result-panel") || [];
+  panels[0]?.classList.add("xai-yy-panel");
+  panels[1]?.classList.add("xai-importance-panel");
+  panels[2]?.classList.add("xai-relationship-panel");
+}
+
+function unmarkExplainPanels(root) {
+  root?.querySelectorAll(
+    ".xai-yy-panel, .xai-importance-panel, .xai-relationship-panel",
+  ).forEach((panel) => {
+    panel.classList.remove(
+      "xai-yy-panel",
+      "xai-importance-panel",
+      "xai-relationship-panel",
+    );
+  });
+}
+
 export default function ModelResultVisualizationControl() {
   const { step, modelInfo } = useWorkbench();
   const [host, setHost] = useState(null);
@@ -106,11 +130,10 @@ export default function ModelResultVisualizationControl() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (step !== "model" || !modelInfo?.model_id) {
-      setHost((current) => {
-        if (current?.isConnected) current.remove();
-        return null;
-      });
+    const isModel = step === "model";
+    const isExplain = step === "explain";
+    if ((!isModel && !isExplain) || (isModel && !modelInfo?.model_id)) {
+      setHost(removeHost);
       return undefined;
     }
 
@@ -118,13 +141,9 @@ export default function ModelResultVisualizationControl() {
     let frameId = null;
     let disposed = false;
 
-    const resolveHost = () => {
-      if (disposed) return;
+    const resolveModelHost = () => {
       const panel = contentRoot.querySelector(".model-registration-panel");
-      if (!panel) {
-        setHost(null);
-        return;
-      }
+      if (!panel) return null;
       const panelTitle = panel.querySelector(":scope > .panel-title");
       let nextHost = panel.querySelector(":scope > .model-result-visualization-host");
       if (!nextHost) {
@@ -140,6 +159,34 @@ export default function ModelResultVisualizationControl() {
       } else if (panel.firstElementChild !== nextHost) {
         panel.prepend(nextHost);
       }
+      return nextHost;
+    };
+
+    const resolveExplainHost = () => {
+      const stack = contentRoot.querySelector(".xai-results-stack");
+      if (!stack) return null;
+      markExplainPanels(stack);
+      let nextHost = stack.querySelector(":scope > .xai-evaluation-host");
+      if (!nextHost) {
+        nextHost = document.createElement("div");
+        nextHost.className = "xai-evaluation-host";
+        nextHost.dataset.location = "explain-evaluation";
+        nextHost.setAttribute("aria-label", "選択中の目的変数の精度評価");
+      }
+      const yyPanel = stack.querySelector(":scope > .xai-yy-panel");
+      if (yyPanel && yyPanel.nextElementSibling !== nextHost) {
+        yyPanel.insertAdjacentElement("afterend", nextHost);
+      } else if (!yyPanel && stack.firstElementChild !== nextHost) {
+        stack.prepend(nextHost);
+      }
+      const selectedTarget = contentRoot.querySelector(".xai-overview select")?.value;
+      if (selectedTarget) setActiveTarget(selectedTarget);
+      return nextHost;
+    };
+
+    const resolveHost = () => {
+      if (disposed) return;
+      const nextHost = isExplain ? resolveExplainHost() : resolveModelHost();
       setHost(nextHost);
     };
 
@@ -151,16 +198,30 @@ export default function ModelResultVisualizationControl() {
       });
     };
 
+    const handleChange = (event) => {
+      if (
+        isExplain
+        && event.target instanceof HTMLSelectElement
+        && event.target.closest(".xai-overview")
+      ) {
+        setActiveTarget(event.target.value);
+      }
+      scheduleResolve();
+    };
+
+    const observer = new MutationObserver(scheduleResolve);
+    observer.observe(contentRoot, { childList: true, subtree: true });
     scheduleResolve();
     contentRoot.addEventListener("click", scheduleResolve);
+    contentRoot.addEventListener("change", handleChange);
     return () => {
       disposed = true;
+      observer.disconnect();
       contentRoot.removeEventListener("click", scheduleResolve);
+      contentRoot.removeEventListener("change", handleChange);
       if (frameId !== null) window.cancelAnimationFrame(frameId);
-      setHost((current) => {
-        if (current?.isConnected) current.remove();
-        return null;
-      });
+      unmarkExplainPanels(contentRoot);
+      setHost(removeHost);
     };
   }, [step, modelInfo?.model_id]);
 
@@ -168,6 +229,8 @@ export default function ModelResultVisualizationControl() {
     setLiveEvaluation(null);
     if (!modelInfo?.model_id) {
       setResult(null);
+      setError("");
+      setLoading(false);
       return undefined;
     }
     let cancelled = false;
@@ -208,6 +271,30 @@ export default function ModelResultVisualizationControl() {
 
   const targetDiagram = targets.find((item) => item.target === activeTarget) || targets[0];
   const evaluation = liveEvaluation || result?.evaluation;
+
+  if (step === "explain") {
+    return createPortal(
+      <article className="panel xai-result-panel xai-evaluation-panel">
+        <div className="xai-result-head">
+          <span>02</span>
+          <div>
+            <strong>MODEL EVALUATION</strong>
+            <h3>精度評価の結果</h3>
+          </div>
+        </div>
+        {loading && <p className="empty-state">精度評価を取得しています...</p>}
+        {error && <p className="xai-error">{error}</p>}
+        {!loading && !error && (
+          <EvaluationSummary
+            evaluation={evaluation}
+            target={targetDiagram?.target || activeTarget}
+          />
+        )}
+      </article>,
+      host,
+    );
+  }
+
   const createdAt = modelInfo?.created_at
     ? new Date(modelInfo.created_at).toLocaleString("ja-JP")
     : "—";
