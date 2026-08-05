@@ -1,0 +1,38 @@
+/* Conversation mode geometry fixes loaded after readability overrides. */
+.conversation-launcher {
+  width: 100%;
+  margin: 0 0 16px;
+  flex: 0 0 auto;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+}
+
+.conversation-launcher-copy {
+  overflow: hidden;
+}
+
+.conversation-launcher-copy strong {
+  line-height: 1.25;
+}
+
+.conversation-launcher-copy small {
+  line-height: 1.35;
+}
+
+.conversation-launcher-arrow {
+  justify-self: end;
+}
+
+.conversation-messages > .conversation-message,
+.conversation-messages > .conversation-action-card {
+  flex: 0 0 auto;
+}
+
+.conversation-result-card {
+  overflow: visible;
+}
+
+@media (max-width: 899px) {
+  .conversation-launcher {
+    margin-bottom: 8px;
+  }
+}
