@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { withBottomLegend } from "../plotlyLayout";
 
 export default function PlotlyFigure({ figure, className = "plotly-figure" }) {
   const containerRef = useRef(null);
@@ -15,11 +16,7 @@ export default function PlotlyFigure({ figure, className = "plotly-figure" }) {
       .then((module) => {
         if (!active || !containerRef.current) return;
         plotly = module.default || module;
-        const layout = {
-          ...(figure.layout || {}),
-          autosize: true,
-          width: undefined,
-        };
+        const layout = withBottomLegend(figure.layout || {});
         plotly.react(
           containerRef.current,
           figure.data || [],
