@@ -55,6 +55,7 @@ class TargetModelEvaluation(BaseModel):
     task: TaskType
     train: list[dict[str, Any]] = Field(default_factory=list)
     test: list[dict[str, Any]] = Field(default_factory=list)
+    oof: dict[str, float] = Field(default_factory=dict)
     oof_predictions: list[dict[str, Any]] = Field(default_factory=list)
 
 
