@@ -21,6 +21,14 @@ assert.deepEqual(
 assert.equal(metricValue(result.oof, "RMSE"), 0.0733);
 assert.equal(metricValue(result.train[0], "rmse"), 0.0471);
 
+const component = fs.readFileSync(
+  new URL("./components/ModelResultVisualizationControl.jsx", import.meta.url),
+  "utf8",
+);
+assert.match(component, /evaluationMetricNames\(result\)/);
+assert.match(component, /metricValue\(record, metric\)/);
+assert.doesNotMatch(component, /const metrics = \[\.\.\.new Set\(\[/);
+
 const css = fs.readFileSync(new URL("./explain-evaluation.css", import.meta.url), "utf8");
 assert.match(css, /\.bochan-evaluation-table\s*\{[^}]*width:\s*100%/s);
 assert.match(css, /\.bochan-evaluation-table table\s*\{[^}]*width:\s*100%/s);
