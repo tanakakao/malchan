@@ -1,6 +1,7 @@
 import { buildHtmlReport, reportFileName } from "./report";
 import { collectReportVisualizations } from "./report-visualizations";
 import { collectInteractiveFigures } from "./report-interactive-figures";
+import { removeReportNavItem, removeReportSection } from "./report-html-sections";
 import {
   INTERACTIVE_REPORT_CSS,
   interactiveModalHtml,
@@ -107,10 +108,17 @@ const STATIC_VISUALIZATION_CSS = `
     @media print{.export-figure-grid{grid-template-columns:1fr 1fr}.export-figure-card{break-inside:avoid}.export-figure-details{break-inside:auto}.export-figure-details>summary{display:none}.export-figure-details:not([open])>*:not(summary){display:block}}
 `;
 
-function injectReportContent(baseHtml, visualizations, registry, plotlySource) {
+export function injectReportContent(baseHtml, visualizations, registry, plotlySource) {
+  const hasModelVisualizations = Object.keys(visualizations?.targets || {}).length > 0;
+  let reportHtml = baseHtml;
+  if (hasModelVisualizations) {
+    reportHtml = removeReportSection(reportHtml, "diagnostics");
+    reportHtml = removeReportNavItem(reportHtml, "diagnostics");
+  }
+
   const sectionHtml = `
     <section class="report-section" id="model-figures">
-      <header class="section-heading"><span>06</span><div><h2>モデル可視化</h2><p>図をクリックすると拡大し、軸レンジ、文字サイズ、表示高さを変更できます。</p></div></header>
+      <header class="section-heading"><span>05</span><div><h2>モデル可視化</h2><p>精度診断とモデル挙動を重複なくまとめ、図はクリックして拡大・編集できます。</p></div></header>
       ${renderVisualizationSection(visualizations)}
     </section>`;
   const runtime = `
@@ -118,7 +126,7 @@ function injectReportContent(baseHtml, visualizations, registry, plotlySource) {
     <script type="application/json" id="malchan-interactive-figures">${safeScriptJson(registry)}</script>
     ${plotlySource ? `<script>${safeInlineScript(plotlySource)}</script>` : ""}
     <script>${safeInlineScript(interactiveRuntimeScript())}</script>`;
-  return baseHtml
+  return reportHtml
     .replace("</style>", `${STATIC_VISUALIZATION_CSS}${INTERACTIVE_REPORT_CSS}\n  </style>`)
     .replace('<a href="#optimization">予測・逆解析</a>', '<a href="#model-figures">モデル可視化</a><a href="#optimization">予測・逆解析</a>')
     .replace('<section class="report-section" id="optimization">', `${sectionHtml}<section class="report-section" id="optimization">`)
