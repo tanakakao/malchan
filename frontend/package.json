@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test:plotly-layout": "node --test test/plotlyLayout.test.js",
+    "test:conversation-mode": "node --test test/conversationModeUi.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
