@@ -13,6 +13,7 @@ import "./model-bundle.css";
 import "./model-target-tabs.css";
 import "./comparison-evaluation.css";
 import "./xai.css";
+import "./explain-evaluation.css";
 import "./prediction.css";
 import "./optimize-header-alignment.css";
 import "./material-features.css";

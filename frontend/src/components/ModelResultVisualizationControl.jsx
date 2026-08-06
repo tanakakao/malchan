@@ -10,7 +10,10 @@ function formatMetric(value) {
   if (magnitude >= 1000 || (magnitude > 0 && magnitude < 0.001)) {
     return value.toExponential(4);
   }
-  return value.toFixed(4);
+  return value
+    .toFixed(4)
+    .replace(/\.0+$/, "")
+    .replace(/(\.\d*?)0+$/, "$1");
 }
 
 function summarizeMetric(records, metric) {
@@ -27,6 +30,111 @@ function formatSummary(summary) {
   if (!summary) return "—";
   const mean = formatMetric(summary.mean);
   return summary.count > 1 ? `${mean} ± ${formatMetric(summary.std)}` : mean;
+}
+
+function metricValue(values, metric) {
+  if (!values) return undefined;
+  const key = Object.keys(values).find(
+    (candidate) => candidate.toLowerCase() === String(metric).toLowerCase(),
+  );
+  return key ? Number(values[key]) : undefined;
+}
+
+function classificationOofMetrics(records) {
+  const rows = (records || []).filter(
+    (record) => record?.actual !== undefined && record?.predicted !== undefined,
+  );
+  if (!rows.length) return {};
+
+  const labels = [...new Set(rows.flatMap((record) => [record.actual, record.predicted]))];
+  const total = rows.length;
+  const accuracy = rows.filter((record) => record.actual === record.predicted).length / total;
+  let weightedPrecision = 0;
+  let weightedRecall = 0;
+  let weightedF1 = 0;
+
+  labels.forEach((label) => {
+    const support = rows.filter((record) => record.actual === label).length;
+    const truePositive = rows.filter(
+      (record) => record.actual === label && record.predicted === label,
+    ).length;
+    const falsePositive = rows.filter(
+      (record) => record.actual !== label && record.predicted === label,
+    ).length;
+    const falseNegative = rows.filter(
+      (record) => record.actual === label && record.predicted !== label,
+    ).length;
+    const precision = truePositive + falsePositive
+      ? truePositive / (truePositive + falsePositive)
+      : 0;
+    const recall = truePositive + falseNegative
+      ? truePositive / (truePositive + falseNegative)
+      : 0;
+    const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
+    const weight = support / total;
+    weightedPrecision += precision * weight;
+    weightedRecall += recall * weight;
+    weightedF1 += f1 * weight;
+  });
+
+  return {
+    accuracy,
+    precision: weightedPrecision,
+    recall: weightedRecall,
+    f1: weightedF1,
+  };
+}
+
+function regressionOofMetrics(records) {
+  const rows = (records || [])
+    .map((record) => ({
+      actual: Number(record?.actual),
+      predicted: Number(record?.predicted),
+    }))
+    .filter((record) => Number.isFinite(record.actual) && Number.isFinite(record.predicted));
+  if (!rows.length) return {};
+
+  const errors = rows.map((record) => record.predicted - record.actual);
+  const absoluteErrors = errors.map(Math.abs);
+  const squaredErrors = errors.map((value) => value ** 2);
+  const actualMean = rows.reduce((sum, record) => sum + record.actual, 0) / rows.length;
+  const residualSum = squaredErrors.reduce((sum, value) => sum + value, 0);
+  const totalSum = rows.reduce((sum, record) => sum + (record.actual - actualMean) ** 2, 0);
+  const percentageErrors = rows
+    .filter((record) => record.actual !== 0)
+    .map((record) => Math.abs((record.predicted - record.actual) / record.actual));
+
+  return {
+    mae: absoluteErrors.reduce((sum, value) => sum + value, 0) / rows.length,
+    mse: residualSum / rows.length,
+    rmse: Math.sqrt(residualSum / rows.length),
+    r2: totalSum > 0 ? 1 - residualSum / totalSum : 0,
+    mape: percentageErrors.length
+      ? percentageErrors.reduce((sum, value) => sum + value, 0) / percentageErrors.length
+      : undefined,
+  };
+}
+
+function comparisonTargetEvaluation(comparisonResult, task) {
+  if (!comparisonResult) return null;
+  return {
+    task,
+    train: comparisonResult.best_cv_scores?.train || [],
+    test: comparisonResult.best_cv_scores?.test || [],
+    oof: task === "classification"
+      ? classificationOofMetrics(comparisonResult.best_cv_predictions?.test)
+      : regressionOofMetrics(comparisonResult.best_cv_predictions?.test),
+  };
+}
+
+function resolvedTargetEvaluation(evaluation, comparison, target, task) {
+  const direct = evaluation?.targets?.[target];
+  const compared = comparisonTargetEvaluation(comparison?.targets?.[target], task);
+  if (!direct) return compared;
+  return {
+    ...direct,
+    oof: direct.oof || compared?.oof || {},
+  };
 }
 
 function ModelTargetTabs({ targets, activeTarget, onChange }) {
@@ -50,48 +158,80 @@ function ModelTargetTabs({ targets, activeTarget, onChange }) {
   );
 }
 
-function EvaluationSummary({ evaluation, target }) {
-  const result = evaluation?.targets?.[target];
-  const metrics = useMemo(() => {
-    if (!result) return [];
-    return [...new Set([
-      ...(result.train || []).flatMap((record) => Object.keys(record || {})),
-      ...(result.test || []).flatMap((record) => Object.keys(record || {})),
-    ])];
-  }, [result]);
+function EvaluationSummary({ evaluation, comparison, targets, activeTarget }) {
+  const entries = useMemo(
+    () => targets
+      .map((item) => [
+        item.target,
+        resolvedTargetEvaluation(evaluation, comparison, item.target, item.task),
+      ])
+      .filter(([, result]) => result),
+    [evaluation, comparison, targets],
+  );
 
-  if (!evaluation || !result) {
+  if (!entries.length) {
     return (
       <section className="model-result-evaluation empty">
         <div className="model-result-section-head">
-          <div><span>VALIDATION</span><strong>精度検証</strong></div>
+          <div><span>CROSS VALIDATION</span><strong>交差検証による精度評価</strong></div>
           <span className="status-chip">未実施</span>
         </div>
-        <p>精度検証を有効にして学習すると、TrainとValidationの指標をここに表示します。</p>
+        <p>Model画面で精度検証またはモデル比較を実行すると表示します。</p>
       </section>
     );
   }
 
-  const methodLabel = evaluation.method === "loo" ? "Leave-One-Out" : `${evaluation.n_splits}-fold`;
+  const methodLabel = evaluation
+    ? evaluation.method === "loo"
+      ? "Leave-One-Out"
+      : `${evaluation.n_splits}-fold`
+    : "Model comparison CV";
+
   return (
-    <section className="model-result-evaluation">
+    <section className="model-result-evaluation bochan-evaluation-summary">
       <div className="model-result-section-head">
-        <div><span>VALIDATION</span><strong>精度検証</strong></div>
+        <div><span>CROSS VALIDATION</span><strong>交差検証による精度評価</strong></div>
         <span className="status-chip success">{methodLabel}</span>
       </div>
-      <div className="model-result-metric-head" aria-hidden="true">
-        <span>指標</span><span>Train</span><span>Validation</span>
+      <div className="bochan-evaluation-targets">
+        {entries.map(([target, result], index) => {
+          const metrics = [...new Set([
+            ...(result.train || []).flatMap((record) => Object.keys(record || {})),
+            ...(result.test || []).flatMap((record) => Object.keys(record || {})),
+            ...Object.keys(result.oof || {}),
+          ])];
+          return (
+            <details
+              key={target}
+              open={target === activeTarget || (!activeTarget && index === 0)}
+            >
+              <summary>{target}</summary>
+              <div className="table-wrap compact bochan-evaluation-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>指標</th>
+                      <th>Train</th>
+                      <th>Validation</th>
+                      <th>OOF</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.map((metric) => (
+                      <tr key={`${target}-${metric}`}>
+                        <td>{String(metric).toUpperCase()}</td>
+                        <td>{formatSummary(summarizeMetric(result.train, metric))}</td>
+                        <td>{formatSummary(summarizeMetric(result.test, metric))}</td>
+                        <td>{formatMetric(metricValue(result.oof, metric))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          );
+        })}
       </div>
-      <div className="model-result-metrics">
-        {metrics.map((metric) => (
-          <div className="model-result-metric-row" key={metric}>
-            <strong>{metric}</strong>
-            <span>{formatSummary(summarizeMetric(result.train, metric))}</span>
-            <span>{formatSummary(summarizeMetric(result.test, metric))}</span>
-          </div>
-        ))}
-      </div>
-      <p className="model-result-metric-note">複数foldの場合は平均 ± 標準偏差を表示しています。</p>
     </section>
   );
 }
@@ -121,7 +261,7 @@ function unmarkExplainPanels(root) {
 }
 
 export default function ModelResultVisualizationControl() {
-  const { step, modelInfo } = useWorkbench();
+  const { step, modelInfo, comparison } = useWorkbench();
   const [host, setHost] = useState(null);
   const [result, setResult] = useState(null);
   const [liveEvaluation, setLiveEvaluation] = useState(null);
@@ -150,7 +290,7 @@ export default function ModelResultVisualizationControl() {
         nextHost = document.createElement("div");
         nextHost.className = "model-result-visualization-host";
         nextHost.dataset.location = "registered-model";
-        nextHost.setAttribute("aria-label", "登録モデルの構成と精度検証");
+        nextHost.setAttribute("aria-label", "登録モデルの構成");
       }
       if (panelTitle) {
         if (panelTitle.nextElementSibling !== nextHost) {
@@ -171,7 +311,7 @@ export default function ModelResultVisualizationControl() {
         nextHost = document.createElement("div");
         nextHost.className = "xai-evaluation-host";
         nextHost.dataset.location = "explain-evaluation";
-        nextHost.setAttribute("aria-label", "選択中の目的変数の精度評価");
+        nextHost.setAttribute("aria-label", "交差検証による精度評価");
       }
       const yyPanel = stack.querySelector(":scope > .xai-yy-panel");
       if (yyPanel && yyPanel.nextElementSibling !== nextHost) {
@@ -287,7 +427,9 @@ export default function ModelResultVisualizationControl() {
         {!loading && !error && (
           <EvaluationSummary
             evaluation={evaluation}
-            target={targetDiagram?.target || activeTarget}
+            comparison={comparison}
+            targets={targets}
+            activeTarget={activeTarget}
           />
         )}
       </article>,
@@ -327,8 +469,6 @@ export default function ModelResultVisualizationControl() {
           />
         )}
       </section>
-
-      <EvaluationSummary evaluation={evaluation} target={targetDiagram?.target} />
 
       <details className="model-result-metadata">
         <summary>モデル情報をJSONで確認</summary>

@@ -1,3 +1,15 @@
+.data-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.data-source-grid > .panel {
+  min-width: 0;
+  margin: 0;
+}
+
 .dropzone {
   position: relative;
   min-height: 190px;
@@ -76,4 +88,26 @@
   color: #ffffff;
   background: var(--primary);
   border-color: var(--primary);
+}
+
+.model-dropzone .upload-symbol {
+  color: var(--success, var(--primary));
+  border-color: color-mix(in srgb, var(--success, var(--primary)) 22%, var(--line));
+}
+
+.model-dropzone:hover,
+.model-dropzone.dragging {
+  border-color: var(--success, var(--primary));
+  background: color-mix(in srgb, var(--success-soft, var(--primary-soft)) 72%, var(--surface-subtle));
+}
+
+.model-dropzone.dragging .upload-symbol {
+  background: var(--success, var(--primary));
+  border-color: var(--success, var(--primary));
+}
+
+@media (max-width: 900px) {
+  .data-source-grid {
+    grid-template-columns: 1fr;
+  }
 }
