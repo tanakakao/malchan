@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
@@ -15,6 +16,8 @@ from malchan.app.schemas import (
     ModelParameterSchemaResponse,
     TargetModelEvaluation,
 )
+
+from .comparison_service import _prediction_records
 
 
 def _json_value(value: Any) -> Any:
@@ -212,11 +215,18 @@ def evaluate_model(
             raise RuntimeError(
                 f"Cross-validation scores are unavailable for target {target!r}."
             )
+        predictions = getattr(child_model, "cv_preds", None)
+        oof_predictions = (
+            _prediction_records(child_model, predictions.get("test"))
+            if isinstance(predictions, Mapping)
+            else []
+        )
         results[target] = TargetModelEvaluation(
             target=target,
             task=target_tasks[target],
             train=_frame_records(scores.get("train")),
             test=_frame_records(scores.get("test")),
+            oof_predictions=oof_predictions,
         )
 
     return ModelEvaluationResponse(
