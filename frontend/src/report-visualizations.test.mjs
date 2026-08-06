@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("./report-visualizations.js", import.meta.url), "utf8");
+const apiSource = fs.readFileSync(new URL("./api.js", import.meta.url), "utf8");
 const interactiveExport = fs.readFileSync(new URL("./report-interactive-export.js", import.meta.url), "utf8");
 const interactiveFigures = fs.readFileSync(new URL("./report-interactive-figures.js", import.meta.url), "utf8");
 const interactiveRuntime = fs.readFileSync(new URL("./report-interactive-runtime.js", import.meta.url), "utf8");
@@ -15,6 +16,14 @@ assert.match(source, /visualizationBeeswarm/);
 assert.match(source, /visualizationPdp2d/);
 assert.match(source, /figureToPng/);
 assert.match(source, /plotly\.toImage/);
+
+assert.match(apiSource, /function unavailableShapFeature\(error\)/);
+assert.match(apiSource, /Unknown or unavailable SHAP feature/);
+assert.match(apiSource, /if \(!unavailableShapFeature\(error\)\) throw error/);
+assert.match(apiSource, /records:\s*\[\]/);
+assert.match(apiSource, /value_columns:\s*\[\]/);
+assert.match(apiSource, /unavailable:\s*true/);
+assert.match(apiSource, /xaiShap:\s*requestOptionalShap/);
 
 assert.match(interactiveFigures, /collectInteractiveFigures/);
 assert.match(interactiveFigures, /combinedImportanceFigure/);
