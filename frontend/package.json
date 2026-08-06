@@ -8,7 +8,7 @@
     "build": "vite build",
     "test:plotly-layout": "node --test test/plotlyLayout.test.js",
     "test:conversation-mode": "node --test test/conversationModeUi.test.js",
-    "test:report": "node src/report-visualizations.test.mjs && node src/report-html-sections.test.mjs",
+    "test:report": "node src/report-visualizations.test.mjs && node src/report-html-sections.test.mjs && node src/report-script-embedding.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

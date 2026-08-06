@@ -1,6 +1,7 @@
 import { buildHtmlReport, reportFileName } from "./report";
 import { collectReportVisualizations } from "./report-visualizations";
 import { collectInteractiveFigures } from "./report-interactive-figures";
+import { embeddedScriptTag } from "./report-script-embedding";
 import { removeReportNavItem, removeReportSection } from "./report-html-sections";
 import {
   INTERACTIVE_REPORT_CSS,
@@ -124,7 +125,7 @@ export function injectReportContent(baseHtml, visualizations, registry, plotlySo
   const runtime = `
     ${interactiveModalHtml()}
     <script type="application/json" id="malchan-interactive-figures">${safeScriptJson(registry)}</script>
-    ${plotlySource ? `<script>${safeInlineScript(plotlySource)}</script>` : ""}
+    ${embeddedScriptTag(plotlySource)}
     <script>${safeInlineScript(interactiveRuntimeScript())}</script>`;
   return reportHtml
     .replace("</style>", `${STATIC_VISUALIZATION_CSS}${INTERACTIVE_REPORT_CSS}\n  </style>`)
