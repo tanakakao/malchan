@@ -43,6 +43,76 @@ def _frame_records(value: Any) -> list[dict[str, Any]]:
     return json.loads(frame.to_json(orient="records", date_format="iso"))
 
 
+def _oof_metrics(
+    task: str,
+    records: list[dict[str, Any]],
+) -> dict[str, float]:
+    """Calculate aggregate metrics from out-of-fold prediction records."""
+
+    valid = [
+        record
+        for record in records
+        if record.get("actual") is not None and record.get("predicted") is not None
+    ]
+    if not valid:
+        return {}
+
+    actual = [record["actual"] for record in valid]
+    predicted = [record["predicted"] for record in valid]
+
+    if task == "classification":
+        from sklearn.metrics import (
+            accuracy_score,
+            f1_score,
+            precision_score,
+            recall_score,
+        )
+
+        return {
+            "accuracy": float(accuracy_score(actual, predicted)),
+            "precision": float(
+                precision_score(actual, predicted, average="weighted", zero_division=0)
+            ),
+            "recall": float(
+                recall_score(actual, predicted, average="weighted", zero_division=0)
+            ),
+            "f1": float(
+                f1_score(actual, predicted, average="weighted", zero_division=0)
+            ),
+        }
+
+    from sklearn.metrics import (
+        mean_absolute_error,
+        mean_absolute_percentage_error,
+        mean_squared_error,
+        r2_score,
+    )
+
+    actual_values = pd.to_numeric(pd.Series(actual), errors="coerce")
+    predicted_values = pd.to_numeric(pd.Series(predicted), errors="coerce")
+    finite = actual_values.notna() & predicted_values.notna()
+    actual_values = actual_values[finite]
+    predicted_values = predicted_values[finite]
+    if actual_values.empty:
+        return {}
+
+    mse = float(mean_squared_error(actual_values, predicted_values))
+    metrics = {
+        "mae": float(mean_absolute_error(actual_values, predicted_values)),
+        "mse": mse,
+        "rmse": math.sqrt(mse),
+    }
+    if len(actual_values) > 1:
+        r2 = float(r2_score(actual_values, predicted_values))
+        if math.isfinite(r2):
+            metrics["r2"] = r2
+    if not (actual_values == 0).any():
+        mape = float(mean_absolute_percentage_error(actual_values, predicted_values))
+        if math.isfinite(mape):
+            metrics["mape"] = mape
+    return metrics
+
+
 def _numeric_default(
     default_value: Any,
     low: int | float,
@@ -226,6 +296,7 @@ def evaluate_model(
             task=target_tasks[target],
             train=_frame_records(scores.get("train")),
             test=_frame_records(scores.get("test")),
+            oof=_oof_metrics(target_tasks[target], oof_predictions),
             oof_predictions=oof_predictions,
         )
 
