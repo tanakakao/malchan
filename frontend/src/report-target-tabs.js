@@ -62,8 +62,8 @@ export function reportTargetTabsRuntimeScript() {
     tabList.setAttribute("aria-label", "目的変数");
 
     const buttons = cards.map((item, itemIndex) => {
-      const panelId = `malchan-target-panel-${groupIndex}-${itemIndex}`;
-      const tabId = `malchan-target-tab-${groupIndex}-${itemIndex}`;
+      const panelId = "malchan-target-panel-" + groupIndex + "-" + itemIndex;
+      const tabId = "malchan-target-tab-" + groupIndex + "-" + itemIndex;
       item.card.id = item.card.id || panelId;
       item.card.classList.add("report-target-panel");
       item.card.dataset.reportTarget = item.target;
