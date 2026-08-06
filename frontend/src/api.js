@@ -233,6 +233,28 @@ async function evaluateAndNotify(modelId, payload) {
   return result;
 }
 
+function unavailableShapFeature(error) {
+  const detail = typeof error?.detail === "string" ? error.detail : error?.message;
+  return /Unknown or unavailable SHAP feature/i.test(String(detail || ""));
+}
+
+async function requestOptionalShap(modelId, target, feature) {
+  try {
+    return await request(
+      `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/shap${query({ feature })}`,
+    );
+  } catch (error) {
+    if (!unavailableShapFeature(error)) throw error;
+    return {
+      feature,
+      records: [],
+      value_columns: [],
+      unavailable: true,
+      unavailable_reason: error.message || String(error),
+    };
+  }
+}
+
 export const api = {
   health: () => request("/health"),
   modelParameters: (task, modelName) =>
@@ -290,10 +312,7 @@ export const api = {
     request(
       `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/shap-values`,
     ),
-  xaiShap: (modelId, target, feature) =>
-    request(
-      `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/shap${query({ feature })}`,
-    ),
+  xaiShap: requestOptionalShap,
   xaiPdp: (modelId, target, feature, options = {}) =>
     request(
       `/models/${encodeURIComponent(modelId)}/xai/${encodeURIComponent(target)}/pdp${query({ feature, ...options })}`,
