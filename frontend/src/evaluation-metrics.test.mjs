@@ -20,6 +20,9 @@ assert.deepEqual(
 );
 assert.equal(metricValue(result.oof, "RMSE"), 0.0733);
 assert.equal(metricValue(result.train[0], "rmse"), 0.0471);
+assert.equal(metricValue(result.train[0], "MSE"), 0.0471 ** 2);
+assert.equal(metricValue(result.test[0], "mse"), 0.0704 ** 2);
+assert.equal(metricValue({ RMSE: 2, MSE: 3 }, "mse"), 3);
 
 const component = fs.readFileSync(
   new URL("./components/ModelResultVisualizationControl.jsx", import.meta.url),
@@ -28,6 +31,10 @@ const component = fs.readFileSync(
 assert.match(component, /evaluationMetricNames\(result\)/);
 assert.match(component, /metricValue\(record, metric\)/);
 assert.doesNotMatch(component, /const metrics = \[\.\.\.new Set\(\[/);
+
+const metrics = fs.readFileSync(new URL("./evaluationMetrics.js", import.meta.url), "utf8");
+assert.match(metrics, /normalized === "mse"/);
+assert.match(metrics, /rmse \*\* 2/);
 
 const css = fs.readFileSync(new URL("./explain-evaluation.css", import.meta.url), "utf8");
 assert.match(css, /\.bochan-evaluation-table\s*\{[^}]*width:\s*100%/s);
