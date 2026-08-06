@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../api";
+import { evaluationMetricNames, metricValue } from "../evaluationMetrics";
 import { useWorkbench } from "../context/WorkbenchContext";
 import ModelStructureSummaryTable from "./ModelStructureSummaryTable";
 
@@ -18,7 +19,7 @@ function formatMetric(value) {
 
 function summarizeMetric(records, metric) {
   const values = (records || [])
-    .map((record) => Number(record?.[metric]))
+    .map((record) => metricValue(record, metric))
     .filter(Number.isFinite);
   if (!values.length) return null;
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -30,14 +31,6 @@ function formatSummary(summary) {
   if (!summary) return "—";
   const mean = formatMetric(summary.mean);
   return summary.count > 1 ? `${mean} ± ${formatMetric(summary.std)}` : mean;
-}
-
-function metricValue(values, metric) {
-  if (!values) return undefined;
-  const key = Object.keys(values).find(
-    (candidate) => candidate.toLowerCase() === String(metric).toLowerCase(),
-  );
-  return key ? Number(values[key]) : undefined;
 }
 
 function classificationOofMetrics(records) {
@@ -195,11 +188,7 @@ function EvaluationSummary({ evaluation, comparison, targets, activeTarget }) {
       </div>
       <div className="bochan-evaluation-targets">
         {entries.map(([target, result], index) => {
-          const metrics = [...new Set([
-            ...(result.train || []).flatMap((record) => Object.keys(record || {})),
-            ...(result.test || []).flatMap((record) => Object.keys(record || {})),
-            ...Object.keys(result.oof || {}),
-          ])];
+          const metrics = evaluationMetricNames(result);
           return (
             <details
               key={target}
@@ -218,7 +207,7 @@ function EvaluationSummary({ evaluation, comparison, targets, activeTarget }) {
                   </thead>
                   <tbody>
                     {metrics.map((metric) => (
-                      <tr key={`${target}-${metric}`}>
+                      <tr key={`${target}-${String(metric).toLowerCase()}`}>
                         <td>{String(metric).toUpperCase()}</td>
                         <td>{formatSummary(summarizeMetric(result.train, metric))}</td>
                         <td>{formatSummary(summarizeMetric(result.test, metric))}</td>
