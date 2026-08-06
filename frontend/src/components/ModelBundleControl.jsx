@@ -1,7 +1,35 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useWorkbench } from "../context/WorkbenchContext";
 import { downloadModelBundle } from "../modelBundles";
+
+function bestModelNames(comparison) {
+  return Object.fromEntries(
+    Object.entries(comparison?.targets || {})
+      .filter(([, result]) => result?.best_model_name)
+      .map(([target, result]) => [target, result.best_model_name]),
+  );
+}
+
+function resolvedModelInfo(modelInfo, comparison, activateBest) {
+  if (!modelInfo || !activateBest) return modelInfo;
+  const bestNames = bestModelNames(comparison);
+  if (!Object.keys(bestNames).length) return modelInfo;
+  const targetNames = {
+    ...(modelInfo.model_names_by_target || {}),
+    ...Object.fromEntries(
+      Object.entries(bestNames).map(([target, name]) => [target, [name]]),
+    ),
+  };
+  const targets = modelInfo.target_cols || Object.keys(targetNames);
+  return {
+    ...modelInfo,
+    model_names_by_target: targetNames,
+    model_names: targets.length === 1 && bestNames[targets[0]]
+      ? [bestNames[targets[0]]]
+      : modelInfo.model_names,
+  };
+}
 
 function defaultSaveName(modelInfo) {
   const names = Object.values(modelInfo?.model_names_by_target || {})
@@ -15,6 +43,10 @@ export default function ModelBundleControl() {
   const {
     step,
     modelInfo,
+    comparison,
+    activateBest,
+    modelNames,
+    setModelNames,
     busy,
     setToast,
     loadModelBundle,
@@ -26,10 +58,22 @@ export default function ModelBundleControl() {
   const [downloading, setDownloading] = useState(false);
   const fileInputRef = useRef(null);
   const sourceRunButtonRef = useRef(null);
+  const displayedModelInfo = useMemo(
+    () => resolvedModelInfo(modelInfo, comparison, activateBest),
+    [modelInfo, comparison, activateBest],
+  );
 
   useEffect(() => {
-    setSaveName(defaultSaveName(modelInfo));
-  }, [modelInfo?.model_id]);
+    setSaveName(defaultSaveName(displayedModelInfo));
+  }, [displayedModelInfo?.model_id, comparison, activateBest]);
+
+  useEffect(() => {
+    if (!activateBest) return;
+    const names = bestModelNames(comparison);
+    if (!Object.keys(names).length) return;
+    const changed = Object.entries(names).some(([target, name]) => modelNames[target] !== name);
+    if (changed) setModelNames({ ...modelNames, ...names });
+  }, [activateBest, comparison, modelNames, setModelNames]);
 
   useEffect(() => {
     if (step !== "model") {
@@ -89,6 +133,12 @@ export default function ModelBundleControl() {
 
       const evaluationPanel = contentRoot.querySelector(".evaluation-result-panel");
       if (evaluationPanel) evaluationPanel.hidden = true;
+
+      const registeredModel = contentRoot.querySelector(".model-registration-panel pre");
+      if (registeredModel && displayedModelInfo) {
+        const serialized = JSON.stringify(displayedModelInfo, null, 2);
+        if (registeredModel.textContent !== serialized) registeredModel.textContent = serialized;
+      }
     };
 
     const scheduleResolve = () => {
@@ -122,7 +172,7 @@ export default function ModelBundleControl() {
         return null;
       });
     };
-  }, [step]);
+  }, [step, displayedModelInfo]);
 
   async function handleDownload() {
     if (!modelInfo?.model_id || downloading) return;
