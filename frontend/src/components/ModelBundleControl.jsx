@@ -1,21 +1,89 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useWorkbench } from "../context/WorkbenchContext";
+import { downloadModelBundle } from "../modelBundles";
+
+function bestModelNames(comparison) {
+  return Object.fromEntries(
+    Object.entries(comparison?.targets || {})
+      .filter(([, result]) => result?.best_model_name)
+      .map(([target, result]) => [target, result.best_model_name]),
+  );
+}
+
+function resolvedModelInfo(modelInfo, comparison, activateBest) {
+  if (!modelInfo || !activateBest) return modelInfo;
+  const bestNames = bestModelNames(comparison);
+  if (!Object.keys(bestNames).length) return modelInfo;
+  const targetNames = {
+    ...(modelInfo.model_names_by_target || {}),
+    ...Object.fromEntries(
+      Object.entries(bestNames).map(([target, name]) => [target, [name]]),
+    ),
+  };
+  const targets = modelInfo.target_cols || Object.keys(targetNames);
+  return {
+    ...modelInfo,
+    model_names_by_target: targetNames,
+    model_names: targets.length === 1 && bestNames[targets[0]]
+      ? [bestNames[targets[0]]]
+      : modelInfo.model_names,
+  };
+}
+
+function defaultSaveName(modelInfo) {
+  const names = Object.values(modelInfo?.model_names_by_target || {})
+    .flat()
+    .filter(Boolean);
+  if (names.length === 1) return names[0];
+  return modelInfo?.model_id ? `malchan-model-${modelInfo.model_id}` : "malchan-model";
+}
 
 export default function ModelBundleControl() {
   const {
     step,
     modelInfo,
+    comparison,
+    activateBest,
+    setModelNames,
     busy,
-    downloadActiveModel,
+    setToast,
     loadModelBundle,
   } = useWorkbench();
   const [host, setHost] = useState(null);
+  const [actionHost, setActionHost] = useState(null);
+  const [runAction, setRunAction] = useState({ label: "モデル学習を実行 →", disabled: true });
+  const [saveName, setSaveName] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const fileInputRef = useRef(null);
+  const sourceRunButtonRef = useRef(null);
+  const displayedModelInfo = useMemo(
+    () => resolvedModelInfo(modelInfo, comparison, activateBest),
+    [modelInfo, comparison, activateBest],
+  );
+
+  useEffect(() => {
+    setSaveName(defaultSaveName(displayedModelInfo));
+  }, [displayedModelInfo?.model_id, comparison, activateBest]);
+
+  useEffect(() => {
+    if (!activateBest) return;
+    const names = bestModelNames(comparison);
+    if (!Object.keys(names).length) return;
+    setModelNames((current) => {
+      const changed = Object.entries(names).some(([target, name]) => current[target] !== name);
+      return changed ? { ...current, ...names } : current;
+    });
+  }, [activateBest, comparison, setModelNames]);
 
   useEffect(() => {
     if (step !== "model") {
+      sourceRunButtonRef.current = null;
       setHost((current) => {
+        if (current?.isConnected) current.remove();
+        return null;
+      });
+      setActionHost((current) => {
         if (current?.isConnected) current.remove();
         return null;
       });
@@ -26,47 +94,108 @@ export default function ModelBundleControl() {
     let frameId = null;
     let disposed = false;
 
-    const resolveHost = () => {
+    const resolveHosts = () => {
       if (disposed) return;
       const settings = contentRoot.querySelector(".model-settings-columns");
-      if (!settings) {
+      const sectionHeader = contentRoot.querySelector(".section-header");
+      if (!settings || !sectionHeader) {
         setHost(null);
+        setActionHost(null);
         return;
       }
+
       let nextHost = contentRoot.querySelector(":scope > .model-bundle-control-host");
       if (!nextHost) {
         nextHost = document.createElement("div");
         nextHost.className = "model-bundle-control-host";
         nextHost.dataset.location = "model-page";
       }
-      if (settings.nextElementSibling !== nextHost) {
-        settings.insertAdjacentElement("afterend", nextHost);
+      if (settings.previousElementSibling !== nextHost) {
+        settings.insertAdjacentElement("beforebegin", nextHost);
       }
       setHost(nextHost);
+
+      let nextActionHost = sectionHeader.querySelector(":scope > .model-run-action-host");
+      if (!nextActionHost) {
+        nextActionHost = document.createElement("div");
+        nextActionHost.className = "model-run-action-host";
+        sectionHeader.appendChild(nextActionHost);
+      }
+      setActionHost(nextActionHost);
+
+      const sourceButton = contentRoot.querySelector(".model-run-summary button");
+      sourceRunButtonRef.current = sourceButton;
+      if (sourceButton) {
+        setRunAction({
+          label: sourceButton.textContent?.trim() || "学習を実行 →",
+          disabled: sourceButton.disabled,
+        });
+      }
+
+      const evaluationPanel = contentRoot.querySelector(".evaluation-result-panel");
+      if (evaluationPanel) evaluationPanel.hidden = true;
+
+      const registeredModel = contentRoot.querySelector(".model-registration-panel pre");
+      if (registeredModel && displayedModelInfo) {
+        const serialized = JSON.stringify(displayedModelInfo, null, 2);
+        if (registeredModel.textContent !== serialized) registeredModel.textContent = serialized;
+      }
     };
 
     const scheduleResolve = () => {
       if (frameId !== null) window.cancelAnimationFrame(frameId);
       frameId = window.requestAnimationFrame(() => {
         frameId = null;
-        resolveHost();
+        resolveHosts();
       });
     };
 
+    const observer = new MutationObserver(scheduleResolve);
+    observer.observe(contentRoot, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["disabled", "class"],
+    });
     scheduleResolve();
-    contentRoot.addEventListener("click", scheduleResolve);
     return () => {
       disposed = true;
-      contentRoot.removeEventListener("click", scheduleResolve);
+      observer.disconnect();
       if (frameId !== null) window.cancelAnimationFrame(frameId);
+      sourceRunButtonRef.current = null;
       setHost((current) => {
         if (current?.isConnected) current.remove();
         return null;
       });
+      setActionHost((current) => {
+        if (current?.isConnected) current.remove();
+        return null;
+      });
     };
-  }, [step]);
+  }, [step, displayedModelInfo]);
 
-  if (!host) return null;
+  async function handleDownload() {
+    if (!modelInfo?.model_id || downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadModelBundle(modelInfo.model_id, saveName);
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setToast({ text: `${result.filename}をダウンロードしました。`, type: "success" });
+    } catch (error) {
+      setToast({ text: error.message || String(error), type: "error" });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function handleFile(event) {
     const file = event.target.files?.[0];
@@ -74,66 +203,60 @@ export default function ModelBundleControl() {
     if (file) await loadModelBundle(file);
   }
 
-  return createPortal(
-    <article className="panel model-bundle-panel">
-      <div className="panel-title">
-        <div>
-          <span className="panel-kicker">MODEL FILE</span>
-          <h3>モデルの保存・読み込み</h3>
-          <p>
-            サーバーへ永続保存せず、モデルファイルをPCへダウンロードして管理します。
-          </p>
-        </div>
-        <span className="status-chip">Server storage off</span>
-      </div>
+  return (
+    <>
+      {actionHost && createPortal(
+        <button
+          type="button"
+          disabled={runAction.disabled}
+          onClick={() => sourceRunButtonRef.current?.click()}
+        >
+          {runAction.label}
+        </button>,
+        actionHost,
+      )}
+      {host && createPortal(
+        <article className="panel model-bundle-panel">
+          <div className="panel-title">
+            <div><h3>モデルの保存・読み込み</h3></div>
+          </div>
 
-      <div className="model-bundle-content">
-        <div className="model-bundle-security-note">
-          <strong>bochanと同様の信頼済みファイル方式</strong>
-          <span>
-            モデルファイルはpickle形式です。malchanからダウンロードしたものなど、
-            作成元を信頼できるファイルだけを読み込んでください。
-          </span>
-          <span>
-            モデル内に学習データが保持されている場合、予測入力と最適化条件の
-            初期値・範囲・カテゴリ候補へ自動的に反映します。
-          </span>
-          <span>
-            FastAPIの停止後は、読み込んだモデルもメモリから消えます。
-          </span>
-        </div>
-
-        <div className="model-bundle-actions">
-          <button
-            type="button"
-            className="secondary"
-            disabled={!modelInfo || Boolean(busy)}
-            onClick={downloadActiveModel}
-          >
-            モデルをダウンロード
-          </button>
-          <button
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            モデルファイルを読み込む
-          </button>
-          <input
-            ref={fileInputRef}
-            className="model-bundle-file-input"
-            type="file"
-            accept=".malchan,application/vnd.malchan.model"
-            onChange={handleFile}
-          />
-        </div>
-      </div>
-
-      <p className="model-bundle-config-note">
-        署名用の秘密値は不要です。作成時と互換性のあるmalchanおよび依存ライブラリの
-        環境で読み込んでください。
-      </p>
-    </article>,
-    host,
+          <div className="model-bundle-actions">
+            <label className="model-bundle-save-name">
+              保存名
+              <input
+                type="text"
+                value={saveName}
+                placeholder="malchan-model"
+                onChange={(event) => setSaveName(event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!modelInfo || Boolean(busy) || downloading || !saveName.trim()}
+              onClick={handleDownload}
+            >
+              {downloading ? "保存中..." : "モデルをダウンロード"}
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(busy) || downloading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              モデルファイルを読み込む
+            </button>
+            <input
+              ref={fileInputRef}
+              className="model-bundle-file-input"
+              type="file"
+              accept=".malchan,application/vnd.malchan.model"
+              onChange={handleFile}
+            />
+          </div>
+        </article>,
+        host,
+      )}
+    </>
   );
 }

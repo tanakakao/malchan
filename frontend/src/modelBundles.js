@@ -34,6 +34,17 @@ function attachmentFilename(header, modelId) {
   return plain?.[1]?.trim() || `malchan-model-${modelId}.malchan`;
 }
 
+export function modelBundleFilename(value, fallback = "malchan-model") {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "_")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120);
+  const base = normalized || fallback;
+  return base.toLowerCase().endsWith(".malchan") ? base : `${base}.malchan`;
+}
+
 export function importedModelRows(modelId) {
   if (!modelId) return [];
   return importedRowsByModel.get(modelId) || [];
@@ -43,7 +54,7 @@ export function activeImportedModelRows() {
   return activeImportedRows;
 }
 
-export async function downloadModelBundle(modelId) {
+export async function downloadModelBundle(modelId, saveName = "") {
   const response = await fetch(
     `${API_BASE}/models/${encodeURIComponent(modelId)}/export`,
     {
@@ -53,12 +64,15 @@ export async function downloadModelBundle(modelId) {
     },
   );
   if (!response.ok) throw await responseError(response);
+  const serverFilename = attachmentFilename(
+    response.headers.get("content-disposition"),
+    modelId,
+  );
   return {
     blob: await response.blob(),
-    filename: attachmentFilename(
-      response.headers.get("content-disposition"),
-      modelId,
-    ),
+    filename: saveName.trim()
+      ? modelBundleFilename(saveName, `malchan-model-${modelId}`)
+      : serverFilename,
   };
 }
 
