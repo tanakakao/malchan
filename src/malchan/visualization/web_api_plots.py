@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 
 from .machine_learning_plots import (
@@ -58,6 +60,99 @@ def _model_for_visualization(model: Any, target: str) -> Any:
         return model
     _resolve_child_model(model, target)
     return _SingleOutputVisualizationAdapter(model, target)
+
+
+def _training_features(child_model: Any) -> pd.DataFrame:
+    """Return the raw feature frame used to fit a target-specific model."""
+
+    values = (
+        child_model._get_X()
+        if hasattr(child_model, "_get_X")
+        else getattr(child_model, "X", None)
+    )
+    if values is None:
+        raise ValueError("Training features are unavailable for visualization.")
+    return values if isinstance(values, pd.DataFrame) else pd.DataFrame(values)
+
+
+def _training_target(child_model: Any) -> Any:
+    """Return the target values stored by a target-specific model."""
+
+    return (
+        child_model._get_y()
+        if hasattr(child_model, "_get_y")
+        else getattr(child_model, "y", None)
+    )
+
+
+def _categorical_values(child_model: Any, feature_name: str) -> list[Any] | None:
+    """Return configured category values when ``feature_name`` is categorical."""
+
+    unique_values = (
+        child_model._shared_attr("unique_cols")
+        if hasattr(child_model, "_shared_attr")
+        else getattr(child_model, "unique_cols", None)
+    )
+    if not isinstance(unique_values, Mapping) or feature_name not in unique_values:
+        return None
+    values = unique_values[feature_name]
+    if values is None:
+        return []
+    return list(values)
+
+
+def _categorical_pd_and_ice(
+    child_model: Any,
+    feature_name: str,
+    categories: Sequence[Any],
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame, Any]:
+    """Compute categorical PD/ICE without modifying similarly named columns.
+
+    The legacy implementation identifies categorical columns by substring.
+    A feature such as ``material`` therefore also matches ``material_grade`` and
+    overwrites both columns while creating the PD grid. This helper changes only
+    the exact raw categorical column, which keeps the prediction frame valid.
+    """
+
+    X = _training_features(child_model)
+    if feature_name not in X.columns:
+        raise ValueError(
+            f"Categorical feature {feature_name!r} is unavailable in training data."
+        )
+    category_values = np.asarray(list(categories), dtype=object)
+    if category_values.size == 0:
+        raise ValueError(f"Categorical feature {feature_name!r} has no categories.")
+
+    X_sample = X.sample(300, random_state=0) if len(X) > 300 else X
+    pd_values: list[np.ndarray] = []
+    for row_index in range(len(X_sample)):
+        frame = pd.concat(
+            [X_sample.iloc[[row_index]].copy()] * len(category_values),
+            ignore_index=True,
+        )
+        frame.loc[:, feature_name] = category_values
+        prediction = child_model.predict(
+            frame,
+            proba=getattr(child_model, "task", "") == "classification",
+        )
+        array = np.asarray(getattr(prediction, "values", prediction))
+        if array.ndim == 1:
+            array = array.reshape(-1, 1)
+        elif array.ndim == 2 and array.shape[1] > 1:
+            array = array.reshape(-1, 1, array.shape[1])
+        elif array.ndim != 2:
+            raise ValueError(
+                "Categorical partial-dependence predictions must be one- or "
+                f"two-dimensional, received shape {array.shape}."
+            )
+        pd_values.append(array)
+
+    return (
+        np.concatenate(pd_values, axis=1),
+        category_values,
+        X,
+        _training_target(child_model),
+    )
 
 
 def visualization_diagnostic_options(model: Any, target: str) -> dict[str, Any]:
@@ -179,17 +274,48 @@ def show_model_pd_and_ice(
     ice: bool = True,
     output_index: int = -1,
 ) -> go.Figure:
-    """Return the existing ``show_pd_and_ice`` visualization without restyling."""
+    """Return a one-dimensional PD/ICE figure for numeric or categorical input."""
 
     if not feature_name:
         raise ValueError("feature_name must not be empty.")
-    return show_pd_and_ice(
-        model=_model_for_visualization(model, target),
-        target=target,
+
+    child_model = _resolve_child_model(model, target)
+    categories = _categorical_values(child_model, feature_name)
+    if categories is None:
+        return show_pd_and_ice(
+            model=_model_for_visualization(model, target),
+            target=target,
+            target_col=feature_name,
+            ice=ice,
+            col_idx=output_index,
+        )
+
+    X_PD, ticks, X, y = _categorical_pd_and_ice(
+        child_model,
+        feature_name,
+        categories,
+    )
+    figure = show_pd_and_ice(
+        X_PD=X_PD,
         target_col=feature_name,
+        xticks=ticks,
+        X=X,
+        y=y,
         ice=ice,
         col_idx=output_index,
     )
+    figure.update_xaxes(
+        type="category",
+        categoryorder="array",
+        categoryarray=list(ticks),
+    )
+    for trace in figure.data:
+        if (
+            getattr(trace, "type", "") == "scatter"
+            and str(getattr(trace, "name", "")).startswith("Partial Dependence")
+        ):
+            trace.mode = "lines+markers"
+    return figure
 
 
 def show_model_pd_2d(
