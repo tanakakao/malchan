@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import {
+  REPORT_TARGET_TABS_CSS,
+  reportTargetTabsRuntimeScript,
+} from "./report-target-tabs.js";
 
 const source = fs.readFileSync(new URL("./report-visualizations.js", import.meta.url), "utf8");
 const apiSource = fs.readFileSync(new URL("./api.js", import.meta.url), "utf8");
@@ -7,6 +11,7 @@ const interactiveExport = fs.readFileSync(new URL("./report-interactive-export.j
 const interactiveFigures = fs.readFileSync(new URL("./report-interactive-figures.js", import.meta.url), "utf8");
 const interactiveRuntime = fs.readFileSync(new URL("./report-interactive-runtime.js", import.meta.url), "utf8");
 const reportPage = fs.readFileSync(new URL("./pages/ReportPage.jsx", import.meta.url), "utf8");
+const targetTabsRuntime = reportTargetTabsRuntimeScript();
 
 assert.match(source, /visualizationYy\(modelId, target, \{ cv: true, residual: false \}\)/);
 assert.match(source, /visualizationYy\(modelId, target, \{ cv, residual: true \}\)/);
@@ -37,6 +42,19 @@ assert.match(interactiveExport, /<span>05<\/span>/);
 assert.match(interactiveExport, /data-open-report-figure/);
 assert.match(interactiveExport, /embeddedScriptTag\(plotlySource\)/);
 assert.doesNotMatch(interactiveExport, /safeInlineScript\(plotlySource\)/);
+assert.match(interactiveExport, /REPORT_TARGET_TABS_CSS/);
+assert.match(interactiveExport, /reportTargetTabsRuntimeScript\(\)/);
+
+assert.match(targetTabsRuntime, /#comparison/);
+assert.match(targetTabsRuntime, /#diagnostics/);
+assert.match(targetTabsRuntime, /#model-figures/);
+assert.match(targetTabsRuntime, /cards\.length <= 1/);
+assert.match(targetTabsRuntime, /activateTarget/);
+assert.match(targetTabsRuntime, /ArrowRight/);
+assert.match(targetTabsRuntime, /aria-selected/);
+assert.match(REPORT_TARGET_TABS_CSS, /@media print/);
+assert.match(REPORT_TARGET_TABS_CSS, /report-target-panel\[hidden\]/);
+
 assert.match(interactiveRuntime, /plotly\.min\.js\?raw/);
 assert.match(interactiveRuntime, /malchan-figure-modal/);
 assert.match(interactiveRuntime, /malchan-x-min/);

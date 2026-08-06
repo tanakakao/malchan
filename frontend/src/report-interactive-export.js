@@ -4,6 +4,10 @@ import { collectInteractiveFigures } from "./report-interactive-figures";
 import { embeddedScriptTag } from "./report-script-embedding";
 import { removeReportNavItem, removeReportSection } from "./report-html-sections";
 import {
+  REPORT_TARGET_TABS_CSS,
+  reportTargetTabsRuntimeScript,
+} from "./report-target-tabs";
+import {
   INTERACTIVE_REPORT_CSS,
   interactiveModalHtml,
   interactiveRuntimeScript,
@@ -126,9 +130,10 @@ export function injectReportContent(baseHtml, visualizations, registry, plotlySo
     ${interactiveModalHtml()}
     <script type="application/json" id="malchan-interactive-figures">${safeScriptJson(registry)}</script>
     ${embeddedScriptTag(plotlySource)}
-    <script>${safeInlineScript(interactiveRuntimeScript())}</script>`;
+    <script>${safeInlineScript(interactiveRuntimeScript())}</script>
+    <script>${safeInlineScript(reportTargetTabsRuntimeScript())}</script>`;
   return reportHtml
-    .replace("</style>", `${STATIC_VISUALIZATION_CSS}${INTERACTIVE_REPORT_CSS}\n  </style>`)
+    .replace("</style>", `${STATIC_VISUALIZATION_CSS}${REPORT_TARGET_TABS_CSS}${INTERACTIVE_REPORT_CSS}\n  </style>`)
     .replace('<a href="#optimization">予測・逆解析</a>', '<a href="#model-figures">モデル可視化</a><a href="#optimization">予測・逆解析</a>')
     .replace('<section class="report-section" id="optimization">', `${sectionHtml}<section class="report-section" id="optimization">`)
     .replace("</body>", `${runtime}\n</body>`);
