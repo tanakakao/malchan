@@ -49,12 +49,13 @@ class ModelEvaluationRequest(BaseModel):
 
 
 class TargetModelEvaluation(BaseModel):
-    """Cross-validation metrics for one output target."""
+    """Cross-validation metrics and OOF predictions for one output target."""
 
     target: str
     task: TaskType
     train: list[dict[str, Any]] = Field(default_factory=list)
     test: list[dict[str, Any]] = Field(default_factory=list)
+    oof_predictions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ModelEvaluationResponse(BaseModel):
