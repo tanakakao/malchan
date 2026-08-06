@@ -45,7 +45,6 @@ export default function ModelBundleControl() {
     modelInfo,
     comparison,
     activateBest,
-    modelNames,
     setModelNames,
     busy,
     setToast,
@@ -71,9 +70,11 @@ export default function ModelBundleControl() {
     if (!activateBest) return;
     const names = bestModelNames(comparison);
     if (!Object.keys(names).length) return;
-    const changed = Object.entries(names).some(([target, name]) => modelNames[target] !== name);
-    if (changed) setModelNames({ ...modelNames, ...names });
-  }, [activateBest, comparison, modelNames, setModelNames]);
+    setModelNames((current) => {
+      const changed = Object.entries(names).some(([target, name]) => current[target] !== name);
+      return changed ? { ...current, ...names } : current;
+    });
+  }, [activateBest, comparison, setModelNames]);
 
   useEffect(() => {
     if (step !== "model") {
