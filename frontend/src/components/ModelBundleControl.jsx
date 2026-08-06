@@ -1,17 +1,32 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useWorkbench } from "../context/WorkbenchContext";
+import { downloadModelBundle } from "../modelBundles";
+
+function defaultSaveName(modelInfo) {
+  const names = Object.values(modelInfo?.model_names_by_target || {})
+    .flat()
+    .filter(Boolean);
+  if (names.length === 1) return names[0];
+  return modelInfo?.model_id ? `malchan-model-${modelInfo.model_id}` : "malchan-model";
+}
 
 export default function ModelBundleControl() {
   const {
     step,
     modelInfo,
     busy,
-    downloadActiveModel,
+    setToast,
     loadModelBundle,
   } = useWorkbench();
   const [host, setHost] = useState(null);
+  const [saveName, setSaveName] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    setSaveName(defaultSaveName(modelInfo));
+  }, [modelInfo?.model_id]);
 
   useEffect(() => {
     if (step !== "model") {
@@ -39,8 +54,8 @@ export default function ModelBundleControl() {
         nextHost.className = "model-bundle-control-host";
         nextHost.dataset.location = "model-page";
       }
-      if (settings.nextElementSibling !== nextHost) {
-        settings.insertAdjacentElement("afterend", nextHost);
+      if (settings.previousElementSibling !== nextHost) {
+        settings.insertAdjacentElement("beforebegin", nextHost);
       }
       setHost(nextHost);
     };
@@ -68,6 +83,28 @@ export default function ModelBundleControl() {
 
   if (!host) return null;
 
+  async function handleDownload() {
+    if (!modelInfo?.model_id || downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadModelBundle(modelInfo.model_id, saveName);
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setToast({ text: `${result.filename}をダウンロードしました。`, type: "success" });
+    } catch (error) {
+      setToast({ text: error.message || String(error), type: "error" });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   async function handleFile(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -77,62 +114,42 @@ export default function ModelBundleControl() {
   return createPortal(
     <article className="panel model-bundle-panel">
       <div className="panel-title">
-        <div>
-          <span className="panel-kicker">MODEL FILE</span>
-          <h3>モデルの保存・読み込み</h3>
-          <p>
-            サーバーへ永続保存せず、モデルファイルをPCへダウンロードして管理します。
-          </p>
-        </div>
-        <span className="status-chip">Server storage off</span>
+        <div><h3>モデルの保存・読み込み</h3></div>
       </div>
 
-      <div className="model-bundle-content">
-        <div className="model-bundle-security-note">
-          <strong>bochanと同様の信頼済みファイル方式</strong>
-          <span>
-            モデルファイルはpickle形式です。malchanからダウンロードしたものなど、
-            作成元を信頼できるファイルだけを読み込んでください。
-          </span>
-          <span>
-            モデル内に学習データが保持されている場合、予測入力と最適化条件の
-            初期値・範囲・カテゴリ候補へ自動的に反映します。
-          </span>
-          <span>
-            FastAPIの停止後は、読み込んだモデルもメモリから消えます。
-          </span>
-        </div>
-
-        <div className="model-bundle-actions">
-          <button
-            type="button"
-            className="secondary"
-            disabled={!modelInfo || Boolean(busy)}
-            onClick={downloadActiveModel}
-          >
-            モデルをダウンロード
-          </button>
-          <button
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            モデルファイルを読み込む
-          </button>
+      <div className="model-bundle-actions">
+        <label className="model-bundle-save-name">
+          保存名
           <input
-            ref={fileInputRef}
-            className="model-bundle-file-input"
-            type="file"
-            accept=".malchan,application/vnd.malchan.model"
-            onChange={handleFile}
+            type="text"
+            value={saveName}
+            placeholder="malchan-model"
+            onChange={(event) => setSaveName(event.target.value)}
           />
-        </div>
+        </label>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!modelInfo || Boolean(busy) || downloading || !saveName.trim()}
+          onClick={handleDownload}
+        >
+          {downloading ? "保存中..." : "モデルをダウンロード"}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busy) || downloading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          モデルファイルを読み込む
+        </button>
+        <input
+          ref={fileInputRef}
+          className="model-bundle-file-input"
+          type="file"
+          accept=".malchan,application/vnd.malchan.model"
+          onChange={handleFile}
+        />
       </div>
-
-      <p className="model-bundle-config-note">
-        署名用の秘密値は不要です。作成時と互換性のあるmalchanおよび依存ライブラリの
-        環境で読み込んでください。
-      </p>
     </article>,
     host,
   );
