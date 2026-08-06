@@ -26,6 +26,8 @@ assert.match(interactiveExport, /removeReportSection\(reportHtml, "diagnostics"\
 assert.match(interactiveExport, /removeReportNavItem\(reportHtml, "diagnostics"\)/);
 assert.match(interactiveExport, /<span>05<\/span>/);
 assert.match(interactiveExport, /data-open-report-figure/);
+assert.match(interactiveExport, /embeddedScriptTag\(plotlySource\)/);
+assert.doesNotMatch(interactiveExport, /safeInlineScript\(plotlySource\)/);
 assert.match(interactiveRuntime, /plotly\.min\.js\?raw/);
 assert.match(interactiveRuntime, /malchan-figure-modal/);
 assert.match(interactiveRuntime, /malchan-x-min/);
