@@ -128,6 +128,10 @@ def test_fastapi_forwards_compositional_settings_to_multi_output_training() -> N
             "compositional_method is required",
         ),
         (
+            {"compositional_zero_replacement": 1.0},
+            "less than 1",
+        ),
+        (
             {
                 "compositional_groups": [["a", "b"]],
                 "compositional_method": "ALR",
