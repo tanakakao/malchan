@@ -5,6 +5,7 @@ from .comparison_service import (
     install_comparison_service,
 )
 from .compositional_service import install_compositional_service
+from .compositional_xai_detail_service import install_compositional_xai_detail_service
 from .compositional_xai_service import install_compositional_xai_service
 from .model_configuration_service import install_model_configuration_service
 from .model_service import InMemoryModelService, ModelNotFoundError
@@ -27,6 +28,7 @@ install_model_visualization_service(InMemoryModelService)
 install_xai_service(InMemoryModelService)
 install_compositional_xai_service(InMemoryModelService)
 install_xai_shap_service(InMemoryModelService)
+install_compositional_xai_detail_service(InMemoryModelService)
 install_xai_importance_fallback_service(InMemoryModelService)
 install_xai_comparison_hooks(InMemoryModelService)
 install_model_bundle_service(InMemoryModelService)
