@@ -27,7 +27,13 @@ def make_pipeline(
     ens_type,
     base_model,
     model_params,
-    base_model_params
+    base_model_params,
+    compositional_groups=(),
+    compositional_method="ILR",
+    compositional_zero_replacement=1e-6,
+    compositional_closure=True,
+    compositional_alr_reference=-1,
+    compositional_scale_type=None,
 ):
     """
     データ前処理とモデルを組み合わせたパイプラインを作成する関数。
@@ -47,10 +53,16 @@ def make_pipeline(
         poly=poly,
         poly_degree=poly_degree,
         poly_interaction_only=poly_interaction_only,
-        decomposition = decomposition,
-        decomposition_method = decomposition_method,
+        decomposition=decomposition,
+        decomposition_method=decomposition_method,
         n_components=n_components,
-        ensemble=ensemble
+        ensemble=ensemble,
+        compositional_groups=compositional_groups,
+        compositional_method=compositional_method,
+        compositional_zero_replacement=compositional_zero_replacement,
+        compositional_closure=compositional_closure,
+        compositional_alr_reference=compositional_alr_reference,
+        compositional_scale_type=compositional_scale_type,
     )
 
     predictor = make_predictor(
@@ -60,13 +72,13 @@ def make_pipeline(
         base_model=base_model,
         model_params=model_params,
         base_model_params=base_model_params,
-        task=task
+        task=task,
     )
 
     model = Pipeline(
         steps=[
-            ('preprocess', preprocess),
-            ('predictor', predictor)
+            ("preprocess", preprocess),
+            ("predictor", predictor),
         ]
     )
     return model, preprocess, predictor
