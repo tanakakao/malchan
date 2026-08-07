@@ -8,11 +8,12 @@ the existing ``make_pipeline`` builder without changing positional APIs.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Iterator
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
