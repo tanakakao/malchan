@@ -105,19 +105,23 @@ def _aggregate_compositional_importance(
         if value is not None:
             items.append(XaiImportanceItem(feature=column, value=value))
 
-    smiles_value = _sum_values(
-        raw.items,
-        lambda feature: feature.startswith("smiles__") or feature.startswith("smiles_"),
-    )
-    if smiles_value is not None:
-        items.append(XaiImportanceItem(feature="SMILES", value=smiles_value))
+    if _shared_columns(child, "smiles_cols"):
+        smiles_value = _sum_values(
+            raw.items,
+            lambda feature: (
+                feature.startswith("smiles__") or feature.startswith("smiles_")
+            ),
+        )
+        if smiles_value is not None:
+            items.append(XaiImportanceItem(feature="SMILES", value=smiles_value))
 
-    composition_value = _sum_values(
-        raw.items,
-        lambda feature: feature.startswith("comp__") or feature.startswith("comp_"),
-    )
-    if composition_value is not None:
-        items.append(XaiImportanceItem(feature="Composition", value=composition_value))
+    if _shared_columns(child, "comp_cols"):
+        composition_value = _sum_values(
+            raw.items,
+            lambda feature: feature.startswith("comp__") or feature.startswith("comp_"),
+        )
+        if composition_value is not None:
+            items.append(XaiImportanceItem(feature="Composition", value=composition_value))
 
     items.sort(key=lambda item: abs(item.value), reverse=True)
     if top_n is not None:
