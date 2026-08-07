@@ -80,6 +80,10 @@ export default function CompositionalSettingsControl() {
   if (!host || !available) return null;
 
   const groups = settings.compositionalGroups || [];
+  const usedColumns = new Set(groups.flat());
+  const remainingColumns = numFeatures.filter((column) => !usedColumns.has(column));
+  const groupsComplete = groups.every((group) => group.length >= 2);
+  const canAddGroup = groupsComplete && remainingColumns.length >= 2;
 
   function toggleEnabled(enabled) {
     patchMaterialFeatureSettings({
@@ -96,6 +100,7 @@ export default function CompositionalSettingsControl() {
   }
 
   function addGroup() {
+    if (!canAddGroup) return;
     patchMaterialFeatureSettings({ compositionalGroups: [...groups, []] });
   }
 
@@ -130,7 +135,7 @@ export default function CompositionalSettingsControl() {
               <strong>組成グループ</strong>
               <span>同じ合計制約を持つ列を1グループとして2列以上選択します。</span>
             </div>
-            <span className={`status-chip ${groups.length ? "success" : "warning"}`}>
+            <span className={`status-chip ${groupsComplete && groups.length ? "success" : "warning"}`}>
               {groups.length} groups
             </span>
           </div>
@@ -164,7 +169,13 @@ export default function CompositionalSettingsControl() {
             })}
           </div>
 
-          <button type="button" className="secondary compact-button" onClick={addGroup}>
+          <button
+            type="button"
+            className="secondary compact-button"
+            disabled={!canAddGroup}
+            onClick={addGroup}
+            title={canAddGroup ? "別の合計制約を持つ組成グループを追加" : "現在のグループを2列以上完成させ、未使用列を2列以上残してください"}
+          >
             ＋ 組成グループを追加
           </button>
 
@@ -186,6 +197,7 @@ export default function CompositionalSettingsControl() {
               <input
                 type="number"
                 min="0"
+                max="0.999999999"
                 step="any"
                 value={settings.compositionalZeroReplacement}
                 onChange={(event) => patchMaterialFeatureSettings({
