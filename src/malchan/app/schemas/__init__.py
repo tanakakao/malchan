@@ -6,6 +6,7 @@ from .comparison import (
     TargetComparisonResponse,
     TuneBestModelRequest,
 )
+from .compositional import TrainModelRequest
 from .inverse_analysis import (
     InverseAnalysisRequest,
     InverseAnalysisResponse,
@@ -33,7 +34,6 @@ from .models import (
     ModelListResponse,
     PredictRequest,
     PredictionResponse,
-    TrainModelRequest,
 )
 from .visualization import PlotlyFigureResponse
 from .xai import (
