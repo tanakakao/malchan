@@ -54,7 +54,18 @@ assert.throws(
 
 patchMaterialFeatureSettings({
   compositionalGroups: [["a", "b"]],
+  compositionalMethod: "ILR",
+  compositionalZeroReplacement: 1,
+});
+assert.throws(
+  () => applyMaterialFeatureTrainingPayload(basePayload),
+  /0より大きく1より小さい/,
+);
+
+patchMaterialFeatureSettings({
+  compositionalGroups: [["a", "b"]],
   compositionalMethod: "ALR",
+  compositionalZeroReplacement: 1e-6,
   compositionalAlrReference: 3,
 });
 assert.throws(
