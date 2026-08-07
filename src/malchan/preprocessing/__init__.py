@@ -11,6 +11,11 @@ from typing import Any
 _LAZY_EXPORTS = {
     "make_pipeline": "malchan.preprocessing.compose",
     "make_preprocess": "malchan.preprocessing.compose",
+    "ALRTransformer": "malchan.preprocessing.compositional",
+    "CLRTransformer": "malchan.preprocessing.compositional",
+    "ILRTransformer": "malchan.preprocessing.compositional",
+    "SUPPORTED_COMPOSITIONAL_METHODS": "malchan.preprocessing.compositional",
+    "make_compositional_preprocess": "malchan.preprocessing.compositional",
 }
 
 __all__ = list(_LAZY_EXPORTS)
