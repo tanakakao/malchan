@@ -67,8 +67,12 @@ def _transformed_frame(child: Any) -> pd.DataFrame:
 
     sample = getattr(child, "X_sample", None)
     if isinstance(sample, pd.DataFrame):
+        if sample.empty:
+            raise XaiNotReadyError("Transformed SHAP sample values are unavailable.")
         return sample.reset_index(drop=True).copy()
 
+    if sample is None:
+        raise XaiNotReadyError("Transformed SHAP sample values are unavailable.")
     array = np.asarray(sample)
     if array.ndim != 2 or array.size == 0:
         raise XaiNotReadyError("Transformed SHAP sample values are unavailable.")
@@ -81,8 +85,11 @@ def _transformed_frame(child: Any) -> pd.DataFrame:
 def _normalized_shap_values(child: Any, frame: pd.DataFrame) -> np.ndarray:
     """Return SHAP values in row x feature x output layout."""
 
-    values = np.asarray(getattr(child, "shap_values", None))
-    if values.size == 0:
+    raw_values = getattr(child, "shap_values", None)
+    if raw_values is None:
+        raise XaiNotReadyError("Cached SHAP values are unavailable.")
+    values = np.asarray(raw_values)
+    if values.ndim not in {2, 3} or values.size == 0:
         raise XaiNotReadyError("Cached SHAP values are unavailable.")
     if values.shape[0] != len(frame):
         raise ValueError(
@@ -95,9 +102,6 @@ def _normalized_shap_values(child: Any, frame: pd.DataFrame) -> np.ndarray:
                 "SHAP values and transformed feature columns are not aligned."
             )
         return values[:, :, None]
-
-    if values.ndim != 3:
-        raise ValueError(f"Unsupported SHAP value shape: {values.shape}")
 
     if values.shape[1] == frame.shape[1]:
         return values
