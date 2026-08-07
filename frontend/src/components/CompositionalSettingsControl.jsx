@@ -193,7 +193,7 @@ export default function CompositionalSettingsControl() {
               </select>
             </Field>
 
-            <Field label="ゼロ置換値">
+            <Field label="ゼロ置換値（0より大きく1未満）">
               <input
                 type="number"
                 min="0"
