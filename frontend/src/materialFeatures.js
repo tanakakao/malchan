@@ -212,8 +212,8 @@ function compositionalTrainingSettings(numericColumns) {
   }
 
   const zeroReplacement = Number(settings.compositionalZeroReplacement);
-  if (!Number.isFinite(zeroReplacement) || zeroReplacement <= 0) {
-    throw new Error("ゼロ置換値は0より大きい数値を指定してください。");
+  if (!Number.isFinite(zeroReplacement) || zeroReplacement <= 0 || zeroReplacement >= 1) {
+    throw new Error("ゼロ置換値は0より大きく1より小さい数値を指定してください。");
   }
 
   const alrReference = Number(settings.compositionalAlrReference);
