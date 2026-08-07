@@ -35,12 +35,12 @@ def test_recover_child_importance_collects_methods_independently() -> None:
     available, errors = _recover_child_importance(child)
 
     assert available == ["pfi", "shap"]
+    assert errors == []
     assert child.importances["pfi"].tolist() == [0.25, 0.5]
     assert np.allclose(
         child.importances["shap"],
         np.sqrt((child.shap_values**2).sum(axis=0)),
     )
-    assert any(error.startswith("model:") for error in errors)
 
 
 def test_training_promotes_failed_xai_when_importance_is_recoverable() -> None:
