@@ -57,6 +57,71 @@ def _resolve_output_name(
     )
 
 
+def _compact_compositional_feature_name(feature: str) -> str:
+    """Return a compact axis label while preserving the original API feature name."""
+
+    feature = str(feature)
+    if not feature.startswith("compositional_"):
+        return feature
+
+    parts = feature.split("__", maxsplit=2)
+    if len(parts) != 3:
+        return feature
+
+    group_token, method_token, detail = parts
+    try:
+        group_index = int(group_token.removeprefix("compositional_")) + 1
+    except ValueError:
+        return feature
+
+    method = method_token.upper()
+    if method == "ILR" and detail.startswith("balance_"):
+        balance = detail.removeprefix("balance_")
+        return f"組成{group_index} · ILR{balance}"
+    if method == "CLR":
+        return f"組成{group_index} · CLR:{detail}"
+    if method == "ALR":
+        numerator, separator, denominator = detail.partition("_over_")
+        if separator:
+            return f"組成{group_index} · ALR:{numerator}/{denominator}"
+        return f"組成{group_index} · ALR:{detail}"
+    return f"組成{group_index} · {method}:{detail}"
+
+
+def _compact_beeswarm_labels(fig: go.Figure, row_count: int) -> None:
+    """Shorten generated compositional tick labels and retain full names on hover."""
+
+    ticktext = fig.layout.yaxis.ticktext
+    if ticktext is None:
+        return
+
+    original_labels = [str(value) for value in ticktext]
+    display_labels = [
+        _compact_compositional_feature_name(value)
+        for value in original_labels
+    ]
+    fig.update_yaxes(
+        ticktext=display_labels,
+        tickfont=dict(size=11),
+        automargin=True,
+    )
+
+    if not fig.data or row_count <= 0:
+        return
+
+    # ``show_shap_beeswarm`` appends all rows for one feature before moving to
+    # the next feature, so repeating each full feature name keeps hover data
+    # aligned with every point in the shared scatter trace.
+    full_names = np.repeat(np.asarray(original_labels, dtype=object), row_count)
+    if len(full_names) != len(fig.data[0].x):
+        return
+
+    fig.data[0].customdata = full_names
+    fig.data[0].hovertemplate = (
+        "特徴量=%{customdata}<br>SHAP=%{x:.4g}<extra></extra>"
+    )
+
+
 def show_xai_shap_beeswarm(
     response: Any,
     n_shap_top: int = 10,
@@ -127,6 +192,7 @@ def show_xai_shap_beeswarm(
         n_shap_top=min(n_shap_top, len(features)),
         cat_cols=[str(column) for column in cat_cols if str(column) in features],
     )
+    _compact_beeswarm_labels(fig, row_count=len(feature_frame))
     target = payload.get("target", "target")
     fig.update_layout(title=f"SHAP beeswarm: {target} / {output_name}")
     return fig
