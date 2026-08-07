@@ -16,6 +16,7 @@ from .model_bundle_service import (
 )
 from .model_visualization_service import install_model_visualization_service
 from .xai_comparison_hook import install_xai_comparison_hooks
+from .xai_importance_fallback_service import install_xai_importance_fallback_service
 from .xai_service import XaiNotReadyError, install_xai_service
 from .xai_shap_service import install_xai_shap_service
 
@@ -26,6 +27,7 @@ install_model_visualization_service(InMemoryModelService)
 install_xai_service(InMemoryModelService)
 install_compositional_xai_service(InMemoryModelService)
 install_xai_shap_service(InMemoryModelService)
+install_xai_importance_fallback_service(InMemoryModelService)
 install_xai_comparison_hooks(InMemoryModelService)
 install_model_bundle_service(InMemoryModelService)
 
