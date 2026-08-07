@@ -20,7 +20,7 @@ class TrainModelRequest(BaseTrainModelRequest):
 
     compositional_groups: list[list[str]] = Field(default_factory=list)
     compositional_method: CompositionalMethod | None = None
-    compositional_zero_replacement: float | None = Field(default=1e-6, gt=0)
+    compositional_zero_replacement: float | None = Field(default=1e-6, gt=0, lt=1)
     compositional_closure: bool = True
     compositional_alr_reference: int | str = -1
     compositional_scale_type: CompositionalScaleType | None = None
