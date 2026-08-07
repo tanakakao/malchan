@@ -57,6 +57,15 @@ def _resolve_output_name(
     )
 
 
+def _short_label_token(value: str, max_length: int = 14) -> str:
+    """Bound one label token without losing the full value used by hover data."""
+
+    value = str(value)
+    if len(value) <= max_length:
+        return value
+    return f"{value[: max_length - 1]}…"
+
+
 def _compact_compositional_feature_name(feature: str) -> str:
     """Return a compact axis label while preserving the original API feature name."""
 
@@ -79,13 +88,15 @@ def _compact_compositional_feature_name(feature: str) -> str:
         balance = detail.removeprefix("balance_")
         return f"組成{group_index} · ILR{balance}"
     if method == "CLR":
-        return f"組成{group_index} · CLR:{detail}"
+        return f"組成{group_index} · CLR:{_short_label_token(detail)}"
     if method == "ALR":
         numerator, separator, denominator = detail.partition("_over_")
         if separator:
+            numerator = _short_label_token(numerator, max_length=10)
+            denominator = _short_label_token(denominator, max_length=10)
             return f"組成{group_index} · ALR:{numerator}/{denominator}"
-        return f"組成{group_index} · ALR:{detail}"
-    return f"組成{group_index} · {method}:{detail}"
+        return f"組成{group_index} · ALR:{_short_label_token(detail)}"
+    return f"組成{group_index} · {method}:{_short_label_token(detail)}"
 
 
 def _compact_beeswarm_labels(fig: go.Figure, row_count: int) -> None:
