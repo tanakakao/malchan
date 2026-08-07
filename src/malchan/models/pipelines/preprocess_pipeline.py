@@ -135,6 +135,34 @@ def make_common_preprocess(
     )
 
 
+def _normalize_compositional_groups(
+    compositional_groups: list[list[str]] | tuple[tuple[str, ...], ...],
+) -> list[list[str]]:
+    """組成グループを検証し、ColumnTransformer向けのlistへ正規化する。"""
+    normalized: list[list[str]] = []
+    seen: set[str] = set()
+    for index, group in enumerate(compositional_groups):
+        columns = list(group)
+        if len(columns) < 2:
+            raise ValueError(
+                f"compositional_groups[{index}]には2列以上の組成比を指定してください。"
+            )
+        duplicate_in_group = len(columns) != len(set(columns))
+        if duplicate_in_group:
+            raise ValueError(
+                f"compositional_groups[{index}]に重複した列が含まれています。"
+            )
+        overlap = seen.intersection(columns)
+        if overlap:
+            raise ValueError(
+                "同じ列を複数のcompositional_groupへ指定できません: "
+                f"{sorted(overlap)}"
+            )
+        seen.update(columns)
+        normalized.append(columns)
+    return normalized
+
+
 def make_preprocess_pipeline(
     num_process: Pipeline,
     cat_process: Pipeline,
@@ -146,15 +174,24 @@ def make_preprocess_pipeline(
     cat_cols: list[str] | tuple[str, ...] = (),
     smiles_cols: list[str] | tuple[str, ...] = (),
     comp_cols: list[str] | tuple[str, ...] = (),
+    compositional_process: Pipeline | None = None,
+    compositional_groups: list[list[str]] | tuple[tuple[str, ...], ...] = (),
 ) -> ImbalancedPipeline:
     """列種別の前処理をColumnTransformerへ統合する。"""
     transforms: list[tuple[str, Any, list[str] | tuple[str, ...]]] = []
     numcat_transforms: list[tuple[str, Any, list[str] | tuple[str, ...]]] = []
 
-    if num_cols:
-        numcat_transforms.append(("num", num_process, num_cols))
-    if cat_cols:
-        numcat_transforms.append(("cat", cat_process, cat_cols))
+    normalized_groups = _normalize_compositional_groups(compositional_groups)
+    compositional_columns = {column for group in normalized_groups for column in group}
+    effective_num_cols = [column for column in num_cols if column not in compositional_columns]
+    effective_cat_cols = [column for column in cat_cols if column not in compositional_columns]
+    effective_smiles_cols = [column for column in smiles_cols if column not in compositional_columns]
+    effective_comp_cols = [column for column in comp_cols if column not in compositional_columns]
+
+    if effective_num_cols:
+        numcat_transforms.append(("num", num_process, effective_num_cols))
+    if effective_cat_cols:
+        numcat_transforms.append(("cat", cat_process, effective_cat_cols))
     if numcat_transforms:
         numcat_steps: list[tuple[str, Any]] = [
             (
@@ -168,14 +205,14 @@ def make_preprocess_pipeline(
             (
                 "num_cat",
                 Pipeline(numcat_steps),
-                [*num_cols, *cat_cols],
+                [*effective_num_cols, *effective_cat_cols],
             )
         )
 
-    if smiles_cols:
+    if effective_smiles_cols:
         if smiles_process is None:
             raise ValueError("smiles_colsを指定する場合はfingerprintsを指定してください。")
-        for index, column in enumerate(smiles_cols):
+        for index, column in enumerate(effective_smiles_cols):
             transforms.append(
                 (
                     f"smiles_{index}",
@@ -184,15 +221,29 @@ def make_preprocess_pipeline(
                 )
             )
 
-    if comp_cols:
+    if effective_comp_cols:
         if comp_process is None:
             raise ValueError("comp_colsを指定する場合はcomp_methodを指定してください。")
-        for index, column in enumerate(comp_cols):
+        for index, column in enumerate(effective_comp_cols):
             transforms.append(
                 (
                     f"comp_{index}",
                     clone(comp_process),
                     [column],
+                )
+            )
+
+    if normalized_groups:
+        if compositional_process is None:
+            raise ValueError(
+                "compositional_groupsを指定する場合はcompositional_methodを指定してください。"
+            )
+        for index, columns in enumerate(normalized_groups):
+            transforms.append(
+                (
+                    f"compositional_{index}",
+                    clone(compositional_process),
+                    columns,
                 )
             )
 
@@ -223,6 +274,12 @@ def make_preprocess(
     decomposition_method: str = "PCA",
     n_components: int = 2,
     ensemble: bool = False,
+    compositional_groups: list[list[str]] | tuple[tuple[str, ...], ...] = (),
+    compositional_method: str | None = "ILR",
+    compositional_zero_replacement: float | None = 1e-6,
+    compositional_closure: bool = True,
+    compositional_alr_reference: int | str = -1,
+    compositional_scale_type: str | None = None,
 ) -> ImbalancedPipeline:
     """モデル設定から前処理Pipeline全体を作成する。"""
     num_process = make_numeric_preprocess(
@@ -252,11 +309,24 @@ def make_preprocess(
             feats=comp_feats,
         )
 
+    compositional_process = None
+    if compositional_groups:
+        from malchan.preprocessing.compositional import make_compositional_preprocess
+
+        compositional_process = make_compositional_preprocess(
+            method=compositional_method,
+            zero_replacement=compositional_zero_replacement,
+            closure=compositional_closure,
+            alr_reference=compositional_alr_reference,
+            scale_type=compositional_scale_type,
+        )
+
     return make_preprocess_pipeline(
         num_process=num_process,
         cat_process=cat_process,
         smiles_process=smiles_process,
         comp_process=comp_process,
+        compositional_process=compositional_process,
         numcat_common_preprocess=make_numcat_common_preprocess(
             poly=poly,
             degree=poly_degree,
@@ -271,6 +341,7 @@ def make_preprocess(
         cat_cols=cat_cols,
         smiles_cols=smiles_cols,
         comp_cols=comp_cols,
+        compositional_groups=compositional_groups,
     )
 
 

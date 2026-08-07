@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { useWorkbench } from "../context/WorkbenchContext";
+import CompositionalSettingsControl from "./CompositionalSettingsControl";
 
 function findButtonByText(root, selector, text) {
   return [...root.querySelectorAll(selector)]
@@ -85,5 +86,5 @@ export default function ModelSettingDefaultsControl() {
     };
   }, [step]);
 
-  return null;
+  return <CompositionalSettingsControl />;
 }
