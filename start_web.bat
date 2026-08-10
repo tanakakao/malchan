@@ -1,9 +1,9 @@
 @echo off
 setlocal EnableExtensions
 
-rem Fixed ports for the malchan development web application.
+rem Reserved ports for the malchan development web application.
 set "BACKEND_HOST=127.0.0.1"
-set "BACKEND_PORT=8001"
+set "BACKEND_PORT=8002"
 set "FRONTEND_HOST=127.0.0.1"
 set "FRONTEND_PORT=5174"
 set "HEALTH_URL=http://%BACKEND_HOST%:%BACKEND_PORT%/api/health"
