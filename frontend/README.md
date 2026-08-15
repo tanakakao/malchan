@@ -2,6 +2,20 @@
 
 添付のスタンドアロンHTMLを参考に、malchanのFastAPI APIへ接続するReactワークベンチです。
 
+## 必要環境
+
+- Node.js 22以上
+- pnpm 11（`frontend/package.json` の `packageManager` でバージョンを固定）
+
+Windowsでpnpmが未導入の場合は、Node.js 22以上を導入した後に次を実行します。
+
+```bash
+npx get-pnpm
+pnpm --version
+```
+
+`winget` を使う場合は `winget install -e --id pnpm.pnpm` でも導入できます。
+
 ## 開発起動
 
 XAIの事前計算とWeb用Plotly図の生成には`visualization` extraが必要です。
@@ -17,18 +31,20 @@ uvicorn "malchan.app:create_app" --factory --reload
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 ブラウザで `http://127.0.0.1:5173` を開きます。Viteは`/api`を`http://127.0.0.1:8000`へプロキシします。
+
+Windowsではリポジトリ直下の `start_web.bat` を従来どおり利用できます。既存の `node_modules` がnpm由来の場合も、pnpm管理の `node_modules/.pnpm` がなければランチャーが `pnpm install --frozen-lockfile` を実行します。
 
 ## 本番ビルド
 
 ```bash
 cd frontend
-npm install
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 cd ..
 uvicorn "malchan.app:create_app" --factory
 ```

@@ -389,9 +389,11 @@ React開発サーバー:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
+
+`pnpm` の導入方法や `start_web.bat` を含む詳細なReact起動方法は `frontend/README.md` を参照してください。
 
 学習リクエストでは`compute_xai`が既定で`true`です。モデル学習後に`shap()`と`get_xai()`を一度だけ実行し、通常のXAI GET APIでは保存済みキャッシュだけを返します。
 
@@ -461,4 +463,4 @@ ruff check src tests
 
 ## ライセンス
 
-未定です。公開前にライセンス方針を決めてください。
+未定です。公開前にライセンス方針を決めてください.
