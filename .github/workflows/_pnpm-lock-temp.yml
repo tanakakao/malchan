@@ -1,19 +1,15 @@
-name: Generate pnpm lockfile
+name: Validate pnpm migration
 
 on:
   push:
     branches:
       - agent/migrate-web-to-pnpm
     paths:
-      - "frontend/package.json"
-      - "frontend/pnpm-workspace.yaml"
+      - "frontend/**"
       - ".github/workflows/_pnpm-lock-temp.yml"
 
-permissions:
-  contents: write
-
 jobs:
-  lockfile:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,14 +18,12 @@ jobs:
         with:
           package-json-file: frontend/package.json
           runtime: node@24
+          cache: true
+          cache-dependency-path: frontend/pnpm-lock.yaml
           install: false
-      - name: Generate lockfile
+      - name: Install dependencies
         working-directory: frontend
-        run: pnpm install --lockfile-only --ignore-scripts
-      - name: Commit lockfile
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/pnpm-lock.yaml
-          git diff --cached --quiet || git commit -m "Generate pnpm lockfile"
-          git push
+        run: pnpm install --frozen-lockfile
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm run build
