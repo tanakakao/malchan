@@ -8,11 +8,14 @@ set "FRONTEND_HOST=127.0.0.1"
 set "FRONTEND_PORT=5174"
 set "HEALTH_URL=http://%BACKEND_HOST%:%BACKEND_PORT%/api/health"
 set "VENV_PYTHON=%~dp0.venv\Scripts\python.exe"
+set "PROJECT_FILE=%~dp0pyproject.toml"
+set "LOCK_FILE=%~dp0uv.lock"
 
 rem The React application uses this absolute API URL instead of the default Vite proxy.
 set "VITE_API_BASE=http://%BACKEND_HOST%:%BACKEND_PORT%/api"
 set "MALCHAN_CORS_ORIGINS=http://%FRONTEND_HOST%:%FRONTEND_PORT%,http://localhost:%FRONTEND_PORT%"
 
+if /i "%~1"=="check" goto check
 if /i "%~1"=="backend" goto backend
 if /i "%~1"=="frontend" goto frontend
 
@@ -37,12 +40,12 @@ if exist "%VENV_PYTHON%" (
     where uv >nul 2>&1
     if errorlevel 1 (
         echo [ERROR] Neither .venv\Scripts\python.exe nor uv was found.
-        echo Create the uv environment in this repository or install uv.
+        echo Run uv sync --locked with the malchan Web extras or install uv first.
         echo.
         pause
         exit /b 1
     )
-    echo Python: uv run with malchan Web extras
+    echo Python: locked uv environment with malchan Web extras
 )
 
 echo Starting malchan backend at http://%BACKEND_HOST%:%BACKEND_PORT% ...
@@ -74,6 +77,16 @@ echo Press any key to close only this launcher window.
 pause >nul
 exit /b 0
 
+:check
+if not "%BACKEND_HOST%"=="127.0.0.1" exit /b 1
+if not "%BACKEND_PORT%"=="8002" exit /b 1
+if not "%FRONTEND_HOST%"=="127.0.0.1" exit /b 1
+if not "%FRONTEND_PORT%"=="5174" exit /b 1
+if not exist "%PROJECT_FILE%" exit /b 1
+if not exist "%LOCK_FILE%" exit /b 1
+echo malchan launcher configuration is valid.
+exit /b 0
+
 :wait_for_backend
 for /L %%I in (1,1,60) do (
     powershell.exe -NoProfile -Command "try { $response = Invoke-WebRequest -UseBasicParsing -Uri '%HEALTH_URL%' -TimeoutSec 2; if ($response.StatusCode -eq 200) { exit 0 } } catch {}; exit 1" >nul 2>&1
@@ -95,9 +108,9 @@ if exist "%VENV_PYTHON%" (
     echo.
     "%VENV_PYTHON%" -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
 ) else (
-    echo .venv was not found. Starting through uv run.
+    echo .venv was not found. Starting through locked uv environment.
     echo.
-    uv run --extra web --extra models --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
+    uv run --locked --extra web --extra models --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
 )
 
 set "SERVER_EXIT=%ERRORLEVEL%"
