@@ -37,12 +37,12 @@ if exist "%VENV_PYTHON%" (
     where uv >nul 2>&1
     if errorlevel 1 (
         echo [ERROR] Neither .venv\Scripts\python.exe nor uv was found.
-        echo Create the uv environment in this repository or install uv.
+        echo Run uv sync --locked with the malchan Web extras or install uv first.
         echo.
         pause
         exit /b 1
     )
-    echo Python: uv run with malchan Web extras
+    echo Python: locked uv environment with malchan Web extras
 )
 
 echo Starting malchan backend at http://%BACKEND_HOST%:%BACKEND_PORT% ...
@@ -95,9 +95,9 @@ if exist "%VENV_PYTHON%" (
     echo.
     "%VENV_PYTHON%" -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
 ) else (
-    echo .venv was not found. Starting through uv run.
+    echo .venv was not found. Starting through locked uv environment.
     echo.
-    uv run --extra web --extra models --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
+    uv run --locked --extra web --extra models --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
 )
 
 set "SERVER_EXIT=%ERRORLEVEL%"
