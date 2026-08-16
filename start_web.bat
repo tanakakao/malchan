@@ -8,11 +8,14 @@ set "FRONTEND_HOST=127.0.0.1"
 set "FRONTEND_PORT=5174"
 set "HEALTH_URL=http://%BACKEND_HOST%:%BACKEND_PORT%/api/health"
 set "VENV_PYTHON=%~dp0.venv\Scripts\python.exe"
+set "PROJECT_FILE=%~dp0pyproject.toml"
+set "LOCK_FILE=%~dp0uv.lock"
 
 rem The React application uses this absolute API URL instead of the default Vite proxy.
 set "VITE_API_BASE=http://%BACKEND_HOST%:%BACKEND_PORT%/api"
 set "MALCHAN_CORS_ORIGINS=http://%FRONTEND_HOST%:%FRONTEND_PORT%,http://localhost:%FRONTEND_PORT%"
 
+if /i "%~1"=="check" goto check
 if /i "%~1"=="backend" goto backend
 if /i "%~1"=="frontend" goto frontend
 
@@ -72,6 +75,16 @@ echo Health  : %HEALTH_URL%
 echo.
 echo Press any key to close only this launcher window.
 pause >nul
+exit /b 0
+
+:check
+if not "%BACKEND_HOST%"=="127.0.0.1" exit /b 1
+if not "%BACKEND_PORT%"=="8002" exit /b 1
+if not "%FRONTEND_HOST%"=="127.0.0.1" exit /b 1
+if not "%FRONTEND_PORT%"=="5174" exit /b 1
+if not exist "%PROJECT_FILE%" exit /b 1
+if not exist "%LOCK_FILE%" exit /b 1
+echo malchan launcher configuration is valid.
 exit /b 0
 
 :wait_for_backend
