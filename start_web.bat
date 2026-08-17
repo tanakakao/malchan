@@ -84,6 +84,7 @@ if not "%FRONTEND_HOST%"=="127.0.0.1" exit /b 1
 if not "%FRONTEND_PORT%"=="5174" exit /b 1
 if not exist "%PROJECT_FILE%" exit /b 1
 if not exist "%LOCK_FILE%" exit /b 1
+findstr /C:"--extra materials" "%~f0" >nul || exit /b 1
 echo malchan launcher configuration is valid.
 exit /b 0
 
@@ -110,7 +111,7 @@ if exist "%VENV_PYTHON%" (
 ) else (
     echo .venv was not found. Starting through locked uv environment.
     echo.
-    uv run --locked --extra web --extra models --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
+    uv run --locked --extra web --extra models --extra materials --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory --reload --host %BACKEND_HOST% --port %BACKEND_PORT%
 )
 
 set "SERVER_EXIT=%ERRORLEVEL%"
