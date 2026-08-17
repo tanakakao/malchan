@@ -15,15 +15,17 @@ The generated `.venv/` directory is local to each checkout and is not committed.
 Install uv, then from the repository root run:
 
 ```bash
-uv sync --locked --extra web --extra models --extra inverse --extra visualization
+uv sync --locked --extra web --extra models --extra materials --extra inverse --extra visualization
 ```
+
+The Web application exposes material-descriptor features, so the `materials` extra is part of the supported Web runtime rather than an optional deployment-only add-on. It provides packages such as `matminer`, `pymatgen`, `mendeleev`, and the other material/chemical descriptor dependencies declared in `pyproject.toml`.
 
 This creates or updates `.venv` from the committed lockfile. `--locked` fails instead of silently changing `uv.lock` when `pyproject.toml` and the lockfile do not agree.
 
 Run commands in the same locked environment with, for example:
 
 ```bash
-uv run --locked --extra web --extra models --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory
+uv run --locked --extra web --extra models --extra materials --extra inverse --extra visualization python -m uvicorn "malchan.app:create_app" --factory
 ```
 
 ## Other common environments
