@@ -7,6 +7,7 @@ on:
       - "uv.lock"
       - ".python-version"
       - "start_web.bat"
+      - "ENVIRONMENT.md"
       - ".github/workflows/uv-lock.yml"
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - "uv.lock"
       - ".python-version"
       - "start_web.bat"
+      - "ENVIRONMENT.md"
       - ".github/workflows/uv-lock.yml"
 
 jobs:
@@ -31,6 +33,10 @@ jobs:
         run: uv python install 3.12
       - name: Verify lockfile is current
         run: uv lock --check
+      - name: Sync supported Web runtime
+        run: uv sync --locked --python 3.12 --extra web --extra models --extra materials --extra inverse --extra visualization
+      - name: Verify material runtime imports
+        run: .venv/bin/python -c "import malchan; import matminer"
 
   launcher-check:
     runs-on: windows-latest
