@@ -18,7 +18,6 @@ assert.match(source, /visualizationYy\(modelId, target, \{ cv, residual: true \}
 assert.match(source, /IMPORTANCE_METHODS/);
 assert.match(source, /Baseline \+ SHAP/);
 assert.match(source, /visualizationBeeswarm/);
-assert.match(source, /visualizationPdp2d/);
 assert.match(source, /figureToPng/);
 assert.match(source, /plotly\.toImage/);
 
@@ -33,7 +32,8 @@ assert.match(apiSource, /xaiShap:\s*requestOptionalShap/);
 assert.match(interactiveFigures, /collectInteractiveFigures/);
 assert.match(interactiveFigures, /combinedImportanceFigure/);
 assert.match(interactiveFigures, /legacyPdFigure/);
-assert.match(interactiveFigures, /visualizationPdp2d/);
+assert.doesNotMatch(interactiveFigures, /visualizationPdp2d/);
+assert.doesNotMatch(interactiveFigures, /pd2d/);
 assert.match(interactiveExport, /downloadInteractiveHtmlReport/);
 assert.match(interactiveExport, /attachInteractiveRegistry/);
 assert.match(interactiveExport, /removeReportSection\(reportHtml, "diagnostics"\)/);
@@ -44,6 +44,10 @@ assert.match(interactiveExport, /embeddedScriptTag\(plotlySource\)/);
 assert.doesNotMatch(interactiveExport, /safeInlineScript\(plotlySource\)/);
 assert.match(interactiveExport, /REPORT_TARGET_TABS_CSS/);
 assert.match(interactiveExport, /reportTargetTabsRuntimeScript\(\)/);
+assert.match(interactiveExport, /numericFeatures:\s*\[\]/);
+assert.doesNotMatch(interactiveExport, /result\.pd2d/);
+assert.doesNotMatch(interactiveExport, /2D Partial Dependence/);
+assert.doesNotMatch(reportPage, /2D PD/);
 
 assert.match(targetTabsRuntime, /#comparison/);
 assert.match(targetTabsRuntime, /#diagnostics/);
