@@ -269,31 +269,6 @@ async function pdFigures(modelId, target, task, staticItems, rows) {
   return result;
 }
 
-async function pd2dFigures(modelId, target, staticItems) {
-  const result = [];
-  for (const item of staticItems) {
-    const metadata = item?.metadata || {};
-    const featureX = metadata.feature_x;
-    const featureY = metadata.feature_y;
-    const output = metadata.selected_output || "";
-    if (!featureX || !featureY) {
-      result.push(null);
-      continue;
-    }
-    try {
-      const response = await api.visualizationPdp2d(modelId, target, {
-        feature_x: featureX,
-        feature_y: featureY,
-        ...(output ? { output } : {}),
-      });
-      result.push(clone(response.figure));
-    } catch {
-      result.push(null);
-    }
-  }
-  return result;
-}
-
 export async function collectInteractiveFigures({ modelId, visualizations, rows, onProgress }) {
   const result = { targets: {} };
   const entries = Object.entries(visualizations?.targets || {});
@@ -306,7 +281,6 @@ export async function collectInteractiveFigures({ modelId, visualizations, rows,
       importance: await importanceFigures(modelId, target),
       shap: await shapFigures(modelId, target, staticTarget.shap || []),
       pd: await pdFigures(modelId, target, task, staticTarget.pd || [], rows || []),
-      pd2d: await pd2dFigures(modelId, target, staticTarget.pd2d || []),
     };
   }
   return result;
