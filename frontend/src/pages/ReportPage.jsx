@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
+import { api } from "../api";
 import { Field, SectionHeader } from "../components/Common";
 import { useWorkbench } from "../context/WorkbenchContext";
 import { createReportSnapshot } from "../report";
 import { downloadInteractiveHtmlReport } from "../report-interactive-export";
+import { generateChatGptReportPrompt } from "../report-prompt";
 import "../report-page.css";
 
 export default function ReportPage() {
@@ -11,7 +13,6 @@ export default function ReportPage() {
     setReportProblem,
     report,
     setReport,
-    makeReportPrompt,
     fileName,
     rows,
     columns,
@@ -36,6 +37,9 @@ export default function ReportPage() {
   const [downloadStatus, setDownloadStatus] = useState("");
   const [downloadError, setDownloadError] = useState("");
   const [preparingReport, setPreparingReport] = useState(false);
+  const [promptStatus, setPromptStatus] = useState("");
+  const [promptError, setPromptError] = useState("");
+  const [preparingPrompt, setPreparingPrompt] = useState(false);
 
   const snapshot = useMemo(() => createReportSnapshot({
     reportProblem,
@@ -131,9 +135,48 @@ export default function ReportPage() {
     }
   }
 
+  async function generatePrompt() {
+    if (preparingPrompt) return;
+    setPreparingPrompt(true);
+    setPromptError("");
+    setPromptStatus(modelInfo?.model_id
+      ? "重要度・SHAP・1D PDの傾向を整理しています..."
+      : "分析コンテキストを整理しています...");
+    try {
+      const result = await generateChatGptReportPrompt({
+        apiClient: api,
+        reportProblem,
+        fileName,
+        rows,
+        features,
+        targets,
+        tasks,
+        missing,
+        modelInfo,
+        comparison,
+        inverseResult,
+        objectives,
+        bounds,
+        onProgress: setPromptStatus,
+      });
+      setReport(result.prompt);
+      setPromptStatus(result.summarizedFeatureCount
+        ? `ChatGPT用プロンプトを作成しました（主要特徴量 ${result.summarizedFeatureCount} 件を要約）。`
+        : "ChatGPT用プロンプトを作成しました。XAIが未実施の場合は、利用可能な分析結果のみを含めています。");
+    } catch (error) {
+      setPromptStatus("");
+      setPromptError(error.message || String(error));
+    } finally {
+      setPreparingPrompt(false);
+    }
+  }
+
   const downloadLabel = preparingReport
     ? "レポートを作成中..."
     : "HTMLレポートをダウンロード";
+  const promptLabel = preparingPrompt
+    ? "分析結果を要約中..."
+    : "ChatGPT用プロンプトを生成";
 
   return (
     <>
@@ -219,12 +262,12 @@ export default function ReportPage() {
       <article className="panel">
         <div className="panel-title">
           <div>
-            <span className="panel-kicker">REPORT TEXT</span>
-            <h3>分析課題とレポート用テキスト</h3>
-            <p>作成したテキストはHTMLレポートの最終セクションへそのまま収録されます。</p>
+            <span className="panel-kicker">LLM REPORT PROMPT</span>
+            <h3>分析課題とChatGPT用レポートプロンプト</h3>
+            <p>モデル比較、重要度、SHAP、1D PD、逆解析をLLM向けの分析コンテキストへ整理します。</p>
           </div>
           <span className={`status-chip ${report ? "success" : ""}`}>
-            {report ? "Text ready" : "Optional"}
+            {preparingPrompt ? "Building" : report ? "Prompt ready" : "Optional"}
           </span>
         </div>
 
@@ -238,15 +281,21 @@ export default function ReportPage() {
                 placeholder="分析の目的、背景、確認したい仮説など"
               />
             </Field>
-            <button className="full-button" onClick={makeReportPrompt}>
-              プロンプトを作成
+            <button
+              className="full-button"
+              disabled={preparingPrompt}
+              onClick={generatePrompt}
+            >
+              {promptLabel}
             </button>
+            {promptStatus && <p className="report-download-status">{promptStatus}</p>}
+            {promptError && <p className="report-download-status error">{promptError}</p>}
           </aside>
           <div className="report-prompt-output">
             <textarea
               value={report}
               onChange={(event) => setReport(event.target.value)}
-              placeholder="生成AI向けプロンプト、または編集済みの分析所見"
+              placeholder="ChatGPTへそのまま貼り付けるレポート作成プロンプト"
             />
             <div className="report-prompt-actions">
               <button
