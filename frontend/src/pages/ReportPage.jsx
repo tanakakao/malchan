@@ -109,7 +109,6 @@ export default function ReportPage() {
         targets,
         tasks,
         features,
-        numericFeatures: numeric.filter((column) => features.includes(column)),
         rows,
         onProgress: setDownloadStatus,
       });
@@ -191,7 +190,7 @@ export default function ReportPage() {
           </div>
           <div>
             <span>XAI計算後</span>
-            <strong>重要度・SHAP・PD・2D PD</strong>
+            <strong>重要度・SHAP・PD</strong>
           </div>
           <div>
             <span>HTML上で操作</span>
