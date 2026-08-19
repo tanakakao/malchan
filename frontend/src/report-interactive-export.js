@@ -16,7 +16,7 @@ import {
   safeScriptJson,
 } from "./report-interactive-runtime";
 
-const GROUP_KEYS = ["yy", "importance", "shap", "pd", "pd2d"];
+const GROUP_KEYS = ["yy", "importance", "shap", "pd"];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -97,7 +97,6 @@ function renderVisualizationSection(visualizations) {
       ${renderFigureGroup("特徴量重要度", "モデル固有重要度、SHAP重要度、Permutation Importanceを正規化して同一図で比較します。", result.importance)}
       ${renderFigureGroup("SHAP", "特徴量値の大小と予測への寄与方向をBeeswarmで表示します。", result.shap)}
       ${renderFigureGroup("Partial Dependence", "各説明変数についてPD、ベース値+SHAP、実測値、ベースラインを表示します。", result.pd, true)}
-      ${renderFigureGroup("2D Partial Dependence", "数値説明変数の全組合せについてPDヒートマップを表示します。", result.pd2d, true)}
     </article>`).join("");
   const globalErrors = (visualizations.errors || [])
     .map((error) => `<li>${escapeHtml(error)}</li>`)
@@ -157,7 +156,6 @@ export async function downloadInteractiveHtmlReport(snapshot, {
   targets,
   tasks,
   features,
-  numericFeatures,
   rows,
   onProgress,
 } = {}) {
@@ -167,7 +165,9 @@ export async function downloadInteractiveHtmlReport(snapshot, {
         targets,
         tasks,
         features,
-        numericFeatures,
+        // 2D PD is intentionally excluded from reports because its all-pairs
+        // evaluation dominates report-generation time for wide datasets.
+        numericFeatures: [],
         rows,
         onProgress,
       })
