@@ -1,6 +1,12 @@
+import { api } from "./api";
 import { buildHtmlReport, reportFileName } from "./report";
 import { collectReportVisualizations } from "./report-visualizations";
 import { collectInteractiveFigures } from "./report-interactive-figures";
+import {
+  buildDeterministicReportAnalysis,
+  LOCAL_ANALYSIS_CSS,
+  renderDeterministicAnalysisSection,
+} from "./report-local-analysis";
 import { embeddedScriptTag } from "./report-script-embedding";
 import { removeReportNavItem, removeReportSection } from "./report-html-sections";
 import {
@@ -112,7 +118,7 @@ const STATIC_VISUALIZATION_CSS = `
     @media print{.export-figure-grid{grid-template-columns:1fr 1fr}.export-figure-card{break-inside:avoid}.export-figure-details{break-inside:auto}.export-figure-details>summary{display:none}.export-figure-details:not([open])>*:not(summary){display:block}}
 `;
 
-export function injectReportContent(baseHtml, visualizations, registry, plotlySource) {
+export function injectReportContent(baseHtml, visualizations, registry, plotlySource, localAnalysis = null) {
   const hasModelVisualizations = Object.keys(visualizations?.targets || {}).length > 0;
   let reportHtml = baseHtml;
   if (hasModelVisualizations) {
@@ -120,21 +126,25 @@ export function injectReportContent(baseHtml, visualizations, registry, plotlySo
     reportHtml = removeReportNavItem(reportHtml, "diagnostics");
   }
 
-  const sectionHtml = `
+  const modelSectionHtml = hasModelVisualizations ? `
     <section class="report-section" id="model-figures">
       <header class="section-heading"><span>05</span><div><h2>モデル可視化</h2><p>精度診断とモデル挙動を重複なくまとめ、図はクリックして拡大・編集できます。</p></div></header>
       ${renderVisualizationSection(visualizations)}
-    </section>`;
+    </section>` : "";
+  const analysisSectionHtml = localAnalysis
+    ? renderDeterministicAnalysisSection(localAnalysis)
+    : "";
   const runtime = `
     ${interactiveModalHtml()}
     <script type="application/json" id="malchan-interactive-figures">${safeScriptJson(registry)}</script>
     ${embeddedScriptTag(plotlySource)}
     <script>${safeInlineScript(interactiveRuntimeScript())}</script>
     <script>${safeInlineScript(reportTargetTabsRuntimeScript())}</script>`;
+  const navPrefix = `${hasModelVisualizations ? '<a href="#model-figures">モデル可視化</a>' : ""}${localAnalysis ? '<a href="#local-analysis">自動分析所見</a>' : ""}`;
   return reportHtml
-    .replace("</style>", `${STATIC_VISUALIZATION_CSS}${REPORT_TARGET_TABS_CSS}${INTERACTIVE_REPORT_CSS}\n  </style>`)
-    .replace('<a href="#optimization">予測・逆解析</a>', '<a href="#model-figures">モデル可視化</a><a href="#optimization">予測・逆解析</a>')
-    .replace('<section class="report-section" id="optimization">', `${sectionHtml}<section class="report-section" id="optimization">`)
+    .replace("</style>", `${STATIC_VISUALIZATION_CSS}${LOCAL_ANALYSIS_CSS}${REPORT_TARGET_TABS_CSS}${INTERACTIVE_REPORT_CSS}\n  </style>`)
+    .replace('<a href="#optimization">予測・逆解析</a>', `${navPrefix}<a href="#optimization">予測・逆解析</a>`)
+    .replace('<section class="report-section" id="optimization">', `${modelSectionHtml}${analysisSectionHtml}<section class="report-section" id="optimization">`)
     .replace("</body>", `${runtime}\n</body>`);
 }
 
@@ -159,6 +169,30 @@ export async function downloadInteractiveHtmlReport(snapshot, {
   rows,
   onProgress,
 } = {}) {
+  let localAnalysis = null;
+  try {
+    localAnalysis = await buildDeterministicReportAnalysis({
+      apiClient: api,
+      reportProblem: snapshot?.problem || "",
+      fileName: snapshot?.data?.fileName || "",
+      rows,
+      features,
+      targets,
+      tasks,
+      missing: snapshot?.data?.missingCount || 0,
+      modelInfo: snapshot?.model || null,
+      comparison: snapshot?.comparison || null,
+      inverseResult: snapshot?.optimization?.result || null,
+      objectives: snapshot?.optimization?.objectives || {},
+      bounds: snapshot?.optimization?.bounds || {},
+      numericColumns: snapshot?.data?.numericColumns || [],
+      categoricalColumns: snapshot?.data?.categoricalColumns || [],
+      onProgress,
+    });
+  } catch (error) {
+    onProgress?.(`自動分析所見を生成できませんでした。従来のレポート生成を続行します: ${error?.message || String(error)}`);
+  }
+
   const visualizations = modelId
     ? await collectReportVisualizations({
         modelId,
@@ -177,19 +211,21 @@ export async function downloadInteractiveHtmlReport(snapshot, {
     ? await collectInteractiveFigures({ modelId, visualizations, rows, onProgress })
     : { targets: {} };
   const registry = attachInteractiveRegistry(visualizations, interactiveFigures);
-  onProgress?.("拡大・編集機能をHTMLへ組み込んでいます...");
+  onProgress?.("拡大・編集機能と自動分析所見をHTMLへ組み込んでいます...");
   const plotlySource = Object.keys(registry).length ? await loadPlotlySource() : "";
   const html = injectReportContent(
     buildHtmlReport(snapshot),
     visualizations,
     registry,
     plotlySource,
+    localAnalysis,
   );
   const fileName = reportFileName(snapshot);
   triggerDownload(html, fileName);
   return {
     fileName,
     visualizations,
+    localAnalysis,
     interactiveFigureCount: Object.keys(registry).length,
     interactiveRuntimeEmbedded: Boolean(plotlySource),
   };
