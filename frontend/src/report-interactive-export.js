@@ -169,24 +169,29 @@ export async function downloadInteractiveHtmlReport(snapshot, {
   rows,
   onProgress,
 } = {}) {
-  const localAnalysis = await buildDeterministicReportAnalysis({
-    apiClient: api,
-    reportProblem: snapshot?.problem || "",
-    fileName: snapshot?.data?.fileName || "",
-    rows,
-    features,
-    targets,
-    tasks,
-    missing: snapshot?.data?.missingCount || 0,
-    modelInfo: snapshot?.model || null,
-    comparison: snapshot?.comparison || null,
-    inverseResult: snapshot?.optimization?.result || null,
-    objectives: snapshot?.optimization?.objectives || {},
-    bounds: snapshot?.optimization?.bounds || {},
-    numericColumns: snapshot?.data?.numericColumns || [],
-    categoricalColumns: snapshot?.data?.categoricalColumns || [],
-    onProgress,
-  });
+  let localAnalysis = null;
+  try {
+    localAnalysis = await buildDeterministicReportAnalysis({
+      apiClient: api,
+      reportProblem: snapshot?.problem || "",
+      fileName: snapshot?.data?.fileName || "",
+      rows,
+      features,
+      targets,
+      tasks,
+      missing: snapshot?.data?.missingCount || 0,
+      modelInfo: snapshot?.model || null,
+      comparison: snapshot?.comparison || null,
+      inverseResult: snapshot?.optimization?.result || null,
+      objectives: snapshot?.optimization?.objectives || {},
+      bounds: snapshot?.optimization?.bounds || {},
+      numericColumns: snapshot?.data?.numericColumns || [],
+      categoricalColumns: snapshot?.data?.categoricalColumns || [],
+      onProgress,
+    });
+  } catch (error) {
+    onProgress?.(`自動分析所見を生成できませんでした。従来のレポート生成を続行します: ${error?.message || String(error)}`);
+  }
 
   const visualizations = modelId
     ? await collectReportVisualizations({
