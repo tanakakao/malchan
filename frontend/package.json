@@ -9,7 +9,7 @@
     "build": "vite build",
     "test:plotly-layout": "node --test test/plotlyLayout.test.js",
     "test:conversation-mode": "node --test test/conversationModeUi.test.js",
-    "test:report": "node src/report-visualizations.test.mjs && node src/report-html-sections.test.mjs && node src/report-script-embedding.test.mjs && node src/report-prompt.test.mjs",
+    "test:report": "node src/report-visualizations.test.mjs && node src/report-html-sections.test.mjs && node src/report-script-embedding.test.mjs && node src/report-prompt.test.mjs && node src/report-local-analysis.test.mjs",
     "test:model-page": "node src/model-page-controls.test.mjs && node src/evaluation-metrics.test.mjs && node src/compositional-preprocessing.test.mjs",
     "preview": "vite preview"
   },
