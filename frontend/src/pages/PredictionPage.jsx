@@ -8,10 +8,27 @@ import {
   uniqueValues,
 } from "../data";
 import { useWorkbench } from "../context/WorkbenchContext";
+import { useWorkspacePageState } from "../context/useWorkspacePageState";
 import "../prediction-auto.css";
 
 const FILE_PAGE_SIZE = 30;
 const SHAP_FEATURE_LIMIT = 10;
+
+function createPredictionWorkspace() {
+  return {
+    mode: "custom",
+    customPrediction: null,
+    customShap: null,
+    fileName: "",
+    fileRows: [],
+    fileColumns: [],
+    selectedRows: new Set(),
+    filePage: 0,
+    filePredictions: [],
+    fileShap: null,
+    fileShapLabels: [],
+  };
+}
 
 function requiredRecords(rows, features) {
   return rows.map((row) => Object.fromEntries(
@@ -283,30 +300,48 @@ export default function PredictionPage() {
     modelInfo,
     busy,
   } = useWorkbench();
-  const [mode, setMode] = useState("custom");
-  const [customPrediction, setCustomPrediction] = useState(null);
-  const [customShap, setCustomShap] = useState(null);
-  const [fileName, setFileName] = useState("");
-  const [fileRows, setFileRows] = useState([]);
-  const [fileColumns, setFileColumns] = useState([]);
-  const [selectedRows, setSelectedRows] = useState(new Set());
-  const [filePage, setFilePage] = useState(0);
-  const [filePredictions, setFilePredictions] = useState([]);
-  const [fileShap, setFileShap] = useState(null);
-  const [fileShapLabels, setFileShapLabels] = useState([]);
+  const [workspace, setWorkspace] = useWorkspacePageState(
+    "prediction",
+    createPredictionWorkspace,
+    modelInfo,
+  );
   const [running, setRunning] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    setCustomPrediction(null);
-    setCustomShap(null);
-    setFileRows([]);
-    setFileColumns([]);
-    setFilePredictions([]);
-    setFileShap(null);
-    setFileName("");
-    setSelectedRows(new Set());
-  }, [modelInfo?.model_id]);
+  const {
+    mode,
+    customPrediction,
+    customShap,
+    fileName,
+    fileRows,
+    fileColumns,
+    selectedRows,
+    filePage,
+    filePredictions,
+    fileShap,
+    fileShapLabels,
+  } = workspace;
+
+  function setWorkspaceValue(key, nextValueOrUpdater) {
+    setWorkspace((current) => ({
+      ...current,
+      [key]: typeof nextValueOrUpdater === "function"
+        ? nextValueOrUpdater(current[key])
+        : nextValueOrUpdater,
+    }));
+  }
+
+  const setMode = (value) => setWorkspaceValue("mode", value);
+  const setCustomPrediction = (value) => setWorkspaceValue("customPrediction", value);
+  const setCustomShap = (value) => setWorkspaceValue("customShap", value);
+  const setFileName = (value) => setWorkspaceValue("fileName", value);
+  const setFileRows = (value) => setWorkspaceValue("fileRows", value);
+  const setFileColumns = (value) => setWorkspaceValue("fileColumns", value);
+  const setSelectedRows = (value) => setWorkspaceValue("selectedRows", value);
+  const setFilePage = (value) => setWorkspaceValue("filePage", value);
+  const setFilePredictions = (value) => setWorkspaceValue("filePredictions", value);
+  const setFileShap = (value) => setWorkspaceValue("fileShap", value);
+  const setFileShapLabels = (value) => setWorkspaceValue("fileShapLabels", value);
 
   const filePredictionEntries = useMemo(
     () => predictionColumnEntries(filePredictions, fileColumns),
