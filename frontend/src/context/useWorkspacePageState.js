@@ -18,6 +18,7 @@ export function useWorkspacePageState(scope, initialState, resetKey = null) {
   const initialStateRef = useRef(initialState);
   const resetKeyRef = useRef(resetKey);
   const stateRef = useRef();
+  const mountedRef = useRef(true);
 
   const [state, setInternalState] = useState(() => {
     const cached = workspacePageStateStore.get(scope);
@@ -29,6 +30,10 @@ export function useWorkspacePageState(scope, initialState, resetKey = null) {
     stateRef.current = initial;
     return initial;
   });
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (Object.is(resetKeyRef.current, resetKey)) return;
@@ -54,7 +59,7 @@ export function useWorkspacePageState(scope, initialState, resetKey = null) {
       state: nextState,
     });
     stateRef.current = nextState;
-    setInternalState(nextState);
+    if (mountedRef.current) setInternalState(nextState);
   }, [scope]);
 
   return [state, setState];
