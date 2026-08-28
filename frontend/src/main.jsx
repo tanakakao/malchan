@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import ApiProcessingOverlay from "./components/ApiProcessingOverlay";
+import DetailedProcessingProgress from "./components/DetailedProcessingProgress";
+import { installDetailedProgressTransport } from "./detailed-progress";
 import "./styles.css";
 import "./bochan-theme.css";
 import "./prepare.css";
@@ -30,9 +32,12 @@ import "./conversation-mode.css";
 import "./readability.css";
 import "./conversation-mode-fixes.css";
 
+installDetailedProgressTransport();
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
     <ApiProcessingOverlay />
+    <DetailedProcessingProgress />
   </React.StrictMode>,
 );

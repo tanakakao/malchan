@@ -1,0 +1,145 @@
+.detailed-progress-card {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--footer-h) + 18px);
+  z-index: 1135;
+  width: min(520px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px);
+}
+
+.detailed-progress-card.completed {
+  border-color: color-mix(in srgb, var(--success) 32%, var(--line));
+}
+
+.detailed-progress-card.failed {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+}
+
+.detailed-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detailed-progress-heading strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.detailed-progress-state {
+  min-width: 44px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.detailed-progress-state.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.detailed-progress-state.complete {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.detailed-progress-state.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.detailed-progress-dimensions {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.detailed-progress-dimension {
+  min-width: 0;
+}
+
+.detailed-progress-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detailed-progress-label strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailed-progress-label span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailed-progress-track {
+  height: 7px;
+  margin-top: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.detailed-progress-track > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.detailed-progress-card.completed .detailed-progress-track > span {
+  background: var(--success);
+}
+
+.detailed-progress-card.failed .detailed-progress-track > span {
+  background: var(--danger);
+}
+
+.detailed-progress-card > p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 620px) {
+  .detailed-progress-card {
+    bottom: calc(var(--footer-h) + 10px);
+    width: calc(100vw - 20px);
+    padding: 12px;
+  }
+
+  .detailed-progress-label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .detailed-progress-label span {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
