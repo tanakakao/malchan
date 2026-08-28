@@ -31,6 +31,7 @@ import "./red-theme.css";
 import "./conversation-mode.css";
 import "./readability.css";
 import "./conversation-mode-fixes.css";
+import "./workflow-completion.css";
 
 installDetailedProgressTransport();
 

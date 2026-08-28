@@ -15,6 +15,7 @@
     "test:data-columns": "node src/analysis-column-selection.test.mjs",
     "test:processing-progress": "node src/processing-progress.test.mjs",
     "test:detailed-progress": "node src/detailed-processing-progress.test.mjs",
+    "test:workflow-completion": "node src/workflow-completion.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
