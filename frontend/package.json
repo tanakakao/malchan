@@ -16,6 +16,7 @@
     "test:processing-progress": "node src/processing-progress.test.mjs",
     "test:detailed-progress": "node src/detailed-processing-progress.test.mjs",
     "test:workflow-completion": "node src/workflow-completion.test.mjs",
+    "test:readability": "node src/readability-responsive.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

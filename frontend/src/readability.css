@@ -1,12 +1,21 @@
-/* Readability overrides aligned with bochan and loaded last. */
+/*
+ * Final readability layer.
+ *
+ * Keep type readable without making every control 15px.  The scale below is
+ * intentionally role based so narrow layouts can preserve hierarchy without
+ * accidental wrapping.
+ */
 :root {
-  --ui-control-font-size: 15px;
-  --ui-label-font-size: 14px;
-  --ui-secondary-font-size: 13px;
+  --ui-body-font-size: 14px;
+  --ui-control-font-size: 14px;
+  --ui-label-font-size: 13px;
+  --ui-secondary-font-size: 12px;
+  --ui-caption-font-size: 11px;
+  --ui-micro-font-size: 10px;
 }
 
 body {
-  font-size: 15px;
+  font-size: var(--ui-body-font-size);
   line-height: 1.55;
 }
 
@@ -18,10 +27,7 @@ textarea {
   line-height: 1.4;
 }
 
-button:not(.icon-button) {
-  min-height: 40px;
-}
-
+button:not(.icon-button),
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 select,
 textarea {
@@ -44,7 +50,8 @@ th,
 .variable-label,
 .target-task-select,
 .feature-type-toggle,
-.material-feature-label {
+.material-feature-label,
+.model-parameter-head label {
   font-size: var(--ui-label-font-size) !important;
   line-height: 1.45;
 }
@@ -60,8 +67,10 @@ dd,
 .alert,
 .simple-default-grid,
 .model-setting-summary,
-.model-structure-summary {
-  font-size: 15px !important;
+.model-structure-summary,
+.optimize-model-warning p,
+.optimize-hero-copy p {
+  font-size: var(--ui-body-font-size) !important;
   line-height: 1.6;
 }
 
@@ -76,11 +85,16 @@ small,
 .description,
 .variable-description,
 .material-feature-description,
-.model-setting-description {
+.model-setting-description,
+.model-setting-heading span,
+.target-model-card-head span,
+.data-column-selection-help,
+.data-column-selection-lock-note {
   font-size: var(--ui-secondary-font-size) !important;
   line-height: 1.5;
 }
 
+/* Navigation and primary control copy stays compact enough not to wrap. */
 .workflow-step strong,
 .tab strong,
 .workbench-mode-switch button,
@@ -93,15 +107,21 @@ small,
 .variable-choice-main > span:first-child,
 .target-task-select > span,
 .feature-type-toggle > span,
-.panel-title h3,
-.side-card-title strong,
-.section-header h2,
 .comparison-target-tab,
 .model-target-tab {
+  font-size: 12px !important;
+}
+
+.panel-title h3,
+.side-card-title strong {
   font-size: 15px !important;
 }
 
-.workflow-step,
+.section-header h2 {
+  font-size: clamp(22px, 2.1vw, 27px) !important;
+  line-height: 1.25;
+}
+
 .tab small,
 .conversation-launcher-copy small,
 .conversation-choice-grid button small,
@@ -110,25 +130,36 @@ small,
 .context-list,
 .context-list span,
 .context-list strong,
-.statusbar,
 .runtime-copy,
-.side-card-title span,
-.rail-note,
-.rail-note p,
 .model-meta,
-.comparison-meta {
-  font-size: var(--ui-secondary-font-size) !important;
+.comparison-meta,
+.runtime-large small,
+.rail-note,
+.rail-note p {
+  font-size: var(--ui-caption-font-size) !important;
+}
+
+.statusbar {
+  font-size: var(--ui-micro-font-size) !important;
 }
 
 .rail-section-label,
 .panel-kicker,
 .eyebrow,
-.status-chip,
-.viz-badge,
+.side-card-title span,
 .conversation-kicker,
 .conversation-result-label {
-  font-size: 12px !important;
+  font-size: var(--ui-caption-font-size) !important;
   letter-spacing: 0.08em;
+}
+
+.status-chip,
+.viz-badge,
+.tab-status,
+.runtime-badge {
+  font-size: var(--ui-micro-font-size) !important;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .tabs .tab {
@@ -153,16 +184,32 @@ small,
 }
 
 .conversation-composer input {
-  font-size: 16px !important;
+  font-size: 15px !important;
+}
+
+/* Tables should remain readable and scroll horizontally rather than squeeze text. */
+.table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 table th,
-table td,
 .table-wrap th,
-.table-wrap td,
 .comparison-table th,
-.comparison-table td {
-  font-size: 14px !important;
+.inverse-objective-table th,
+.optimize-variable-table th {
+  font-size: 12px !important;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+table td,
+.table-wrap td,
+.comparison-table td,
+.inverse-objective-table td,
+.optimize-variable-table td {
+  font-size: 13px !important;
   line-height: 1.5;
 }
 
@@ -171,20 +218,239 @@ button.compact-button,
 .table-action,
 button.table-action {
   min-height: 36px;
+  font-size: 12px !important;
+}
+
+/* Optimize had several 8-10px labels and descriptions. */
+.optimize-hero-kicker,
+.optimize-summary-item > div > span,
+.optimize-status-badge,
+.optimize-count-badge,
+.optimize-detail-button,
+.optimize-outline-button,
+.optimize-type-badge,
+.muted-cell,
+.constraint-range-summary span {
+  font-size: 11px !important;
+}
+
+.optimize-section-title p,
+.optimize-card-note,
+.constraint-toggle-card small,
+.constraint-variable-card small,
+.sampler-description span,
+.optimize-bottom-action > div span {
+  font-size: 12px !important;
+  line-height: 1.55;
+}
+
+.optimize-section-title h3 {
+  font-size: 16px !important;
+}
+
+.optimize-name-cell strong,
+.constraint-toggle-card strong,
+.constraint-variable-card strong,
+.sampler-description strong,
+.optimize-bottom-action > div strong {
+  font-size: 13px !important;
+}
+
+.optimize-primary-run,
+.optimize-outline-button,
+.optimize-detail-button {
+  white-space: nowrap;
+}
+
+.optimize-card-note,
+.sampler-description,
+.optimize-section-title,
+.optimize-section-title > div {
+  min-width: 0;
+}
+
+.sampler-description span,
+.optimize-card-note,
+.optimize-section-title p {
+  overflow-wrap: anywhere;
+}
+
+/* Data-column and model settings need readable secondary text. */
+.data-column-toggle-copy strong {
+  font-size: 13px !important;
+}
+
+.data-column-toggle-copy small,
+.data-column-toggle em {
+  font-size: 11px !important;
+}
+
+.model-setting-heading strong,
+.target-model-card-head strong,
+.model-run-summary strong {
   font-size: 14px !important;
+}
+
+.model-run-summary span,
+.model-run-summary small {
+  font-size: 11px !important;
+  line-height: 1.45;
+}
+
+/* Keep identifiers and long column names from expanding fixed sidebars/cards. */
+.brand-wordmark,
+.runtime-copy,
+.tab-copy,
+.context-list > div,
+.context-list strong,
+.data-column-toggle-copy,
+.optimize-name-cell,
+.target-model-card-head,
+.model-setting-heading > div,
+.model-meta,
+.comparison-meta {
+  min-width: 0;
+}
+
+.brand-wordmark p,
+.runtime-copy strong,
+.tab-copy strong,
+.tab-copy small,
+.context-list strong,
+.data-column-toggle-copy strong,
+.optimize-name-cell strong,
+.model-meta,
+.comparison-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-list > div {
+  align-items: baseline;
+}
+
+.context-list > span,
+.context-list > strong {
+  min-width: 0;
+}
+
+/* Header controls and badges should not split into awkward two-line labels. */
+.workflow-step,
+.portal-button,
+.runtime-pill,
+.workbench-mode-switch button,
+.status-chip,
+.tab-status,
+.compact-button {
+  white-space: nowrap;
+}
+
+/* Long prose is allowed to wrap; hard identifiers are allowed to break only where needed. */
+.inline-alert-copy,
+.panel-title > div,
+.section-header > div,
+.side-card,
+.constraint-toggle-card span,
+.constraint-variable-card span {
+  min-width: 0;
+}
+
+.inline-alert-copy p,
+.panel-title p,
+.section-header p,
+.empty-state,
+.data-column-selection-help,
+.data-column-selection-lock-note {
+  overflow-wrap: anywhere;
+}
+
+/* 1440px-class screens do not have enough center width for eight labels. */
+@media (max-width: 1480px) {
+  .workflow-strip {
+    gap: 5px;
+    padding-inline: 10px;
+  }
+
+  .workflow-step strong {
+    display: none !important;
+  }
+
+  .workflow-strip > i {
+    min-width: 7px;
+    width: 12px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .content {
+    padding-inline: 24px;
+  }
+
+  .right-rail .side-card {
+    min-width: 0;
+  }
+
+  .context-list strong {
+    max-width: min(46vw, 260px);
+  }
+}
+
+@media (max-width: 899px) {
+  .content {
+    padding: 22px 18px 48px;
+  }
+
+  .section-header,
+  .panel-title,
+  .optimize-card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .panel-title > :last-child,
+  .optimize-card-actions {
+    align-self: flex-start;
+  }
 }
 
 @media (max-width: 720px) {
   body {
-    font-size: 15px;
+    font-size: var(--ui-body-font-size);
   }
 
-  .workflow-step strong,
-  .tab strong,
-  .conversation-action-card > strong,
-  .variable-choice-main > span:first-child,
-  .panel-title h3,
+  button:not(.icon-button) {
+    white-space: normal;
+  }
+
+  .portal-button,
+  .status-chip,
+  .tab-status,
+  .compact-button {
+    white-space: nowrap;
+  }
+
   .section-header h2 {
-    font-size: 15px !important;
+    font-size: 22px !important;
+  }
+
+  .optimize-section-title > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .optimize-section-title h3 {
+    white-space: normal;
+  }
+
+  .optimize-primary-run,
+  .optimize-outline-button {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .data-column-toggle-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
