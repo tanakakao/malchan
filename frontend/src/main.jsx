@@ -29,9 +29,9 @@ import "./styles/components.css";
 import "./data-dropzone.css";
 import "./red-theme.css";
 import "./conversation-mode.css";
-import "./readability.css";
 import "./conversation-mode-fixes.css";
 import "./workflow-completion.css";
+import "./readability.css";
 
 installDetailedProgressTransport();
 

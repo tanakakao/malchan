@@ -17,18 +17,25 @@ export default function DataTable({ rows, columns, pageSize = 20 }) {
           <thead>
             <tr>
               <th>#</th>
-              {columns.map((column) => <th key={column}>{column}</th>)}
+              {columns.map((column) => <th key={column} title={column}>{column}</th>)}
             </tr>
           </thead>
           <tbody>
             {visibleRows.map((row, rowIndex) => (
               <tr key={`${normalizedPage}-${rowIndex}`}>
                 <td>{normalizedPage * pageSize + rowIndex + 1}</td>
-                {columns.map((column) => (
-                  <td key={column} className={row[column] === null ? "missing-cell" : ""}>
-                    {row[column] === null ? "missing" : formatNumber(row[column])}
-                  </td>
-                ))}
+                {columns.map((column) => {
+                  const displayValue = row[column] === null ? "missing" : formatNumber(row[column]);
+                  return (
+                    <td
+                      key={column}
+                      className={row[column] === null ? "missing-cell" : ""}
+                      title={String(displayValue)}
+                    >
+                      {displayValue}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
