@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { api } from "../api";
 import { Field, SectionHeader } from "../components/Common";
 import { useWorkbench } from "../context/WorkbenchContext";
+import { useAnalysisColumnSelection } from "../context/useAnalysisColumnSelection";
 import { createReportSnapshot } from "../report";
 import { downloadInteractiveHtmlReport } from "../report-interactive-export";
 import { generateChatGptReportPrompt } from "../report-prompt";
@@ -15,14 +16,13 @@ export default function ReportPage() {
     setReport,
     fileName,
     rows,
-    columns,
-    numeric,
-    categorical,
+    columns: rawColumns,
+    numeric: rawNumeric,
+    categorical: rawCategorical,
     targets,
     tasks,
     features,
-    stats,
-    missing,
+    stats: rawStats,
     modelInfo,
     comparison,
     diagnostics,
@@ -34,6 +34,23 @@ export default function ReportPage() {
     inverseTrials,
     topK,
   } = useWorkbench();
+  const { enabledColumns: columns, enabledSet } = useAnalysisColumnSelection(rawColumns, rows);
+  const numeric = useMemo(
+    () => rawNumeric.filter((column) => enabledSet.has(column)),
+    [rawNumeric, enabledSet],
+  );
+  const categorical = useMemo(
+    () => rawCategorical.filter((column) => enabledSet.has(column)),
+    [rawCategorical, enabledSet],
+  );
+  const stats = useMemo(
+    () => rawStats.filter((item) => enabledSet.has(item.column)),
+    [rawStats, enabledSet],
+  );
+  const missing = useMemo(
+    () => stats.reduce((sum, item) => sum + item.missing, 0),
+    [stats],
+  );
   const [downloadStatus, setDownloadStatus] = useState("");
   const [downloadError, setDownloadError] = useState("");
   const [preparingReport, setPreparingReport] = useState(false);

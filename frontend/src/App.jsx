@@ -1,5 +1,7 @@
 import React from "react";
 import { WorkbenchProvider, useWorkbench } from "./context/WorkbenchContext";
+import { useArtifactFreshness } from "./context/useArtifactFreshness";
+import { useWorkspacePageStateSnapshot } from "./context/useWorkspacePageState";
 import ComparisonTuningControl from "./components/ComparisonTuningControl";
 import ConversationIcon from "./components/ConversationIcon";
 import EnsembleModelSettingsControl from "./components/EnsembleModelSettingsControl";
@@ -92,8 +94,12 @@ function WorkbenchLayout() {
   const {
     theme, setTheme, step, setStep, health, busy, toast, setToast,
     fileName, rows, columns, features, targets, ready, modelInfo, comparison,
-    diagnostics, prediction, inverseResult, report,
+    diagnostics, prediction, inverseResult, report, setReport,
   } = useWorkbench();
+  const predictionWorkspace = useWorkspacePageStateSnapshot("prediction", modelInfo);
+  const inverseCurrent = useArtifactFreshness(inverseResult, modelInfo);
+  const reportCurrent = useArtifactFreshness(report, modelInfo);
+  const previousModelInfoRef = React.useRef(modelInfo);
   const visibleSteps = mode === "simple"
     ? APP_STEPS.filter(([id]) => SIMPLE_STEP_IDS.has(id))
     : APP_STEPS;
@@ -105,8 +111,11 @@ function WorkbenchLayout() {
     comparison,
     diagnostics,
     prediction,
+    predictionWorkspace,
     inverseResult,
+    inverseCurrent,
     report,
+    reportCurrent,
   });
   const activeAuxiliaryPage = auxiliaryPage === "conversation" ? "conversation" : null;
   const currentPageUsesCache = !activeAuxiliaryPage
@@ -140,6 +149,12 @@ function WorkbenchLayout() {
       current.includes(step) ? current : [...current, step]
     ));
   }, [currentPageUsesCache, step]);
+
+  React.useEffect(() => {
+    if (Object.is(previousModelInfoRef.current, modelInfo)) return;
+    previousModelInfoRef.current = modelInfo;
+    if (report) setReport("");
+  }, [modelInfo, report, setReport]);
 
   function openStep(id) {
     if (auxiliaryPage) clearAuxiliaryHash();
@@ -306,7 +321,7 @@ function WorkbenchLayout() {
                 && pageId === step
                 && !(mode === "simple" && pageId === "model");
               const resetKey = pageId === "optimize"
-                ? modelInfo?.model_id || "unregistered"
+                ? modelInfo || "unregistered"
                 : rows;
               return (
                 <PersistentWorkflowPage
