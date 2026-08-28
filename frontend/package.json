@@ -17,6 +17,8 @@
     "test:detailed-progress": "node src/detailed-processing-progress.test.mjs",
     "test:workflow-completion": "node src/workflow-completion.test.mjs",
     "test:readability": "node src/readability-responsive.test.mjs",
+    "test:workflow-final": "node src/final-workflow-regression.test.mjs",
+    "test:ux-regression": "pnpm run test:workspace-state && pnpm run test:data-columns && pnpm run test:processing-progress && pnpm run test:detailed-progress && pnpm run test:workflow-completion && pnpm run test:readability && pnpm run test:workflow-final",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -11,6 +11,13 @@ function status(complete, available, options = {}) {
   };
 }
 
+function hasPredictionWorkspaceResult(workspace) {
+  return Boolean(
+    workspace?.customPrediction
+    || (Array.isArray(workspace?.filePredictions) && workspace.filePredictions.length > 0),
+  );
+}
+
 /**
  * Derive workflow completion from actual workspace artifacts rather than page order.
  *
@@ -25,8 +32,11 @@ export function getWorkflowCompletion({
   comparison = null,
   diagnostics = [],
   prediction = null,
+  predictionWorkspace = null,
   inverseResult = null,
+  inverseCurrent,
   report = "",
+  reportCurrent,
 } = {}) {
   const hasRawData = rows.length > 0;
   const hasImportedModelContext = Boolean(modelInfo?.model_id) && columns.length > 0;
@@ -37,10 +47,22 @@ export function getWorkflowCompletion({
     || diagnostics.length > 0
     || modelInfo?.xai_status === "ready",
   );
-  const hasCurrentInverseResult = Boolean(
+  const hasPredictionResult = Boolean(
+    hasModel
+    && (prediction || hasPredictionWorkspaceResult(predictionWorkspace)),
+  );
+  const inverseMatchesModelId = Boolean(
     inverseResult
     && hasModel
     && (!inverseResult.model_id || inverseResult.model_id === modelInfo.model_id),
+  );
+  const hasCurrentInverseResult = inverseCurrent === undefined
+    ? inverseMatchesModelId
+    : Boolean(inverseResult && hasModel && inverseCurrent);
+  const hasCurrentReport = Boolean(
+    hasText(report)
+    && hasModel
+    && (reportCurrent === undefined || reportCurrent),
   );
 
   return {
@@ -49,9 +71,9 @@ export function getWorkflowCompletion({
     prepare: status(Boolean(ready), hasRawData, { label: "設定済み" }),
     model: status(hasModel, Boolean(ready), { label: "学習済み" }),
     explain: status(hasExplainResult, hasModel, { optional: true, label: "解析済み" }),
-    predict: status(Boolean(prediction) && hasModel, hasModel, { optional: true, label: "予測済み" }),
+    predict: status(hasPredictionResult, hasModel, { optional: true, label: "予測済み" }),
     optimize: status(hasCurrentInverseResult, hasModel, { optional: true, label: "探索済み" }),
-    report: status(hasText(report) && hasModel, hasModel, { optional: true, label: "作成済み" }),
+    report: status(hasCurrentReport, hasModel, { optional: true, label: "作成済み" }),
   };
 }
 
