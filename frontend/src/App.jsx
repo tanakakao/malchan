@@ -9,6 +9,7 @@ import MaterialFeatureKindControl from "./components/MaterialFeatureKindControl"
 import ModelBundleControl from "./components/ModelBundleControl";
 import ModelResultVisualizationControl from "./components/ModelResultVisualizationControl";
 import ModelSettingDefaultsControl from "./components/ModelSettingDefaultsControl";
+import PersistentWorkflowPage from "./components/PersistentWorkflowPage";
 import YyDiagnosticsControl from "./components/YyDiagnosticsControl";
 import OptimizeCategoryCandidatesControl from "./components/OptimizeCategoryCandidatesControl";
 import ShapScatterControl from "./components/ShapScatterControl";
@@ -44,6 +45,8 @@ const SIMPLE_STEP_IDS = new Set([
   "optimize",
   "report",
 ]);
+
+const PERSISTENT_PAGE_IDS = new Set(["prepare", "model", "optimize"]);
 
 const PAGES = {
   data: DataPage,
@@ -84,6 +87,7 @@ function clearAuxiliaryHash() {
 function WorkbenchLayout() {
   const mode = useWorkbenchMode();
   const [auxiliaryPage, setAuxiliaryPage] = React.useState(currentAuxiliaryPage);
+  const [persistentPageIds, setPersistentPageIds] = React.useState([]);
   const {
     theme, setTheme, step, setStep, health, busy, toast, setToast,
     fileName, rows, features, targets, modelInfo, comparison,
@@ -93,6 +97,12 @@ function WorkbenchLayout() {
     : APP_STEPS;
   const index = visibleSteps.findIndex(([id]) => id === step);
   const activeAuxiliaryPage = auxiliaryPage === "conversation" ? "conversation" : null;
+  const currentPageUsesCache = !activeAuxiliaryPage
+    && PERSISTENT_PAGE_IDS.has(step)
+    && !(mode === "simple" && step === "model");
+  const persistentPagesToRender = currentPageUsesCache && !persistentPageIds.includes(step)
+    ? [...persistentPageIds, step]
+    : persistentPageIds;
   const Page = activeAuxiliaryPage === "conversation"
     ? ConversationPage
     : mode === "simple" && step === "model"
@@ -111,6 +121,13 @@ function WorkbenchLayout() {
       setStep(rows.length ? "prepare" : "data");
     }
   }, [mode, rows.length, setStep, step]);
+
+  React.useEffect(() => {
+    if (!currentPageUsesCache) return;
+    setPersistentPageIds((current) => (
+      current.includes(step) ? current : [...current, step]
+    ));
+  }, [currentPageUsesCache, step]);
 
   function openStep(id) {
     if (auxiliaryPage) clearAuxiliaryHash();
@@ -250,7 +267,24 @@ function WorkbenchLayout() {
                 </button>
               </div>
             )}
-            <Page />
+            {!currentPageUsesCache && <Page />}
+            {persistentPagesToRender.map((pageId) => {
+              const CachedPage = PAGES[pageId];
+              const active = !activeAuxiliaryPage
+                && pageId === step
+                && !(mode === "simple" && pageId === "model");
+              const resetKey = pageId === "optimize"
+                ? modelInfo?.model_id || "unregistered"
+                : rows;
+              return (
+                <PersistentWorkflowPage
+                  key={pageId}
+                  active={active}
+                  resetKey={resetKey}
+                  Page={CachedPage}
+                />
+              );
+            })}
           </div>
         </section>
 
