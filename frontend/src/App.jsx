@@ -23,6 +23,7 @@ import ExplainPage from "./pages/ExplainPage";
 import PredictionPage from "./pages/PredictionPage";
 import OptimizePage from "./pages/OptimizePage";
 import ReportPage from "./pages/ReportPage";
+import { getWorkflowCompletion, workflowStatusText } from "./workflowCompletion";
 import { setWorkbenchMode, useWorkbenchMode } from "./workbenchMode";
 
 const APP_STEPS = [
@@ -90,12 +91,23 @@ function WorkbenchLayout() {
   const [persistentPageIds, setPersistentPageIds] = React.useState([]);
   const {
     theme, setTheme, step, setStep, health, busy, toast, setToast,
-    fileName, rows, features, targets, modelInfo, comparison,
+    fileName, rows, columns, features, targets, ready, modelInfo, comparison,
+    diagnostics, prediction, inverseResult, report,
   } = useWorkbench();
   const visibleSteps = mode === "simple"
     ? APP_STEPS.filter(([id]) => SIMPLE_STEP_IDS.has(id))
     : APP_STEPS;
-  const index = visibleSteps.findIndex(([id]) => id === step);
+  const workflowCompletion = getWorkflowCompletion({
+    rows,
+    columns,
+    ready,
+    modelInfo,
+    comparison,
+    diagnostics,
+    prediction,
+    inverseResult,
+    report,
+  });
   const activeAuxiliaryPage = auxiliaryPage === "conversation" ? "conversation" : null;
   const currentPageUsesCache = !activeAuxiliaryPage
     && PERSISTENT_PAGE_IDS.has(step)
@@ -149,18 +161,28 @@ function WorkbenchLayout() {
           </div>
         </div>
         <div className="workflow-strip" aria-label="ワークフロー">
-          {visibleSteps.map(([id, label], stepIndex) => (
-            <React.Fragment key={id}>
-              <button
-                className={`workflow-step ${!activeAuxiliaryPage && id === step ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
-                onClick={() => openStep(id)}
-                aria-current={!activeAuxiliaryPage && id === step ? "step" : undefined}
-              >
-                <span>{stepIndex + 1}</span><strong>{label}</strong>
-              </button>
-              {stepIndex < visibleSteps.length - 1 && <i />}
-            </React.Fragment>
-          ))}
+          {visibleSteps.map(([id, label], stepIndex) => {
+            const stepStatus = workflowCompletion[id] || {};
+            const active = !activeAuxiliaryPage && id === step;
+            const statusText = workflowStatusText(stepStatus);
+            return (
+              <React.Fragment key={id}>
+                <button
+                  className={`workflow-step ${active ? "active" : ""} ${stepStatus.complete ? "complete" : ""} ${stepStatus.available ? "available" : ""} ${stepStatus.optional ? "optional" : ""}`}
+                  onClick={() => openStep(id)}
+                  aria-current={active ? "step" : undefined}
+                  aria-label={`${label} · ${statusText}`}
+                  title={`${label}: ${statusText}`}
+                  data-workflow-status={stepStatus.complete ? "complete" : stepStatus.optional ? "optional" : stepStatus.available ? "available" : "pending"}
+                >
+                  <span>{stepStatus.complete ? "✓" : stepIndex + 1}</span><strong>{label}</strong>
+                </button>
+                {stepIndex < visibleSteps.length - 1 && (
+                  <i className={stepStatus.complete ? "complete" : ""} aria-hidden="true" />
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
         <div className="header-actions">
           <div className="runtime-pill" title={`API接続: ${health.text}`}>
@@ -226,18 +248,28 @@ function WorkbenchLayout() {
 
           <div className="rail-section-label">WORKFLOW</div>
           <nav className="tabs" aria-label="ページナビゲーション">
-            {visibleSteps.map(([id, label, detail], stepIndex) => (
-              <button
-                key={id}
-                className={`tab ${!activeAuxiliaryPage && step === id ? "active" : ""} ${stepIndex < index ? "complete" : ""}`}
-                onClick={() => openStep(id)}
-                aria-current={!activeAuxiliaryPage && step === id ? "page" : undefined}
-              >
-                <span className="nav-icon">{ICONS[id]}</span>
-                <span><strong>{label}</strong><small>{detail}</small></span>
-                <em>{stepIndex + 1}</em>
-              </button>
-            ))}
+            {visibleSteps.map(([id, label, detail], stepIndex) => {
+              const stepStatus = workflowCompletion[id] || {};
+              const active = !activeAuxiliaryPage && step === id;
+              const statusText = workflowStatusText(stepStatus);
+              return (
+                <button
+                  key={id}
+                  className={`tab ${active ? "active" : ""} ${stepStatus.complete ? "complete" : ""} ${stepStatus.available ? "available" : ""} ${stepStatus.optional ? "optional" : ""}`}
+                  onClick={() => openStep(id)}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={`${label} · ${statusText}`}
+                  title={`${label}: ${statusText}`}
+                  data-workflow-status={stepStatus.complete ? "complete" : stepStatus.optional ? "optional" : stepStatus.available ? "available" : "pending"}
+                >
+                  <span className="nav-icon">{stepStatus.complete ? "✓" : ICONS[id]}</span>
+                  <span className="tab-copy"><strong>{label}</strong><small>{detail}</small></span>
+                  <em className={`tab-status ${stepStatus.complete ? "complete" : stepStatus.optional ? "optional" : stepStatus.available ? "available" : "pending"}`}>
+                    {stepStatus.complete ? "完了" : stepStatus.optional ? "任意" : stepStatus.available ? "準備" : stepIndex + 1}
+                  </em>
+                </button>
+              );
+            })}
           </nav>
           <div className="rail-spacer" />
           <div className="rail-note">
