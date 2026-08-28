@@ -1,11 +1,13 @@
 import { applyMaterialFeatureTrainingPayload } from "./materialFeatures";
 
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
+const API_PROGRESS_EVENT = "malchan:api-progress";
 
 let comparisonTuneBestOverride = false;
 let inverseAnalysisPayloadOverride = null;
 let inverseCategoryCandidatesOverride = null;
 let ensembleTrainingOptions = null;
+let apiRequestSequence = 0;
 
 export function setComparisonTuneBestOverride(enabled) {
   comparisonTuneBestOverride = Boolean(enabled);
@@ -38,33 +40,199 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
-
-  if (response.status === 204) {
+function requestBody(options = {}) {
+  if (typeof options.body !== "string") return null;
+  try {
+    return JSON.parse(options.body);
+  } catch {
     return null;
   }
+}
 
-  const contentType = response.headers.get("content-type") || "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : await response.text();
+function candidateCount(modelNames) {
+  if (Array.isArray(modelNames)) return modelNames.length;
+  if (!modelNames || typeof modelNames !== "object") return 0;
+  return Object.values(modelNames).reduce(
+    (sum, values) => sum + (Array.isArray(values) ? values.length : 0),
+    0,
+  );
+}
 
-  if (!response.ok) {
-    const detail = payload?.detail ?? payload;
-    throw new ApiError(
-      typeof detail === "string" ? detail : JSON.stringify(detail),
-      response.status,
-      detail,
-    );
+function requestProgressDescriptor(path, options = {}) {
+  if (path === "/health") return null;
+
+  const method = String(options.method || "GET").toUpperCase();
+  const body = requestBody(options);
+
+  if (path === "/models" && method === "POST") {
+    const targetCount = body?.target_cols?.length || (body?.target_col ? 1 : 0);
+    const featureCount = (body?.num_cols?.length || 0) + (body?.cat_cols?.length || 0);
+    return {
+      label: body?.tuning ? "モデル学習・パラメータ探索" : "モデル学習",
+      detail: [
+        targetCount ? `目的変数 ${targetCount}件` : null,
+        featureCount ? `説明変数 ${featureCount}件` : null,
+      ].filter(Boolean).join(" · "),
+      foreground: true,
+    };
   }
-  return payload;
+
+  if (/\/compare$/.test(path) && method === "POST") {
+    const count = candidateCount(body?.model_names);
+    const methodLabel = body?.method === "loo"
+      ? "LOO"
+      : body?.n_splits ? `${body.n_splits}-fold CV` : "交差検証";
+    return {
+      label: "候補モデルを交差検証・比較",
+      detail: [methodLabel, count ? `候補 ${count}件` : null, body?.tune_best ? "チューニングあり" : null]
+        .filter(Boolean)
+        .join(" · "),
+      foreground: true,
+    };
+  }
+
+  if (/\/evaluate$/.test(path) && method === "POST") {
+    return {
+      label: "学習済みモデルを精度検証",
+      detail: body?.method === "loo" ? "Leave-One-Out" : `${body?.n_splits || "?"}-fold CV`,
+      foreground: true,
+    };
+  }
+
+  if (/\/comparison\/tune-best$/.test(path) && method === "POST") {
+    const trialValues = typeof body?.n_trials === "object"
+      ? Object.values(body.n_trials)
+      : [body?.n_trials];
+    const maxTrials = Math.max(0, ...trialValues.map((value) => Number(value) || 0));
+    return {
+      label: "ベストモデルをチューニング",
+      detail: maxTrials ? `最大 ${maxTrials} trials` : "Optuna探索",
+      foreground: true,
+    };
+  }
+
+  if (/\/inverse-analysis$/.test(path) && method === "POST") {
+    return {
+      label: "逆解析・候補探索",
+      detail: [
+        body?.trials ? `${body.trials} trials` : null,
+        body?.n_candidates ? `上位 ${body.n_candidates}件` : null,
+      ].filter(Boolean).join(" · "),
+      foreground: true,
+    };
+  }
+
+  if (/\/predict$/.test(path) && method === "POST") {
+    return {
+      label: "予測を計算",
+      detail: body?.data?.length ? `${body.data.length} records` : "",
+      foreground: true,
+    };
+  }
+
+  if (/\/xai\/local$/.test(path) && method === "POST") {
+    return {
+      label: "ローカルSHAPを計算",
+      detail: body?.data?.length ? `${body.data.length} records` : "",
+      foreground: true,
+    };
+  }
+
+  if (/\/xai\/recompute$/.test(path) && method === "POST") {
+    return { label: "XAIを再計算", detail: "", foreground: true };
+  }
+
+  if (path === "/models" && method === "GET") {
+    return { label: "登録モデルを確認", detail: "", foreground: false };
+  }
+
+  if (/^\/models\/[^/]+$/.test(path) && method === "GET") {
+    return { label: "モデル情報を反映", detail: "", foreground: false };
+  }
+
+  if (path.startsWith("/model-parameters")) {
+    return { label: "モデル設定を確認", detail: "", foreground: false };
+  }
+
+  return {
+    label: method === "GET" ? "APIデータを取得" : "API処理を実行",
+    detail: "",
+    foreground: false,
+  };
+}
+
+function dispatchApiProgress(detail) {
+  window.dispatchEvent(new CustomEvent(API_PROGRESS_EVENT, { detail }));
+}
+
+async function request(path, options = {}) {
+  const descriptor = requestProgressDescriptor(path, options);
+  apiRequestSequence += 1;
+  const requestId = apiRequestSequence;
+  const startedAt = Date.now();
+
+  if (descriptor) {
+    dispatchApiProgress({
+      phase: "start",
+      requestId,
+      startedAt,
+      method: String(options.method || "GET").toUpperCase(),
+      ...descriptor,
+    });
+  }
+
+  let requestStatus = "success";
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+
+    if (!response.ok) {
+      const detail = payload?.detail ?? payload;
+      throw new ApiError(
+        typeof detail === "string" ? detail : JSON.stringify(detail),
+        response.status,
+        detail,
+      );
+    }
+    return payload;
+  } catch (error) {
+    requestStatus = "error";
+    throw error;
+  } finally {
+    if (descriptor) {
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      const timing = {
+        phase: "complete",
+        requestId,
+        startedAt,
+        completedAt: Date.now(),
+        durationMs,
+        status: requestStatus,
+        method: String(options.method || "GET").toUpperCase(),
+        ...descriptor,
+      };
+      dispatchApiProgress(timing);
+      console.info("[malchan api timing]", {
+        label: descriptor.label,
+        duration_ms: durationMs,
+        status: requestStatus,
+      });
+    }
+  }
 }
 
 function query(params) {

@@ -1,0 +1,226 @@
+.api-processing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1120;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.api-processing-card {
+  width: min(560px, calc(100vw - 32px));
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.api-processing-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.api-processing-header h3 {
+  margin: 3px 0 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.api-processing-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.api-processing-spinner {
+  width: 38px;
+  height: 38px;
+  border: 4px solid var(--surface-3);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: apiProcessingSpin 0.8s linear infinite;
+}
+
+.api-processing-elapsed {
+  min-width: 92px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.api-processing-elapsed span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.api-processing-elapsed strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.api-processing-stage-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.api-processing-stage {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+
+.api-processing-stage.current {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--line));
+  background: var(--primary-soft);
+}
+
+.api-processing-stage.completed {
+  background: color-mix(in srgb, var(--success-soft) 48%, var(--surface));
+}
+
+.api-processing-stage > div {
+  min-width: 0;
+}
+
+.api-processing-stage strong,
+.api-processing-stage small {
+  display: block;
+}
+
+.api-processing-stage strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-processing-stage small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.api-processing-stage time {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.api-stage-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.api-stage-icon.complete {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.api-stage-icon.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.api-stage-icon.active {
+  border: 3px solid color-mix(in srgb, var(--primary) 26%, var(--surface));
+  border-top-color: var(--primary);
+  animation: apiProcessingSpin 0.8s linear infinite;
+}
+
+.api-processing-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.api-processing-complete {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--footer-h) + 78px);
+  z-index: 1110;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: min(360px, calc(100vw - 28px));
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--line));
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.api-processing-complete strong,
+.api-processing-complete small {
+  display: block;
+}
+
+.api-processing-complete strong {
+  font-size: 12px;
+}
+
+.api-processing-complete small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@keyframes apiProcessingSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 620px) {
+  .api-processing-card {
+    padding: 18px;
+  }
+
+  .api-processing-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .api-processing-elapsed {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .api-processing-stage strong {
+    white-space: normal;
+  }
+}
