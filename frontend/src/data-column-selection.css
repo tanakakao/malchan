@@ -1,0 +1,117 @@
+.data-column-selection-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.data-column-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.data-column-selection-actions button {
+  min-width: 104px;
+}
+
+.data-column-selection-lock-note,
+.data-column-selection-help {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.data-column-selection-lock-note {
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--line));
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.data-column-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 9px;
+}
+
+.data-column-toggle {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+
+.data-column-toggle:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.data-column-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.data-column-toggle-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.data-column-toggle-copy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-column-toggle-copy small {
+  color: var(--subtle);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.data-column-toggle em {
+  min-width: 36px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--subtle);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  text-align: center;
+}
+
+.data-column-toggle.enabled {
+  border-color: color-mix(in srgb, var(--success) 28%, var(--line));
+  background: color-mix(in srgb, var(--success-soft) 58%, var(--surface));
+}
+
+.data-column-toggle.enabled em {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.data-column-toggle.disabled {
+  opacity: 0.64;
+}
+
+.data-column-toggle:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+@media (max-width: 780px) {
+  .data-column-toggle-grid {
+    grid-template-columns: 1fr;
+  }
+}

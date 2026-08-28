@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/Common";
 import { useWorkbench } from "../context/WorkbenchContext";
+import { useAnalysisColumnSelection } from "../context/useAnalysisColumnSelection";
 import { useWorkbenchMode } from "../workbenchMode";
 
 const COLUMN_KIND_LABELS = {
@@ -44,9 +45,10 @@ function simpleModelsFor(task) {
 export default function PreparePage() {
   const mode = useWorkbenchMode();
   const {
-    columns,
-    numeric,
-    categorical,
+    rows,
+    columns: rawColumns,
+    numeric: rawNumeric,
+    categorical: rawCategorical,
     targets,
     tasks,
     numFeatures,
@@ -60,6 +62,15 @@ export default function PreparePage() {
     compareModels,
     setStep,
   } = useWorkbench();
+  const { enabledColumns: columns, enabledSet } = useAnalysisColumnSelection(rawColumns, rows);
+  const numeric = useMemo(
+    () => rawNumeric.filter((column) => enabledSet.has(column)),
+    [rawNumeric, enabledSet],
+  );
+  const categorical = useMemo(
+    () => rawCategorical.filter((column) => enabledSet.has(column)),
+    [rawCategorical, enabledSet],
+  );
   const [featureTypeOverrides, setFeatureTypeOverrides] = useState({});
   const [simpleRunPending, setSimpleRunPending] = useState(false);
 
@@ -354,9 +365,14 @@ export default function PreparePage() {
         </article>
       </div>
 
-      {!columns.length && (
+      {!rawColumns.length && (
         <p className="empty-state prepare-empty-state">
           Data画面でCSVまたはXLSXを読み込むと、変数選択カードが表示されます。
+        </p>
+      )}
+      {rawColumns.length > 0 && !columns.length && (
+        <p className="empty-state prepare-empty-state">
+          Data画面ですべての列が解析対象外になっています。1列以上をONにしてください。
         </p>
       )}
     </>
