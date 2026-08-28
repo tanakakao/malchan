@@ -14,6 +14,7 @@
     "test:workspace-state": "node src/workspace-state.test.mjs && node src/workflow-page-persistence.test.mjs",
     "test:data-columns": "node src/analysis-column-selection.test.mjs",
     "test:processing-progress": "node src/processing-progress.test.mjs",
+    "test:detailed-progress": "node src/detailed-processing-progress.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

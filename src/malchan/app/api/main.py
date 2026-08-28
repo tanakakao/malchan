@@ -47,9 +47,18 @@ def create_app(
             "FastAPI support requires installing malchan with the 'api' or 'web' extra."
         ) from exc
 
+    from malchan.app.api.progress_routes import create_progress_router
     from malchan.app.api.routes import create_api_router
+    from malchan.app.progress import (
+        PROGRESS_HEADER,
+        finish_progress,
+        install_progress_instrumentation,
+        progress_scope,
+    )
     from malchan.app.services import InMemoryModelService
     from malchan.app.web import mount_web_ui
+
+    install_progress_instrumentation()
 
     resolved_settings = settings or get_settings()
     resolved_service = model_service or InMemoryModelService()
@@ -74,8 +83,25 @@ def create_app(
             expose_headers=["Content-Disposition"],
         )
 
+    @app.middleware("http")
+    async def bind_detailed_progress(request, call_next):
+        progress_id = request.headers.get(PROGRESS_HEADER)
+        if not progress_id:
+            return await call_next(request)
+
+        operation = f"{request.method} {request.url.path}"
+        with progress_scope(progress_id, operation=operation):
+            response = await call_next(request)
+            if response.status_code >= 400:
+                finish_progress("error", progress_id=progress_id)
+            return response
+
     app.state.settings = resolved_settings
     app.state.model_service = resolved_service
+    app.include_router(
+        create_progress_router(),
+        prefix=resolved_settings.api_prefix,
+    )
     app.include_router(
         create_api_router(
             service=resolved_service,
